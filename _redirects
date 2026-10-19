@@ -1,0 +1,3 @@
+# netlify.app 子網域全部 301 到正式網域，避免同一份內容出現兩個網址（搜尋結果目前顯示 moonick-ntc.netlify.app）
+https://moonick-ntc.netlify.app/*  https://moonickmusic.com/:splat  301!
+http://moonick-ntc.netlify.app/*   https://moonickmusic.com/:splat  301!

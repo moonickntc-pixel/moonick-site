@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#F5F4F1">
+<title>預約課程｜慕尼克音樂 新北板橋校區</title>
+<link rel="preload" as="image" href="media/mk_cover.jpg" fetchpriority="high">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="慕尼克音樂 新北板橋校區">
+<meta property="og:locale" content="zh_TW">
+<meta property="og:title" content="預約課程｜慕尼克音樂 新北板橋校區">
+<meta property="og:description" content="約一分鐘填完，教室會以電話與您聯繫，安排上課時間。爵士鼓、吉他、Bass、歌唱、鋼琴，兒童與成人都可以學。">
+<meta property="og:url" content="https://moonickmusic.com/signup/">
+<meta property="og:image" content="https://moonickmusic.com/img/og/moonick-banqiao-og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+:root{
+  --bg:#F5F4F1; --surface:#FBFAF7; --ink:#3A4256; --muted:#77736B; --faint:#ABA69C;
+  --line:#E2DACD; --accent:#B7804C; --accent-d:#8F6238; --soft:#F1EADF; --cream:#F5F4F1; --navy:#3A4256; --sand:#EADFCF;
+  --serif:"Noto Serif TC","Noto Serif CJK TC","Songti TC",serif;
+  --sans:"Noto Sans TC","Noto Sans CJK TC","PingFang TC","Microsoft JhengHei",sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+button,a,input{touch-action:manipulation}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-weight:400;
+  -webkit-font-smoothing:antialiased;letter-spacing:.03em}
+/* 題目頁是一般由上往下的排版：不綁螢幕高度、不把按鈕釘在底部（文字題的「下一題」直接接在輸入框下面） */
+.wrap{max-width:30rem;margin:0 auto;padding:22px 24px 128px;position:relative}
+.wrap.textq{padding-bottom:40px}
+
+.wrap.has-hero{padding-top:0}
+header{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:14px;border-bottom:1px solid var(--line)}
+header .brand{white-space:nowrap;font-family:var(--serif);font-size:15px;font-weight:600;letter-spacing:.14em;margin:0;color:var(--ink)}
+header .sub{white-space:nowrap;font-size:10px;letter-spacing:.2em;color:var(--muted);margin:0;text-transform:uppercase}
+.hero{position:relative;margin:0 -24px;height:min(47dvh,400px);overflow:hidden;background:#3A4256}
+.hero video,.hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:60% 50%}
+.hero img{object-position:50% 40%}
+.hero img.slide{opacity:0;animation-name:heroFade;animation-timing-function:linear;animation-iteration-count:infinite;will-change:opacity}
+.hero img.slide:first-of-type{opacity:1}
+@media (prefers-reduced-motion: reduce){.hero img.slide{animation:none;opacity:0}.hero img.slide:first-of-type{opacity:1}}
+.hero::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(58,66,86,.42) 0%,rgba(58,66,86,.06) 32%,rgba(58,66,86,.08) 62%,rgba(245,244,241,1) 100%)}
+.hero header{position:absolute;z-index:2;left:24px;right:24px;top:22px;border-bottom-color:rgba(245,244,241,.35)}
+.hero header .brand{color:var(--cream)} .hero header .sub{color:rgba(245,244,241,.8)}
+.hero .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--cream);font-size:13px;letter-spacing:.2em}
+.eyebrow{font-size:11px;letter-spacing:.32em;color:var(--accent);text-transform:uppercase;margin:0}
+.intro{margin-top:-28px;position:relative;z-index:2}
+.intro h1{font-family:var(--serif);font-weight:500;font-size:30px;line-height:1.35;letter-spacing:.08em;margin:12px 0 0}
+.lead{font-size:15px;line-height:1.9;color:var(--muted);margin:14px 0 0;font-weight:300}
+.tags{margin:22px 0 0;font-size:13px;color:var(--muted);letter-spacing:.12em;line-height:2}
+.tags span{white-space:nowrap}
+.tags span+span::before{content:"／";margin:0 .4em;color:var(--faint)}
+.steps{margin:26px 0 0;padding:0;list-style:none;border-top:1px solid var(--line)}
+.steps li{display:flex;gap:18px;align-items:baseline;padding:15px 0;border-bottom:1px solid var(--line);font-size:15px;font-weight:400}
+.steps li i{font-style:normal;font-family:var(--serif);font-size:13px;color:var(--accent);letter-spacing:.1em;width:22px}
+.top{display:flex;justify-content:space-between;align-items:center;margin-top:18px}
+.back{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0;border:0;background:none;color:var(--muted);
+  font:inherit;font-size:13.5px;letter-spacing:.1em;cursor:pointer}
+.back svg{width:15px;height:15px}
+.count{margin:0;font-family:var(--serif);font-size:13px;color:var(--muted);letter-spacing:.14em;font-variant-numeric:tabular-nums}
+.count b{color:var(--accent);font-weight:600}
+.track{height:2px;background:var(--line);margin-top:10px;position:relative}
+.track span{position:absolute;left:0;top:0;bottom:0;background:var(--accent);transition:width .35s ease}
+h1.q{font-family:var(--serif);font-size:24px;line-height:1.45;font-weight:500;letter-spacing:.06em;margin:34px 0 0}
+.hint{font-size:14px;color:var(--muted);margin:10px 0 0;line-height:1.8;font-weight:300}
+.note{margin-top:22px;border-left:2px solid var(--accent);padding:2px 0 2px 14px;font-size:13.5px;line-height:1.9;color:var(--ink);font-weight:300}
+.note b{font-weight:500;color:var(--accent-d)}
+.opts{display:grid;gap:10px;margin-top:26px}
+.opts.two{grid-template-columns:1fr 1fr}
+.opt{display:flex;align-items:center;justify-content:space-between;gap:14px;min-height:56px;padding:14px 16px;border-radius:6px;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:15.5px;font-weight:400;
+  letter-spacing:.05em;text-align:left;cursor:pointer;transition:border-color .15s,background .15s}
+.opt .lb{display:flex;flex-direction:column;gap:3px}
+.opt small{font-size:12px;font-weight:300;color:var(--muted);letter-spacing:.04em}
+.opt .mk{flex:none;width:16px;height:16px;border:1px solid var(--faint);border-radius:50%;position:relative}
+.opts.multi .opt .mk{border-radius:3px}
+.opt[aria-pressed="true"]{border-color:var(--accent);background:var(--soft)}
+.opt[aria-pressed="true"] .mk{border-color:var(--accent);background:var(--accent)}
+.opt[aria-pressed="true"] .mk::after{content:"";position:absolute;left:5px;top:2px;width:4px;height:8px;border:solid var(--cream);border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
+.day{margin:30px 0 0;font-family:var(--serif);font-size:13px;letter-spacing:.24em;color:var(--accent);padding-bottom:8px;border-bottom:1px solid var(--ink)}
+.clist{display:flex;flex-direction:column}
+.cls{display:grid;grid-template-columns:92px 1fr 16px;gap:2px 12px;align-items:center;padding:14px 4px;border:0;border-bottom:1px solid var(--line);
+  background:none;font:inherit;color:var(--ink);text-align:left;cursor:pointer;transition:background .15s}
+.cls .t{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;letter-spacing:.04em}
+.cls .n{font-size:15.5px;letter-spacing:.06em}
+.cls .a{display:block;font-size:12px;color:var(--muted);font-weight:300;margin-top:2px}
+.cls .mk{width:16px;height:16px;border:1px solid var(--faint);border-radius:3px;position:relative}
+.cls[aria-pressed="true"]{background:var(--soft)}
+.cls[aria-pressed="true"] .n{color:var(--accent-d);font-weight:500}
+.cls[aria-pressed="true"] .mk{background:var(--accent);border-color:var(--accent)}
+.cls[aria-pressed="true"] .mk::after{content:"";position:absolute;left:5px;top:2px;width:4px;height:8px;border:solid var(--cream);border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
+input.field{display:block;box-sizing:border-box;width:100%;margin:30px 0 0;height:56px;min-height:56px;padding:0 2px;line-height:normal;
+  border:0;border-bottom:1px solid var(--ink);background:transparent;border-radius:0;-webkit-appearance:none;appearance:none;
+  color:var(--ink);font:inherit;font-size:19px;font-weight:400;letter-spacing:.06em;outline:none;position:static;transform:none}
+input.field:focus{border-bottom:2px solid var(--accent)}
+input.field::placeholder{color:var(--faint);font-weight:300}
+.err{color:#9A5B45;font-size:13px;margin:10px 2px 0;min-height:1em}
+.dock{position:fixed;z-index:5;left:0;right:0;bottom:0;padding:16px 24px calc(16px + env(safe-area-inset-bottom));
+  background:linear-gradient(to top,var(--bg) 72%,rgba(245,244,241,0))}
+.dock .in{max-width:30rem;margin:0 auto}
+.btn{display:flex;align-items:center;justify-content:center;height:54px;width:100%;border-radius:6px;border:0;background:var(--navy);
+  color:var(--cream);font:inherit;font-size:15px;font-weight:500;letter-spacing:.2em;cursor:pointer;text-decoration:none}
+.btn:disabled{background:#B9BBC2;cursor:default}
+.sum{margin-top:26px;border-top:1px solid var(--ink)}
+.row{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;padding:15px 0;border-bottom:1px solid var(--line)}
+.row .k{font-size:11.5px;color:var(--muted);letter-spacing:.14em}
+.row .v{font-size:15px;margin-top:5px;line-height:1.7;white-space:pre-line;letter-spacing:.05em}
+.row .ed{flex:none;border:0;background:none;color:var(--accent);font:inherit;font-size:12.5px;letter-spacing:.12em;
+  padding:2px 0;border-bottom:1px solid var(--accent);cursor:pointer}
+footer{margin-top:46px;padding-top:20px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);line-height:2;font-weight:300;letter-spacing:.06em}
+footer a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line)}
+footer .nm{font-family:var(--serif);font-weight:600;color:var(--ink);font-size:13.5px;letter-spacing:.14em;margin-bottom:4px}
+.done{margin-top:56px}
+.done a.home{color:var(--accent-d);text-decoration:none;border-bottom:1px solid var(--accent-d);font-size:13.5px;letter-spacing:.1em}
+input.field{scroll-margin:90px 0 120px}
+.err{display:block}
+/* 文字題的「下一題」：一般排版、放在輸入框下方並留足夠間距；不用 sticky/absolute/fixed/transform */
+.inl{position:static;display:block;margin:28px 0 0;padding:0;transform:none;clear:both}
+.inl .btn{position:static;transform:none;margin:0}
+/* 保險：文字題時底部固定按鈕一律不顯示 */
+.wrap.textq ~ .dock{display:none!important}
+.ver{margin-top:10px;font-size:10.5px;color:var(--faint);letter-spacing:.08em}
+.resume{margin:14px 0 0;font-size:12.5px;color:var(--accent-d);letter-spacing:.08em}
+.done .rule{width:36px;height:1px;background:var(--accent);margin-bottom:22px}
+.modal{position:fixed;inset:0;background:rgba(58,66,86,.45);display:none;align-items:flex-end;justify-content:center;z-index:9}
+.modal.show{display:flex}
+.modal .box{background:var(--surface);width:100%;max-width:30rem;border-radius:8px 8px 0 0;padding:22px;max-height:80dvh;overflow:auto}
+.modal h3{font-family:var(--serif);font-weight:500;letter-spacing:.08em;margin:0 0 6px;font-size:17px}
+.modal pre{white-space:pre-wrap;word-break:break-all;font-size:11.5px;background:var(--bg);padding:12px;border-radius:6px;color:var(--ink);line-height:1.7}
+.fade{animation:f .3s ease}
+@keyframes f{from{opacity:0}to{opacity:1}} /* 只淡入，不位移，避免 iOS 量位置時錯位 */
+.opts.three{grid-template-columns:1fr 1fr 1fr}
+.opts.three .opt{justify-content:center;text-align:center}.opts.three .opt .mk{display:none}
+.days{margin-top:22px;border-top:1px solid var(--ink)}
+.dayrow{border-bottom:1px solid var(--line)}
+.dayhd{width:100%;display:flex;justify-content:space-between;align-items:center;padding:16px 4px;border:0;background:none;font:inherit;color:var(--ink);font-size:15.5px;letter-spacing:.08em;cursor:pointer}
+.dayhd .c{font-size:12.5px;color:var(--muted);letter-spacing:.06em;display:flex;align-items:center}
+.dayhd .c.on{color:var(--accent-d)}
+.dayhd svg{width:14px;height:14px;margin-left:10px;transition:transform .2s;color:var(--muted)}
+.dayrow.open .dayhd svg{transform:rotate(180deg)}
+.hours{display:none;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 0 16px}
+.dayrow.open .hours{display:grid}
+.hr{height:40px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font:inherit;font-size:13.5px;color:var(--ink);font-variant-numeric:tabular-nums;cursor:pointer}
+.hr[aria-pressed="true"]{border-color:var(--accent);background:var(--soft);color:var(--accent-d);font-weight:500}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div class="dock" id="dock" hidden><div class="in" id="dockIn"></div></div>
+<div class="modal" id="modal"><div class="box"><h3>草稿模式：沒有送出</h3>
+<p class="hint">正式上線後，下面這些資料會送到原本的 Google 表單。</p><pre id="payload"></pre>
+<button class="btn" onclick="document.getElementById('modal').classList.remove('show')">關閉</button></div></div>
+<script>
+/* ============ 設定 ============ */
+// 草稿階段一律 false：按「送出」只會顯示要送的內容，不會寄到 Google 表單。使用者同意上線後再改成 true。
+const LIVE_SUBMIT = true;
+// 慕尼克音樂-新北板橋校區 課程報名表（https://forms.gle/TuchCGDrFQr3iERH9），跟樂器小測驗預填的是同一份表單
+const FORM_ID = "1FAIpQLSeRqZa40SVj5s6a_JjDCwaH0fMW7F7oGojPHA5u0nNGi75zOA";
+const POST_URL = `https://docs.google.com/forms/d/e/${FORM_ID}/formResponse`;
+const LINE_URL = "https://lin.ee/5xMCRe9";
+// 首頁封面：使用者選定的官網 TAMA 爵士鼓教室照（已修掉牆上 Happy Birthday 字牌）。HERO_VIDEO 填 mp4 路徑就會改成影片。
+const HERO_VIDEO = "";
+const HERO_POSTER = "media/mk_cover.jpg";
+// 1019d 首頁輪播（全部是慕尼克板橋校區照片，780×808、各約 75–115KB）：TAMA 爵士鼓教室 → 吉他牆 → 隔音鼓室 → 大廳樂團區 → 板橋門口
+// 第一張立即載入；其他張等整頁載完才一張一張下載並預先解碼，全部好了才開始淡入淡出（只動透明度，不會跳版）
+const HERO_SLIDES = ["media/mk_cover.jpg","media/mk_guitarwall.jpg","media/mk_drumroom.jpg","media/mk_hall.jpg","media/mk_storefront.jpg"];
+const SLIDE_SEC = 4, FADE_SEC = 1;
+
+// Google 表單欄位（entry ID 取自原表單 FB_PUBLIC_LOAD_DATA_；表單只有一頁，pageHistory=0）
+const E = {
+  name:"entry.1533852387", parent:"entry.297686325", relation:"entry.437811702", phone:"entry.1237122548",
+  age:"entry.1353476259", email:"entry.1105098480", contact:"entry.620240045", gender:"entry.1613596884",
+  personality:"entry.935150233", practice:"entry.2036838828", level:"entry.213033094", reason:"entry.1878769903",
+  music:"entry.1949528208", instr:"entry.1084453381", type:"entry.1486376278"
+};
+// 可上課時間：核取方塊格狀題，每一天是一個 entry
+const DAYS = [["星期一","entry.1064522648"],["星期二","entry.1595633699"],["星期三","entry.685379873"],["星期四","entry.1681564137"],
+  ["星期五","entry.1496597711"],["星期六","entry.1210571604"],["星期日","entry.295962484"]];
+const HOURS = ["10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00"];
+
+// 選項：[送出值（必須跟表單一字不差）, 畫面文字, 小字]
+const o=(...a)=>a.map(x=>Array.isArray(x)?x:[x,x]);
+const Q = {
+  name:{t:"學員姓名",kind:"text",ph:"例：王小明",req:true},
+  age:{t:"學員年齡",kind:"text",num:true,ph:"例：5",req:true,hint:"請填數字（幾歲），例如 5 或 3.5；成人填實際年齡。"},
+  gender:{t:"學員生理性別",kind:"single",opts:o("男","女"),grid:"two",req:true},
+  parent:{t:"聯絡人姓名",kind:"text",ph:"例：王媽媽",req:true,hint:"成人學員填自己的名字就好。"},
+  relation:{t:"聯絡人與學員的關係",kind:"text",ph:"例：媽媽、爸爸、本人",req:true},
+  phone:{t:"聯絡電話",kind:"tel",ph:"例：0912-345-678",req:true},
+  email:{t:"電子信箱",kind:"email",ph:"name@example.com",hint:"可以不填。"},
+  contact:{t:"希望用什麼方式聯絡您？",kind:"single",opts:o("電話","Line",["Messenger(FB臉書)","Messenger（Facebook）"]),req:true},
+  instr:{t:"想學哪一種樂器？",kind:"multi",req:true,hint:"可以選多個。",opts:[
+    ["爵士鼓 Drum sets 3y以上","爵士鼓","建議 3 歲以上"],
+    ["流行鋼琴(鍵盤) piano & keyboard for pop music 3y以上","流行鋼琴（鍵盤）","建議 3 歲以上"],
+    ["電吉他 Electric guitar 6y以上","電吉他","建議 6 歲以上"],
+    ["木吉他 Acoustic guitar  8y以上","木吉他","建議 8 歲以上"],
+    ["貝斯 Bass guitar 8y以上","貝斯","建議 8 歲以上"],
+    ["歌唱 Vocal 3y以上","歌唱","建議 3 歲以上"],
+    ["數位創作 6y以上","數位創作","建議 6 歲以上"]]},
+  type:{t:"比較想上哪一種班？",kind:"single",req:true,opts:[
+    ["個人班(單堂50分鐘 $1200)","個人班","一對一，單堂 50 分鐘（費用依老師與課程安排）"],
+    ["團體班3~5人(單堂50分鐘 $800)","團體班","3～5 人，單堂 50 分鐘（費用依老師與課程安排）"]]},
+  level:{t:"目前的程度",kind:"single",req:true,opts:o("無基礎","1年內的初學者","學齡1年以上","學齡2~3年","學齡3年以上")},
+  practice:{t:"預計每週練習幾天？",kind:"single",grid:"three",req:true,opts:o(["0","0 天"],["1","1 天"],["2","2 天"],["3","3 天"],["4~5","4～5 天"],["6~7","6～7 天"])},
+  time:{t:"可以上課的時間",kind:"grid",hint:"點星期幾，再選可以上課的整點，可以選多個。也可以略過，電話裡再約。"},
+  personality:{t:"學員的個性比較像？",kind:"multi",grid:"two",req:true,hint:"可以選多個。",opts:o("活潑大方","害羞內向","成熟懂事","童心未泯","誠懇務實","聰明機智")},
+  music:{t:"喜歡哪些音樂？",kind:"multi",req:true,hint:"可以選多個。",opts:o("古典音樂",["華語流行樂語獨立樂團","華語流行、獨立樂團"],["日系流行與動漫主題曲","日系流行、動漫主題曲"],"歐美流行音樂",["Kpop 韓國流行音樂","K-pop 韓國流行音樂"],"搖滾與重金屬")},
+  reason:{t:"想學的原因與目標",kind:"multi",req:true,hint:"可以選多個。",opts:o("嘗試與累積多元經驗","興趣與舒壓","培養專長","未來職業","醫療專業建議")}
+};
+const FLOW = ["name","age","gender","parent","relation","phone","email","contact","instr","type","level","practice","time","personality","music","reason"];
+
+/* ============ 狀態 ============ */
+// 自動保存：每次作答、換題都存到 localStorage（LINE 內建瀏覽器離開再回來也不會不見），送出成功後清除；保留 7 天
+const SAVE_KEY="mk_form_v1", SAVE_DAYS=7;
+const store=(()=>{try{localStorage.setItem("mk_t","1");localStorage.removeItem("mk_t");return localStorage}catch(e){try{return sessionStorage}catch(e2){return null}}})();
+let A = {}, step = -1, openDay = null, resumed=false, userNav=false;
+const flow=()=>FLOW, total=()=>FLOW.length;
+try{
+  const d=JSON.parse((store&&store.getItem(SAVE_KEY))||"null");
+  if(d&&d.A&&Date.now()-(d.t||0)<SAVE_DAYS*864e5){A=d.A; if(typeof d.step==="number"&&d.step>=0){step=Math.min(d.step,FLOW.length);resumed=true}}
+  else { const old=JSON.parse(sessionStorage.getItem("mk_ans")||"null"); if(old) A=old; }
+}catch(e){}
+const save=()=>{try{store&&store.setItem(SAVE_KEY,JSON.stringify({A,step:typeof step==="number"?step:-1,t:Date.now()}))}catch(e){}};
+const clearSave=()=>{try{store&&store.removeItem(SAVE_KEY);sessionStorage.removeItem("mk_ans")}catch(e){}};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const pad=n=>String(n).padStart(2,"0");
+
+const HEADER=`<header><p class="brand">慕尼克音樂</p><p class="sub">Banqiao</p></header>`;
+const FOOTER=`<footer><div class="nm">慕尼克音樂 新北板橋校區</div>
+ 電話 <a href="tel:0289652288">02-8965-2288</a>　<a href="tel:0935581223">0935-581223</a> 黃小姐<br>
+ 新北市板橋區中正路325巷47號1樓（國光國小對面）<br>
+ <a href="${LINE_URL}" target="_blank" rel="noopener">官方 LINE @595zatgi</a>　<a href="https://moonickmusic.com" target="_blank" rel="noopener">moonickmusic.com</a><div class="ver">版本 1019f</div></footer>`;
+const BACK=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5m6-6-6 6 6 6"/></svg>`;
+const CHEV=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
+
+function dock(html){const d=$("#dock");if(!html){d.hidden=true;$("#dockIn").innerHTML="";return}d.hidden=false;$("#dockIn").innerHTML=html}
+const timeCount=()=>Object.values(A.time||{}).reduce((n,a)=>n+a.length,0);
+
+function render(){
+  const app=$("#app"); window.scrollTo(0,0); app.classList.remove("has-hero","textq"); save();
+  if(step===-1) return renderStart(app);
+  if(step==="done") return renderDone(app);
+  const f=flow(); if(step>=f.length) return renderSummary(app);
+  const key=f[step], q=Q[key], n=step+1, N=total();
+  let h=HEADER+`<div class="fade"><div class="top"><button class="back" onclick="go(-1)">${BACK}上一題</button>
+   <p class="count"><b>${pad(n)}</b> / ${pad(N)}</p></div>
+   <div class="track" role="progressbar" aria-valuemin="1" aria-valuemax="${N}" aria-valuenow="${n}" aria-label="作答進度"><span style="width:${n/N*100}%"></span></div>
+   ${resumed?`<p class="resume">已為您保留上次填寫的內容，可以接著填。</p>`:""}
+   <h1 class="q">${q.t}</h1>${q.hint?`<p class="hint">${q.hint}</p>`:""}`;
+  if(["text","tel","email"].includes(q.kind)){
+    const attr=q.kind==="tel"?'type="tel" inputmode="tel" autocomplete="tel"':q.kind==="email"?'type="email" inputmode="email" autocomplete="email"':q.num?'type="text" inputmode="decimal" autocomplete="off"':'type="text" autocomplete="off"';
+    h+=`<input class="field" id="inp" ${attr} placeholder="${q.ph}" value="${esc(A[key]||"")}" enterkeyhint="${step+1>=f.length?"send":"next"}"><p class="err" id="err"></p><div class="inl"><button type="button" class="btn" id="nx" onclick="next()">下一題</button></div>`;
+  } else if(q.kind==="single"||q.kind==="multi"){
+    h+=`<div class="opts ${q.grid||""} ${q.kind}">`+q.opts.map(([v,l,s])=>{
+      const on=q.kind==="multi"?(A[key]||[]).includes(v):A[key]===v;
+      return `<button type="button" class="opt" aria-pressed="${on}" data-v="${esc(v)}"><span class="lb">${l}${s?`<small>${s}</small>`:""}</span><span class="mk"></span></button>`}).join("")+`</div>`;
+  } else if(q.kind==="grid"){
+    const T=A.time||{};
+    h+=`<div class="days">`+DAYS.map(([d])=>{const sel=T[d]||[];
+      return `<div class="dayrow ${openDay===d?"open":""}" data-d="${d}"><button type="button" class="dayhd" data-d="${d}"><span>${d}</span><span class="c ${sel.length?"on":""}">${sel.length?sel.join("、"):"未選"}${CHEV}</span></button>
+      <div class="hours">${HOURS.map(hr=>`<button type="button" class="hr" data-d="${d}" data-h="${hr}" aria-pressed="${sel.includes(hr)}">${hr}</button>`).join("")}</div></div>`}).join("")+`</div>`;
+  }
+  h+=`</div>`+FOOTER; app.innerHTML=h; if(document.getElementById("inp")) app.classList.add("textq");
+  app.querySelectorAll(".opt").forEach(b=>b.onclick=()=>pick(key,q,b.dataset.v));
+  app.querySelectorAll(".dayhd").forEach(b=>b.onclick=()=>{openDay=openDay===b.dataset.d?null:b.dataset.d;
+    document.querySelectorAll(".dayrow").forEach(r=>r.classList.toggle("open",r.dataset.d===openDay))});
+  app.querySelectorAll(".hr").forEach(b=>b.onclick=()=>{const d=b.dataset.d,hr=b.dataset.h;A.time=A.time||{};
+    const a=A.time[d]||[]; A.time[d]=a.includes(hr)?a.filter(x=>x!==hr):a.concat(hr).sort(); if(!A.time[d].length) delete A.time[d]; save();
+    b.setAttribute("aria-pressed",A.time[d]?A.time[d].includes(hr):false);
+    const c=b.closest(".dayrow").querySelector(".c"); c.classList.toggle("on",!!A.time[d]); c.innerHTML=(A.time[d]?A.time[d].join("、"):"未選")+CHEV; upd()});
+  const inp=$("#inp"); if(inp){inp.oninput=()=>{A[key]=inp.value;save();upd()};
+    inp.onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey){ if(e.isComposing||e.keyCode===229) return; // 注音/拼音選字中的 Enter 不算
+      e.preventDefault(); userNav=true; next()}};
+    // iOS 鍵盤上方的「完成」只會讓輸入框失去焦點：值合格且不是空的才自動下一題；點「下一題／上一題」或離開 App 不會重複換題
+    inp.onblur=()=>{const at=step; setTimeout(()=>{ if(step!==at||!inp.isConnected||document.visibilityState!=="visible") return;
+      if(document.activeElement===inp) return; if(quietOK(key)) next(); },260)};
+    inp.addEventListener("focus",()=>keepVisible(true));
+    if(userNav){ try{inp.focus({preventScroll:true})}catch(e){inp.focus()} } }
+  resumed=false; userNav=false;
+  upd();
+}
+/* 鍵盤打開時（LINE / iOS 會把可視範圍縮小），把輸入框和「下一題」一起捲到看得見的地方 */
+function keepVisible(burst){
+  const run=()=>{const el=document.activeElement; if(!el||el.id!=="inp") return;
+    const vv=window.visualViewport, vh=vv?vv.height:window.innerHeight, top0=vv?vv.offsetTop:0;
+    const nx=$("#nx"), r=el.getBoundingClientRect(), b=nx?nx.getBoundingClientRect().bottom:r.bottom;
+    const want=r.top-top0-70, over=b-top0-(vh-12);
+    let dy=0; if(over>0) dy=Math.min(over,Math.max(want,0)); if(r.top-top0<8) dy=r.top-top0-70;
+    if(Math.abs(dy)>2) window.scrollBy(0,dy);};
+  run(); if(burst){[80,250,450,700].forEach(t=>setTimeout(run,t));}
+}
+if(window.visualViewport){visualViewport.addEventListener("resize",()=>keepVisible(false));visualViewport.addEventListener("scroll",()=>keepVisible(false));}
+window.addEventListener("resize",()=>keepVisible(false));
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden") save()});
+window.addEventListener("pagehide",save);
+function upd(){
+  const f=flow(); if(typeof step!=="number"||step<0||step>=f.length) return;
+  const key=f[step], q=Q[key];
+  if(q.kind==="single"){dock(null);return} // 單選：點了就自動下一題
+  if(q.kind==="grid"){const n=timeCount(); dock(`<button class="btn" id="nx" onclick="next()">${n?`下一題　已選 ${n} 個時段`:"略過，電話裡再約"}</button>`);return}
+  const v=A[key], has=Array.isArray(v)?v.length>0:!!(v&&String(v).trim());
+  const label=!q.req&&!has?"略過":"下一題";
+  // 文字題：按鈕放在輸入框正下方（不固定在畫面底部），鍵盤打開時不會蓋住輸入框
+  if(["text","tel","email"].includes(q.kind)){dock(null); const nx=$("#nx"); if(nx){nx.disabled=!!(q.req&&!has); nx.textContent=label;} return}
+  dock(`<button class="btn" id="nx" ${q.req&&!has?"disabled":""} onclick="next()">${label}</button>`);
+}
+function pick(key,q,v){
+  const els=document.querySelectorAll(".opt");
+  if(q.kind==="single"){
+    A[key]=v; save(); els.forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===v)); setTimeout(next,240);
+  } else {
+    const arr=A[key]||[]; A[key]=arr.includes(v)?arr.filter(x=>x!==v):arr.concat(v); save();
+    els.forEach(b=>b.setAttribute("aria-pressed",A[key].includes(b.dataset.v))); upd();
+  }
+}
+/* 文字題「靜默檢查」：鍵盤按 完成 時用，合格才自動下一題，不合格就不動也不跳錯誤 */
+function quietOK(key){const v=String(A[key]||"").trim(); if(!v) return false;
+  if(key==="age"){const x=v.replace(/[^\d.]/g,""); return /^\d+(\.\d+)?$/.test(x)&&parseFloat(x)>0}
+  if(key==="phone") return /^(\+?886|0)\d{8,9}$/.test(v.replace(/[\s\-()]/g,""));
+  if(key==="email") return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+  return true}
+function next(){
+  const f=flow(), key=f[step], q=Q[key];
+  // Google 表單規定「年齡」「電話」必須是大於 0 的數字，不符合會被拒收（no-cors 看不到錯誤），所以這裡先擋
+  if(key==="age"){const v=(A.age||"").replace(/[^\d.]/g,"");
+    if(!/^\d+(\.\d+)?$/.test(v)||!(parseFloat(v)>0)){$("#err").textContent="請填數字，例如 5。";return} A.age=v; save();}
+  if(key==="phone"){const d=(A.phone||"").replace(/[\s\-()]/g,"");
+    if(!/^(\+?886|0)\d{8,9}$/.test(d)){$("#err").textContent="電話號碼好像少了幾碼，再確認一下。";return}}
+  if(key==="email"&&(A.email||"").trim()&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(A.email.trim())){$("#err").textContent="信箱格式好像不太對，再確認一下，或清空略過。";return}
+  if(q&&["text","tel"].includes(q.kind)&&q.req&&!(A[key]||"").trim()) return;
+  userNav=true; step++; render();
+}
+function go(d){ step+=d; if(step<-1) step=-1; userNav=true; render(); }
+function jump(key){ step=flow().indexOf(key); userNav=true; render(); }
+
+let slidesReady=false, slidesLoading=false;
+function heroFirst(){return `<img class="h0" src="${HERO_SLIDES[0]||HERO_POSTER}" alt="" fetchpriority="high" decoding="async" width="780" height="808">`}
+function loadSlides(){
+  if(slidesReady||slidesLoading||HERO_SLIDES.length<2) return; slidesLoading=true;
+  const one=src=>new Promise(ok=>{const im=new Image();im.decoding="async";im.onload=()=>{(im.decode?im.decode():Promise.resolve()).then(()=>ok(true),()=>ok(true))};im.onerror=()=>ok(false);im.src=src});
+  (async()=>{const okList=[HERO_SLIDES[0]];
+    for(let i=1;i<HERO_SLIDES.length;i++){ if(await one(HERO_SLIDES[i])) okList.push(HERO_SLIDES[i]); }
+    HERO_SLIDES.length=0; HERO_SLIDES.push(...okList);
+    slidesReady=true; const h=document.querySelector(".hero"); if(h&&h.querySelector(".h0")){h.querySelector(".h0").outerHTML=heroMedia()}})();
+}
+function heroMedia(){
+  if(HERO_SLIDES.length>1&&!slidesReady) return heroFirst();
+  if(HERO_SLIDES.length>1){const n=HERO_SLIDES.length, T=n*SLIDE_SEC, f=FADE_SEC/T*100, h=SLIDE_SEC/T*100;
+    const kf=`<style>@keyframes heroFade{0%{opacity:0}${f.toFixed(3)}%{opacity:1}${h.toFixed(3)}%{opacity:1}${(h+f).toFixed(3)}%{opacity:0}100%{opacity:0}}</style>`;
+    return kf+HERO_SLIDES.map((src,i)=>`<img class="slide" src="${src}" alt="" decoding="async" width="780" height="808" style="animation-duration:${T}s;animation-delay:${i*SLIDE_SEC-FADE_SEC}s">`).join("");}
+  if(HERO_VIDEO) return `<video src="${HERO_VIDEO}" poster="${HERO_POSTER}" autoplay muted loop playsinline preload="auto" aria-hidden="true"></video>`;
+  if(HERO_POSTER) return `<img src="${HERO_POSTER}" alt="" fetchpriority="high" decoding="async" width="780" height="808">`;
+  return `<div class="ph">［影片／照片預留位置］</div>`;
+}
+function renderStart(app){
+  app.classList.add("has-hero");
+  app.innerHTML=`<div class="hero">${heroMedia()}${HEADER}</div>
+  <div class="intro fade"><p class="eyebrow">Reservation</p>
+  <h1>預約課程</h1>
+  <p class="lead">約兩分鐘即可填完。<br>送出後，教室會依您選的方式聯繫，安排上課時間。</p>
+  <p class="tags"><span>爵士鼓</span><span>流行鋼琴</span><span>電吉他</span><span>木吉他</span><span>貝斯</span><span>歌唱</span><span>數位創作</span></p>
+  <ol class="steps"><li><i>01</i>學員與聯絡人資料</li><li><i>02</i>想學的樂器、班別與上課時間</li><li><i>03</i>個性、喜歡的音樂與學習目標</li></ol>
+  </div>`+FOOTER;
+  dock(`<button class="btn" onclick="step=0;userNav=true;render()">開始填寫</button>`);
+  if(document.readyState==="complete") setTimeout(loadSlides,1200); else window.addEventListener("load",()=>setTimeout(loadSlides,1200),{once:true});
+}
+function labelOf(key){
+  const q=Q[key], v=A[key];
+  if(key==="time"){const T=A.time||{}; const r=DAYS.filter(([d])=>T[d]).map(([d])=>`${d}　${T[d].join("、")}`); return r.length?r.join("\n"):"（略過，電話裡再約）"}
+  if(v===undefined||v===""||(Array.isArray(v)&&!v.length)) return "（略過）";
+  if(q.opts){const m=x=>{const p=q.opts.find(p=>p[0]===x);return p?p[1]:x}; return Array.isArray(v)?v.map(m).join("、"):m(v)}
+  return v;
+}
+function renderSummary(app){
+  const rows=flow().map(k=>`<div class="row"><div><div class="k">${Q[k].t}</div><div class="v">${esc(labelOf(k))}</div></div><button class="ed" onclick="jump('${k}')">修改</button></div>`).join("");
+  app.innerHTML=HEADER+`<div class="fade"><div class="top"><button class="back" onclick="go(-1)">${BACK}上一題</button><p class="count">確認</p></div>
+   <div class="track"><span style="width:100%"></span></div>
+   <h1 class="q">確認您的資料</h1><p class="hint">確認無誤後送出，教室會與您聯繫。</p><div class="sum">${rows}</div></div>`+FOOTER;
+  dock(`<button class="btn" id="sendBtn" onclick="submitForm()">送出，預約課程</button>`);
+}
+function renderDone(app){
+  app.innerHTML=HEADER+`<div class="done fade"><div class="rule"></div><p class="eyebrow">Thank you</p>
+   <h1 class="q" style="margin-top:12px">已收到您的預約</h1><p class="hint">教室會依您選的聯絡方式與您約定上課日期。有任何問題，也可以直接打電話或傳 LINE 給我們。</p>
+   <p class="hint"><a class="home" href="https://moonickmusic.com/">回到官網</a></p></div>`+FOOTER;
+  dock(null);
+}
+
+/* ============ 送出：POST 到原 Google 表單 formResponse ============ */
+const phoneNum=s=>{let d=String(s||"").replace(/[^\d+]/g,""); if(d.startsWith("+886")) d="0"+d.slice(4); else if(d.startsWith("886")&&d.length>=11) d="0"+d.slice(3); return d.replace(/\D/g,"")};
+function buildParams(){
+  const p=new URLSearchParams();
+  const add=(k,v)=>{if(v!==undefined&&v!==null&&String(v).trim()!=="") p.append(k,String(v).trim())};
+  ["name","parent","relation","age","email","contact","gender","practice","level","type"].forEach(k=>add(E[k],A[k])); add(E.phone,phoneNum(A.phone));
+  ["personality","reason","music","instr"].forEach(k=>(A[k]||[]).forEach(v=>add(E[k],v)));
+  const T=A.time||{}; DAYS.forEach(([d,ent])=>(T[d]||[]).forEach(h=>add(ent,h)));
+  p.append("fvv","1"); p.append("pageHistory","0");
+  return p;
+}
+async function submitForm(){
+  const p=buildParams(), btn=$("#sendBtn");
+  if(!LIVE_SUBMIT){ $("#payload").textContent=POST_URL+"\n\n"+[...p.entries()].map(([k,v])=>k+" = "+v).join("\n"); $("#modal").classList.add("show"); return; }
+  btn.disabled=true; btn.textContent="送出中…";
+  try{
+    await fetch(POST_URL,{method:"POST",mode:"no-cors",body:p}); // Google 不回 CORS，看不到回應內容；沒有網路錯誤就當成功
+    clearSave(); A={}; step="done"; render(); clearSave();
+  }catch(e){
+    btn.disabled=false; btn.textContent="再送一次";
+    alert("網路好像斷了，請再按一次送出，或直接打電話 02-8965-2288、傳 LINE 給我們。");
+  }
+}
+render();
+</script>
+</body>
+</html>

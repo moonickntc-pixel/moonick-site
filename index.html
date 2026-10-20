@@ -177,8 +177,8 @@ section{padding:40px 20px;max-width:960px;margin:auto}
 .line{background:#06C755;color:#fff}.form{background:transparent;color:var(--gold);border:2px solid var(--gold);padding:10px 20px}.tel{background:var(--gold);color:#111}
 footer .form,section .form{color:var(--goldt);border-color:var(--goldt)}
 h2{color:var(--goldt);font-size:1.3rem;margin:0 0 8px}.st{font-size:1.45rem;color:var(--ink);border-left:6px solid var(--gold);padding-left:10px;margin-bottom:20px}
-.grid{display:grid;gap:16px}@media(min-width:720px){.grid{grid-template-columns:1fr 1fr}.hero h1{font-size:2.3rem}}
-.card{background:#fff;border-radius:12px;padding:20px;border-top:3px solid var(--gold);box-shadow:0 2px 12px rgba(0,0,0,.06)}
+.grid{display:grid;gap:16px}@media(min-width:720px){.grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.hero h1{font-size:2.3rem}}
+.card{background:#fff;border-radius:12px;padding:20px;border-top:3px solid var(--gold);box-shadow:0 2px 12px rgba(0,0,0,.06);min-width:0}
 .card ul{padding-left:20px;margin:6px 0}.tag{color:var(--navy);font-weight:700;font-size:.9rem}
 details{background:#fff;border-radius:10px;padding:14px 16px;margin-bottom:10px;border-left:4px solid var(--navy)}summary{font-weight:700;color:var(--ink);cursor:pointer}
 iframe{width:100%;height:280px;border:0;border-radius:12px}
@@ -188,9 +188,9 @@ footer .form{color:var(--gold);border-color:var(--gold)}
 .tgrid{display:grid;gap:18px}.tcard{display:grid;gap:16px}.tcard img{width:100%;max-width:260px;height:auto;border-radius:10px;aspect-ratio:4/5;object-fit:cover}@media(min-width:720px){.tcard{grid-template-columns:220px 1fr}}
 .alist a{display:block;background:#fff;border-radius:10px;padding:14px 16px;margin-bottom:10px;color:var(--ink);text-decoration:none;border-left:4px solid var(--gold);font-weight:700}.alist a span{display:block;font-weight:400;color:#555;font-size:.92rem;margin-top:4px}
 .photo{display:block;width:100%;height:auto;border-radius:12px;margin:18px 0 0;box-shadow:0 2px 12px rgba(0,0,0,.08)}
-.card .cimg{display:block;width:100%;height:auto;aspect-ratio:4/3;object-fit:cover;border-radius:8px;margin:0 0 12px}
-.gal{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(min-width:720px){.gal{grid-template-columns:repeat(4,1fr)}}
-@media(min-width:720px){.photo{aspect-ratio:16/9;object-fit:cover}}.gal figure{margin:0}.gal img{display:block;width:100%;height:auto;aspect-ratio:3/4;object-fit:cover;border-radius:10px}.gal figure.wide{grid-column:1/-1}.gal figure.wide img{aspect-ratio:4/3}@media(min-width:720px){.gal figure.wide img{aspect-ratio:21/9}}.gal figcaption{font-size:.85rem;color:#555;margin-top:6px;text-align:center}
+.card .cimg{display:block;width:100%;height:auto;aspect-ratio:4/3;object-fit:cover;border-radius:8px;margin:0 0 12px}.card .cimg.person{aspect-ratio:3/4;object-fit:contain;background:#F3F1EC;max-width:100%}
+.gal{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}@media(min-width:720px){.gal{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(min-width:720px){.photo{aspect-ratio:16/9;object-fit:cover}}.gal figure{margin:0;min-width:0}.gal img{display:block;width:100%;height:auto;aspect-ratio:3/4;object-fit:cover;border-radius:10px}.gal figure.wide{grid-column:1/-1}.gal figure.wide img{aspect-ratio:4/3}@media(min-width:720px){.gal figure.wide img{aspect-ratio:21/9}}.gal figcaption{font-size:.85rem;color:#555;margin-top:6px;text-align:center}
 </style>
 </head>
 <body>
@@ -208,10 +208,10 @@ footer .form{color:var(--gold);border-color:var(--gold)}
 </section>
 <section id="courses"><h2 class="st">課程介紹</h2><div class="grid">
 <div class="card"><img class="cimg" src="img/classroom/banqiao-jazz-drum-kit.jpg" alt="板橋慕尼克音樂爵士鼓課使用的藍色真鼓組" width="1000" height="1147" loading="lazy" decoding="async"><h2><a href="drums/" style="color:inherit;text-decoration:none">板橋兒童爵士鼓課</a></h2><p class="tag">兒童・成人</p><p>板橋校區有隔音鼓房，用真的爵士鼓上課，孩子打得到真鼓的力道和聲音。</p><ul><li>握棒、基本打點與穩定拍子</li><li>基礎節奏型、跟著流行歌曲演奏</li><li>練習專注與手腳協調</li></ul><p><a href="drums/" style="color:var(--goldt);font-weight:700">看板橋爵士鼓課 ›</a></p></div>
-<div class="card"><img class="cimg" src="img/courses/banqiao-class-guitar-red.jpg" alt="孩子在慕尼克音樂板橋教室彈紅色電吉他" width="1050" height="1400" loading="lazy" decoding="async"><h2><a href="guitar/" style="color:inherit;text-decoration:none">板橋吉他課</a></h2><p class="tag">兒童・成人</p><ul><li>基本和弦、刷法、指法</li><li>看譜與節奏</li><li>自彈自唱完整一首歌</li></ul><p><a href="guitar/" style="color:var(--goldt);font-weight:700">看板橋吉他課 ›</a></p></div>
-<div class="card"><img class="cimg" src="img/courses/banqiao-class-bass-02.jpg" alt="孩子在慕尼克音樂板橋教室上 Bass 課" width="1050" height="1400" loading="lazy" decoding="async"><h2>板橋Bass電貝斯課</h2><p class="tag">兒童・成人</p><ul><li>撥弦與左手按弦基礎</li><li>穩定律動、和鼓一起抓拍子</li><li>跟著歌曲練習低音線條</li></ul></div>
-<div class="card"><img class="cimg" src="img/courses/banqiao-class-keyboard-sing.jpg" alt="孩子在慕尼克音樂板橋教室對著麥克風唱歌" width="948" height="1400" loading="lazy" decoding="async"><h2>板橋歌唱課</h2><p class="tag">兒童・成人</p><ul><li>發聲與呼吸</li><li>音準與節奏</li><li>完整唱好一首喜歡的歌</li></ul></div>
-<div class="card"><img class="cimg" src="img/courses/banqiao-class-piano-01.jpg" alt="孩子在慕尼克音樂板橋教室彈鍵盤" width="1050" height="1400" loading="lazy" decoding="async"><h2><a href="piano/" style="color:inherit;text-decoration:none">板橋鋼琴課</a></h2><p class="tag">兒童・成人</p><ul><li>手型與指法</li><li>讀譜與基礎樂理</li><li>從簡單曲目開始彈奏</li></ul><p><a href="piano/" style="color:var(--goldt);font-weight:700">看板橋鋼琴課 ›</a></p></div>
+<div class="card"><img class="cimg person" src="img/courses/banqiao-class-guitar-red.jpg" alt="孩子在慕尼克音樂板橋教室彈紅色電吉他" width="1050" height="1400" loading="lazy" decoding="async"><h2><a href="guitar/" style="color:inherit;text-decoration:none">板橋吉他課</a></h2><p class="tag">兒童・成人</p><ul><li>基本和弦、刷法、指法</li><li>看譜與節奏</li><li>自彈自唱完整一首歌</li></ul><p><a href="guitar/" style="color:var(--goldt);font-weight:700">看板橋吉他課 ›</a></p></div>
+<div class="card"><img class="cimg person" src="img/courses/banqiao-class-bass-02.jpg" alt="孩子在慕尼克音樂板橋教室上 Bass 課" width="1050" height="1400" loading="lazy" decoding="async"><h2>板橋Bass電貝斯課</h2><p class="tag">兒童・成人</p><ul><li>撥弦與左手按弦基礎</li><li>穩定律動、和鼓一起抓拍子</li><li>跟著歌曲練習低音線條</li></ul></div>
+<div class="card"><img class="cimg person" src="img/courses/banqiao-stage-guitar-04.jpg" alt="孩子在舞台上對著麥克風唱歌" width="788" height="1400" loading="lazy" decoding="async"><h2>板橋歌唱課</h2><p class="tag">兒童・成人</p><ul><li>發聲與呼吸</li><li>音準與節奏</li><li>完整唱好一首喜歡的歌</li></ul></div>
+<div class="card"><img class="cimg person" src="img/courses/banqiao-class-keyboard-white.jpg" alt="孩子在慕尼克音樂板橋教室的白色鍵盤前" width="1050" height="1400" loading="lazy" decoding="async"><h2><a href="piano/" style="color:inherit;text-decoration:none">板橋鋼琴課</a></h2><p class="tag">兒童・成人</p><ul><li>手型與指法</li><li>讀譜與基礎樂理</li><li>從簡單曲目開始彈奏</li></ul><p><a href="piano/" style="color:var(--goldt);font-weight:700">看板橋鋼琴課 ›</a></p></div>
 </div></section>
 <section id="format"><h2 class="st">上課方式</h2><div class="grid">
 <div class="card"><h2>個人班</h2><p>一對一，依個人程度與目標安排進度，時間較彈性。</p></div>

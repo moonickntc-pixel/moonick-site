@@ -187,9 +187,9 @@ const HOURS = ["10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","
 const o=(...a)=>a.map(x=>Array.isArray(x)?x:[x,x]);
 const Q = {
   name:{t:"學員姓名",kind:"text",ph:"例：王小明",req:true},
-  age:{t:"學員年齡",kind:"text",num:true,ph:"例：5",req:true,hint:"填數字就好，例如 5 或 3.5。大人填實際年齡。"},
+  age:{t:"學員年齡",kind:"text",num:true,ph:"例：5",req:true,hint:"請填數字，例如 5 或 3.5。成人請填實際年齡。"},
   gender:{t:"學員生理性別",kind:"single",opts:o("男","女"),grid:"two",req:true},
-  parent:{t:"聯絡人姓名",kind:"text",ph:"例：王媽媽",req:true,hint:"成人學員填自己的名字就好。"},
+  parent:{t:"聯絡人姓名",kind:"text",ph:"例：王媽媽",req:true,hint:"成人學員請填自己的名字。"},
   relation:{t:"聯絡人與學員的關係",kind:"text",ph:"例：媽媽、爸爸、本人",req:true},
   phone:{t:"聯絡電話",kind:"tel",ph:"例：0912-345-678",req:true},
   email:{t:"電子信箱",kind:"email",ph:"name@example.com",hint:"可以不填。"},
@@ -252,7 +252,7 @@ function render(){
   let h=HEADER+`<div class="fade"><div class="top"><button class="back" onclick="go(-1)">${BACK}上一題</button>
    <p class="count"><b>${pad(n)}</b> / ${pad(N)}</p></div>
    <div class="track" role="progressbar" aria-valuemin="1" aria-valuemax="${N}" aria-valuenow="${n}" aria-label="作答進度"><span style="width:${n/N*100}%"></span></div>
-   ${resumed?`<p class="resume">上次填到一半的內容還在，接著填就好。</p>`:""}
+   ${resumed?`<p class="resume">上次填到一半的內容已保留，可接著填寫。</p>`:""}
    <h1 class="q">${q.t}</h1>${q.hint?`<p class="hint">${q.hint}</p>`:""}`;
   if(["text","tel","email"].includes(q.kind)){
     const attr=q.kind==="tel"?'type="tel" inputmode="tel" autocomplete="tel"':q.kind==="email"?'type="email" inputmode="email" autocomplete="email"':q.num?'type="text" inputmode="decimal" autocomplete="off"':'type="text" autocomplete="off"';

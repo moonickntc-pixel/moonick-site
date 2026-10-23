@@ -204,10 +204,10 @@ const Q = {
     ["數位創作 6y以上","數位創作","建議 6 歲以上"]]},
   type:{t:"比較想上哪一種班？",kind:"single",req:true,opts:[
     ["個人班(單堂50分鐘 $1200)","個人班","一對一，一堂 50 分鐘，一期 12 堂"],
-    ["團體班3~5人(單堂50分鐘 $800)","團體班","3～5 人，一堂 50 分鐘。人報得夠了才開班"]]},
+    ["團體班3~5人(單堂50分鐘 $800)","團體班","3 到 5 人，一堂 50 分鐘。人數到了才開班"]]},
   level:{t:"目前的程度",kind:"single",req:true,opts:o("無基礎","1年內的初學者","學齡1年以上","學齡2~3年","學齡3年以上")},
   practice:{t:"預計每週練習幾天？",kind:"single",grid:"three",req:true,opts:o(["0","0 天"],["1","1 天"],["2","2 天"],["3","3 天"],["4~5","4～5 天"],["6~7","6～7 天"])},
-  time:{t:"可以上課的時間",kind:"grid",hint:"點星期幾，再選可以上課的整點，可以選多個。這題可以略過，電話裡再排。週一、週二教室公休。"},
+  time:{t:"可以上課的時間",kind:"grid",hint:"請點選星期幾，再選可以上課的整點，可以選多個。這一題可以略過，電話聯絡時再安排。週一、週二教室公休。"},
   personality:{t:"學員的個性比較像？",kind:"multi",grid:"two",req:true,hint:"可以選多個。",opts:o("活潑大方","害羞內向","成熟懂事","童心未泯","誠懇務實","聰明機智")},
   music:{t:"喜歡哪些音樂？",kind:"multi",req:true,hint:"可以選多個。",opts:o("古典音樂",["華語流行樂語獨立樂團","華語流行、獨立樂團"],["日系流行與動漫主題曲","日系流行、動漫主題曲"],"歐美流行音樂",["Kpop 韓國流行音樂","K-pop 韓國流行音樂"],"搖滾與重金屬")},
   reason:{t:"想學的原因與目標",kind:"multi",req:true,hint:"可以選多個。",opts:o("嘗試與累積多元經驗","興趣與舒壓","培養專長","未來職業","醫療專業建議")}
@@ -306,7 +306,7 @@ function upd(){
   const f=flow(); if(typeof step!=="number"||step<0||step>=f.length) return;
   const key=f[step], q=Q[key];
   if(q.kind==="single"){dock(null);return} // 單選：點了就自動下一題
-  if(q.kind==="grid"){const n=timeCount(); dock(`<button class="btn" id="nx" onclick="next()">${n?`下一題　已選 ${n} 個時段`:"略過，電話裡再約"}</button>`);return}
+  if(q.kind==="grid"){const n=timeCount(); dock(`<button class="btn" id="nx" onclick="next()">${n?`下一題　已選 ${n} 個時段`:"略過，電話聯絡時再安排"}</button>`);return}
   const v=A[key], has=Array.isArray(v)?v.length>0:!!(v&&String(v).trim());
   const label=!q.req&&!has?"略過":"下一題";
   // 文字題：按鈕放在輸入框正下方（不固定在畫面底部），鍵盤打開時不會蓋住輸入框
@@ -332,10 +332,10 @@ function next(){
   const f=flow(), key=f[step], q=Q[key];
   // Google 表單規定「年齡」「電話」必須是大於 0 的數字，不符合會被拒收（no-cors 看不到錯誤），所以這裡先擋
   if(key==="age"){const v=(A.age||"").replace(/[^\d.]/g,"");
-    if(!/^\d+(\.\d+)?$/.test(v)||!(parseFloat(v)>0)){$("#err").textContent="這裡要填數字，例如 5。";return} A.age=v; save();}
+    if(!/^\d+(\.\d+)?$/.test(v)||!(parseFloat(v)>0)){$("#err").textContent="請填寫數字，例如 5。";return} A.age=v; save();}
   if(key==="phone"){const d=(A.phone||"").replace(/[\s\-()]/g,"");
-    if(!/^(\+?886|0)\d{8,9}$/.test(d)){$("#err").textContent="電話位數不夠，再看一次。";return}}
-  if(key==="email"&&(A.email||"").trim()&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(A.email.trim())){$("#err").textContent="信箱看起來不完整。改一下，或清空略過。";return}
+    if(!/^(\+?886|0)\d{8,9}$/.test(d)){$("#err").textContent="電話位數不足，請再確認。";return}}
+  if(key==="email"&&(A.email||"").trim()&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(A.email.trim())){$("#err").textContent="電子信箱看起來不完整。請修改，或清空後略過。";return}
   if(q&&["text","tel"].includes(q.kind)&&q.req&&!(A[key]||"").trim()) return;
   userNav=true; step++; render();
 }
@@ -366,8 +366,8 @@ function renderStart(app){
   app.innerHTML=`<div class="hero">${heroMedia()}${HEADER}</div>
   <div class="intro fade"><p class="eyebrow">Reservation</p>
   <h1>預約課程</h1>
-  <p class="lead">大概兩分鐘填完。<br>送出之後，教室會用你選的方式連絡，一起排這一期 12 堂。</p>
-  <p class="hint">出社會、還在上班的，先看 <a href="../adult/">成人課程</a>。退休、想唱老歌的，看 <a href="../senior/">樂齡專區</a>。</p>
+  <p class="lead">大約兩分鐘可以填完。<br>送出之後，教室會用你選擇的方式聯絡，一起安排這一期 12 堂。</p>
+  <p class="hint">如果是出社會、還在上班，請先參考 <a href="../adult/">成人課程</a>。如果已經退休、想唱熟悉的老歌，請參考 <a href="../senior/">樂齡專區</a>。</p>
   <p class="tags"><span>爵士鼓</span><span>流行鋼琴</span><span>電吉他</span><span>木吉他</span><span>貝斯</span><span>歌唱</span><span>數位創作</span></p>
   <ol class="steps"><li><i>01</i>學員與聯絡人資料</li><li><i>02</i>想學的樂器、班別與上課時間</li><li><i>03</i>個性、喜歡的音樂與學習目標</li></ol>
   </div>`+FOOTER;
@@ -376,7 +376,7 @@ function renderStart(app){
 }
 function labelOf(key){
   const q=Q[key], v=A[key];
-  if(key==="time"){const T=A.time||{}; const r=DAYS.filter(([d])=>T[d]).map(([d])=>`${d}　${T[d].join("、")}`); return r.length?r.join("\n"):"（這題先略過，電話裡再排）"}
+  if(key==="time"){const T=A.time||{}; const r=DAYS.filter(([d])=>T[d]).map(([d])=>`${d}　${T[d].join("、")}`); return r.length?r.join("\n"):"（這一題先略過，電話聯絡時再安排）"}
   if(v===undefined||v===""||(Array.isArray(v)&&!v.length)) return "（略過）";
   if(q.opts){const m=x=>{const p=q.opts.find(p=>p[0]===x);return p?p[1]:x}; return Array.isArray(v)?v.map(m).join("、"):m(v)}
   return v;
@@ -385,7 +385,7 @@ function renderSummary(app){
   const rows=flow().map(k=>`<div class="row"><div><div class="k">${Q[k].t}</div><div class="v">${esc(labelOf(k))}</div></div><button class="ed" onclick="jump('${k}')">修改</button></div>`).join("");
   app.innerHTML=HEADER+`<div class="fade"><div class="top"><button class="back" onclick="go(-1)">${BACK}上一題</button><p class="count">確認</p></div>
    <div class="track"><span style="width:100%"></span></div>
-   <h1 class="q">確認你的資料</h1><p class="hint">看過一遍再送出。教室會用你留的方式連絡，排上課時間。</p><div class="sum">${rows}</div></div>`+FOOTER;
+   <h1 class="q">請確認填寫的資料</h1><p class="hint">請再看過一遍之後送出。教室會用你留下的方式聯絡，安排上課時間。</p><div class="sum">${rows}</div></div>`+FOOTER;
   dock(`<button class="btn" id="sendBtn" onclick="submitForm()">送出，預約課程</button>`);
 }
 function renderDone(app){

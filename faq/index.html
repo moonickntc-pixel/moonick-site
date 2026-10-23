@@ -37,6 +37,11 @@ footer .form{color:var(--gold);border-color:var(--gold)}
 .card .cimg{display:block;width:100%;height:auto;aspect-ratio:4/3;object-fit:cover;border-radius:8px;margin:0 0 12px}.card .cimg.person{aspect-ratio:3/4;object-fit:contain;background:#F3F1EC;max-width:100%}
 .gal{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}@media(min-width:720px){.gal{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(min-width:720px){.photo{aspect-ratio:16/9;object-fit:cover}}.gal figure{margin:0;min-width:0}.gal img{display:block;width:100%;height:auto;aspect-ratio:3/4;object-fit:cover;border-radius:10px}.gal figure.wide{grid-column:1/-1}.gal figure.wide img{aspect-ratio:4/3}@media(min-width:720px){.gal figure.wide img{aspect-ratio:21/9}}.gal figcaption{font-size:.85rem;color:#555;margin-top:6px;text-align:center}
+.top{background:#111;border-bottom:3px solid var(--gold);padding:10px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.top a.brand{display:flex;align-items:center;gap:10px;color:#FCFBF8;text-decoration:none;font-weight:700}
+.top img{width:40px;height:40px;border-radius:50%;background:#FCFBF8;border:1px solid var(--gold)}
+.top nav{margin-left:auto;display:flex;gap:16px;font-size:.95rem}.top nav a{color:#E6E3DC;text-decoration:none}
+@media(max-width:719px){.top nav{min-width:0;max-width:100%;flex-wrap:nowrap;gap:0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;-ms-overflow-style:none;overscroll-behavior-x:contain}.top nav::-webkit-scrollbar{display:none}.top nav a{flex-shrink:0;white-space:nowrap;overflow-wrap:normal;word-break:keep-all;display:inline-flex;align-items:center;min-height:44px;padding:0 12px}}
 </style>
 </head>
 <body>

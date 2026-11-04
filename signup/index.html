@@ -176,7 +176,8 @@ const E = {
   name:"entry.1533852387", parent:"entry.297686325", relation:"entry.437811702", phone:"entry.1237122548",
   age:"entry.1353476259", email:"entry.1105098480", contact:"entry.620240045", gender:"entry.1613596884",
   personality:"entry.935150233", practice:"entry.2036838828", level:"entry.213033094", reason:"entry.1878769903",
-  music:"entry.1949528208", instr:"entry.1084453381", type:"entry.1486376278"
+  music:"entry.1949528208", instr:"entry.1084453381", type:"entry.1486376278",
+  source:"entry.1112476988", referrer:"entry.663361189", utm:"entry.673116146"
 };
 // 可上課時間：核取方塊格狀題，每一天是一個 entry
 const DAYS = [["星期一","entry.1064522648"],["星期二","entry.1595633699"],["星期三","entry.685379873"],["星期四","entry.1681564137"],
@@ -210,9 +211,23 @@ const Q = {
   time:{t:"可以上課的時間",kind:"grid",hint:"點星期幾，再選可以上課的整點，可以選多個。這題可以略過，電話裡再排。週一、週二教室公休。"},
   personality:{t:"學員的個性比較像？",kind:"multi",grid:"two",req:true,hint:"可以選多個。",opts:o("活潑大方","害羞內向","成熟懂事","童心未泯","誠懇務實","聰明機智")},
   music:{t:"喜歡哪些音樂？",kind:"multi",req:true,hint:"可以選多個。",opts:o("古典音樂",["華語流行樂語獨立樂團","華語流行、獨立樂團"],["日系流行與動漫主題曲","日系流行、動漫主題曲"],"歐美流行音樂",["Kpop 韓國流行音樂","K-pop 韓國流行音樂"],"搖滾與重金屬")},
+  source:{t:"請問您是從哪裡知道我們的？（可複選）",kind:"multi",other:true,hint:"可複選；如果是 AI 推薦後再自己去搜尋，兩個都可以勾。",opts:o("Google 搜尋","Google 地圖","Gemini","ChatGPT","其他 AI（例如 Perplexity、Copilot）","Facebook 粉專","Instagram","Threads","YouTube","官方 LINE","親友介紹","經過教室看到招牌","看過我們的演出或活動","其他")},
   reason:{t:"想學的原因與目標",kind:"multi",req:true,hint:"可以選多個。",opts:o("嘗試與累積多元經驗","興趣與舒壓","培養專長","未來職業","醫療專業建議")}
 };
-const FLOW = ["name","age","gender","parent","relation","phone","email","contact","instr","type","level","practice","time","personality","music","reason"];
+const FLOW = ["name","age","gender","parent","relation","phone","email","contact","instr","type","level","practice","time","personality","music","reason","source"];
+
+/* ============ 來源追蹤（不顯示給家長）：第一次進站的外部來源與廣告參數，存在 sessionStorage ============ */
+const LAND_KEY="mk_landing";
+function landing(){
+  try{const d=JSON.parse(sessionStorage.getItem(LAND_KEY)||"null"); if(d) return d;}catch(e){}
+  let ref=document.referrer||""; try{ if(ref&&new URL(ref).host===location.host) ref=""; }catch(e){}
+  const q=new URLSearchParams(location.search), u=new URLSearchParams();
+  ["utm_source","utm_medium","utm_campaign","utm_content","utm_term","gclid","fbclid"].forEach(k=>{const v=q.get(k); if(v) u.append(k,v)});
+  const d={ref,utm:u.toString(),url:location.href};
+  try{sessionStorage.setItem(LAND_KEY,JSON.stringify(d))}catch(e){}
+  return d;
+}
+landing();
 
 /* ============ 狀態 ============ */
 // 自動保存：每次作答、換題都存到 localStorage（LINE 內建瀏覽器離開再回來也不會不見），送出成功後清除；保留 7 天
@@ -263,6 +278,7 @@ function render(){
     h+=`<div class="opts ${q.grid||""} ${q.kind}">`+q.opts.map(([v,l,s])=>{
       const on=q.kind==="multi"?(A[key]||[]).includes(v):A[key]===v;
       return `<button type="button" class="opt" aria-pressed="${on}" data-v="${esc(v)}"><span class="lb">${l}${s?`<small>${s}</small>`:""}</span><span class="mk"></span></button>`}).join("")+`</div>`;
+    if(q.other&&(A[key]||[]).includes("其他")) h+=`<input class="field" id="otherInp" type="text" autocomplete="off" placeholder="請寫下從哪裡知道我們" value="${esc(A[key+"_other"]||"")}">`;
   } else if(q.kind==="grid"){
     const T=A.time||{};
     h+=`<div class="days">`+DAYS.map(([d])=>{const sel=T[d]||[];
@@ -277,6 +293,7 @@ function render(){
     const a=A.time[d]||[]; A.time[d]=a.includes(hr)?a.filter(x=>x!==hr):a.concat(hr).sort(); if(!A.time[d].length) delete A.time[d]; save();
     b.setAttribute("aria-pressed",A.time[d]?A.time[d].includes(hr):false);
     const c=b.closest(".dayrow").querySelector(".c"); c.classList.toggle("on",!!A.time[d]); c.innerHTML=(A.time[d]?A.time[d].join("、"):"未選")+CHEV; upd()});
+  const oi=$("#otherInp"); if(oi) oi.oninput=()=>{A[key+"_other"]=oi.value;save()};
   const inp=$("#inp"); if(inp){inp.oninput=()=>{A[key]=inp.value;save();upd()};
     inp.onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey){ if(e.isComposing||e.keyCode===229) return; // 注音/拼音選字中的 Enter 不算
       e.preventDefault(); userNav=true; next()}};
@@ -319,7 +336,8 @@ function pick(key,q,v){
     A[key]=v; save(); els.forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===v)); setTimeout(next,240);
   } else {
     const arr=A[key]||[]; A[key]=arr.includes(v)?arr.filter(x=>x!==v):arr.concat(v); save();
-    els.forEach(b=>b.setAttribute("aria-pressed",A[key].includes(b.dataset.v))); upd();
+    els.forEach(b=>b.setAttribute("aria-pressed",A[key].includes(b.dataset.v)));
+    if(q.other&&v==="其他"){ render(); return; } upd();
   }
 }
 /* 文字題「靜默檢查」：鍵盤按 完成 時用，合格才自動下一題，不合格就不動也不跳錯誤 */
@@ -378,6 +396,7 @@ function labelOf(key){
   const q=Q[key], v=A[key];
   if(key==="time"){const T=A.time||{}; const r=DAYS.filter(([d])=>T[d]).map(([d])=>`${d}　${T[d].join("、")}`); return r.length?r.join("\n"):"（這題先略過，電話裡再排）"}
   if(v===undefined||v===""||(Array.isArray(v)&&!v.length)) return "（略過）";
+  if(key==="source"&&Array.isArray(v)) return v.map(x=>x==="其他"&&(A.source_other||"").trim()?"其他："+A.source_other.trim():x).join("、");
   if(q.opts){const m=x=>{const p=q.opts.find(p=>p[0]===x);return p?p[1]:x}; return Array.isArray(v)?v.map(m).join("、"):m(v)}
   return v;
 }
@@ -402,6 +421,8 @@ function buildParams(){
   const add=(k,v)=>{if(v!==undefined&&v!==null&&String(v).trim()!=="") p.append(k,String(v).trim())};
   ["name","parent","relation","age","email","contact","gender","practice","level","type"].forEach(k=>add(E[k],A[k])); add(E.phone,phoneNum(A.phone));
   ["personality","reason","music","instr"].forEach(k=>(A[k]||[]).forEach(v=>add(E[k],v)));
+  (A.source||[]).forEach(v=>{ if(v==="其他"){ p.append(E.source,"__other_option__"); add(E.source+".other_option_response",A.source_other||""); } else add(E.source,v); });
+  const L=landing(); add(E.referrer,L.ref||"直接進站"); add(E.utm,L.utm);
   const T=A.time||{}; DAYS.forEach(([d,ent])=>(T[d]||[]).forEach(h=>add(ent,h)));
   p.append("fvv","1"); p.append("pageHistory","0");
   return p;

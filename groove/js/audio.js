@@ -1,154 +1,170 @@
-// Synthesized drum kit and a look-ahead scheduler. No samples.
+// Acoustic one-shot kits. Samples load per kit and stay cached.
+
+const VOICES = [
+  "kick",
+  "snare",
+  "snareAccent",
+  "ghost",
+  "xstick",
+  "buzz",
+  "hat",
+  "hatOpen",
+  "foot",
+  "ride",
+  "rideBell",
+  "crash",
+  "stack",
+  "cow",
+  "click",
+  "tom1",
+  "tom2",
+  "tom3",
+];
+
+export const KITS = [
+  { id: "rock", label: "Rock 搖滾" },
+  { id: "funk", label: "Funk 放克" },
+  { id: "jazz", label: "Jazz 爵士" },
+];
+
+const KIT_KEY = "drumgrid-kit";
 
 export function createKit() {
   let ctx = null;
   let master = null;
-  let noise = null;
+  let current = rememberedKit();
+  const buffers = {};
+  const pending = {};
+  let statusFn = () => {};
 
   function ensure() {
     if (!ctx) {
       const AC = window.AudioContext || window.webkitAudioContext;
       ctx = new AC();
       master = ctx.createGain();
-      master.gain.value = 0.85;
+      master.gain.value = 0.8;
       const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -14;
-      comp.knee.value = 18;
-      comp.ratio.value = 3;
+      comp.threshold.value = -12;
+      comp.knee.value = 8;
+      comp.ratio.value = 2.4;
       comp.attack.value = 0.003;
-      comp.release.value = 0.12;
+      comp.release.value = 0.14;
       master.connect(comp);
       comp.connect(ctx.destination);
-      const len = ctx.sampleRate * 2;
-      noise = ctx.createBuffer(1, len, ctx.sampleRate);
-      const data = noise.getChannelData(0);
-      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
     }
     if (ctx.state === "suspended") ctx.resume();
     return ctx;
   }
 
-  function gain(at, peak, attack, decay) {
-    const node = ctx.createGain();
-    const p = Math.max(0.0001, peak);
-    node.gain.setValueAtTime(0.0001, at);
-    node.gain.exponentialRampToValueAtTime(p, at + attack);
-    node.gain.exponentialRampToValueAtTime(0.0001, at + attack + decay);
-    node.connect(master);
-    return node;
+  function sampleUrl(kit, voice) {
+    return new URL(`../samples/${kit}/${voice}.mp3`, import.meta.url).href;
   }
 
-  function osc(type, freq, at, dur, peak) {
-    const node = ctx.createOscillator();
-    node.type = type;
-    node.frequency.setValueAtTime(freq, at);
-    const g = gain(at, peak, 0.004, dur);
-    node.connect(g);
-    node.start(at);
-    node.stop(at + dur + 0.05);
-    return node;
+  async function fetchBuffer(kit, voice) {
+    const url = sampleUrl(kit, voice);
+    const context = ensure();
+    let cache = null;
+    try {
+      if ("caches" in window) cache = await caches.open("drumgrid-drums-v3");
+    } catch {
+      cache = null;
+    }
+    let response = cache ? await cache.match(url) : null;
+    if (!response) {
+      response = await fetch(url);
+      if (!response.ok) throw new Error(`Missing drum sample ${kit}/${voice}`);
+      if (cache) await cache.put(url, response.clone());
+    }
+    const raw = await response.arrayBuffer();
+    return context.decodeAudioData(raw.slice(0));
   }
 
-  function burst(filterType, freq, q, at, dur, peak) {
-    const src = ctx.createBufferSource();
-    src.buffer = noise;
-    const filter = ctx.createBiquadFilter();
-    filter.type = filterType;
-    filter.frequency.value = freq;
-    filter.Q.value = q;
-    const g = gain(at, peak, 0.002, dur);
-    src.connect(filter);
-    filter.connect(g);
-    src.start(at);
-    src.stop(at + dur + 0.02);
+  function load(id) {
+    const kit = KITS.some((item) => item.id === id) ? id : "jazz";
+    if (buffers[kit]) return Promise.resolve(buffers[kit]);
+    if (pending[kit]) return pending[kit];
+    statusFn("loading", kit);
+    pending[kit] = Promise.all(VOICES.map(async (voice) => [voice, await fetchBuffer(kit, voice)]))
+      .then((pairs) => {
+        buffers[kit] = Object.fromEntries(pairs);
+        if (current === kit) statusFn("ready", kit);
+        return buffers[kit];
+      })
+      .catch((error) => {
+        delete pending[kit];
+        statusFn("error", kit);
+        throw error;
+      });
+    return pending[kit];
+  }
+
+  function select(id) {
+    const kit = KITS.some((item) => item.id === id) ? id : "jazz";
+    current = kit;
+    try {
+      localStorage.setItem(KIT_KEY, kit);
+    } catch {
+      /* private mode */
+    }
+    return load(kit);
+  }
+
+  function voiceFor(inst, vel) {
+    if (inst === "snare") {
+      if (vel < 60) return "ghost";
+      if (vel >= 115) return "snareAccent";
+      return "snare";
+    }
+    if (inst === "clickSoft") return "click";
+    return VOICES.includes(inst) ? inst : "snare";
   }
 
   function play(inst, vel = 100, when = 0) {
+    const map = buffers[current];
+    if (!map) return;
     const at = Math.max(ensure().currentTime, when);
-    const v = Math.max(0.05, Math.min(1, vel / 127));
-    switch (inst) {
-      case "kick": {
-        const o = ctx.createOscillator();
-        o.type = "sine";
-        o.frequency.setValueAtTime(165, at);
-        o.frequency.exponentialRampToValueAtTime(46, at + 0.09);
-        const g = gain(at, 0.95 * v, 0.004, 0.24);
-        o.connect(g);
-        o.start(at);
-        o.stop(at + 0.3);
-        burst("highpass", 1200, 0.4, at, 0.012, 0.25 * v);
-        break;
-      }
-      case "snare":
-        burst("bandpass", 1800, 0.7, at, 0.14, 0.55 * v);
-        osc("triangle", 196, at, 0.09, 0.35 * v);
-        break;
-      case "xstick":
-        burst("highpass", 4500, 0.8, at, 0.03, 0.35 * v);
-        osc("square", 980, at, 0.025, 0.12 * v);
-        break;
-      case "tom1":
-      case "tom2":
-      case "tom3": {
-        const start = inst === "tom1" ? 220 : inst === "tom2" ? 156 : 90;
-        const o = ctx.createOscillator();
-        o.type = "sine";
-        o.frequency.setValueAtTime(start, at);
-        o.frequency.exponentialRampToValueAtTime(start * 0.55, at + 0.18);
-        const g = gain(at, 0.7 * v, 0.004, 0.28);
-        o.connect(g);
-        o.start(at);
-        o.stop(at + 0.34);
-        break;
-      }
-      case "hat":
-        burst("highpass", 7500, 0.7, at, 0.045, 0.28 * v);
-        break;
-      case "hatOpen":
-        burst("highpass", 6800, 0.6, at, 0.38, 0.26 * v);
-        break;
-      case "foot":
-        burst("bandpass", 420, 1.2, at, 0.04, 0.35 * v);
-        break;
-      case "ride":
-        osc("sine", 440, at, 0.32, 0.08 * v);
-        osc("triangle", 820, at, 0.22, 0.05 * v);
-        burst("bandpass", 3200, 1.4, at, 0.18, 0.12 * v);
-        break;
-      case "rideBell":
-        osc("triangle", 988, at, 0.22, 0.1 * v);
-        osc("sine", 1480, at, 0.16, 0.06 * v);
-        break;
-      case "crash":
-        burst("highpass", 4800, 0.4, at, 0.85, 0.32 * v);
-        osc("triangle", 310, at, 0.4, 0.05 * v);
-        break;
-      case "stack":
-        burst("highpass", 5200, 0.8, at, 0.22, 0.28 * v);
-        osc("square", 740, at, 0.08, 0.04 * v);
-        break;
-      case "cow":
-        osc("square", 587, at, 0.18, 0.12 * v);
-        osc("square", 845, at, 0.16, 0.08 * v);
-        break;
-      case "click":
-        osc("square", 1760, at, 0.035, 0.18 * v);
-        break;
-      case "clickSoft":
-        osc("square", 1240, at, 0.03, 0.1 * v);
-        break;
-      default:
-        osc("sine", 440, at, 0.05, 0.1 * v);
-    }
+    const voice = voiceFor(inst, vel);
+    const buffer = map[voice];
+    if (!buffer) return;
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    const gain = ctx.createGain();
+    const amount = Math.max(0.05, Math.min(1, vel / 127));
+    const peak = inst === "clickSoft" ? 0.45 * amount : 0.42 + 0.58 * amount;
+    gain.gain.setValueAtTime(peak, at);
+    src.connect(gain);
+    gain.connect(master);
+    src.start(at);
   }
 
   return {
     ensure,
     play,
+    load,
+    select,
+    onStatus(fn) {
+      statusFn = fn;
+    },
+    has(id) {
+      return Boolean(buffers[id]);
+    },
+    get current() {
+      return current;
+    },
     get context() {
       return ctx;
     },
   };
+}
+
+export function rememberedKit() {
+  try {
+    const saved = localStorage.getItem(KIT_KEY);
+    if (KITS.some((item) => item.id === saved)) return saved;
+  } catch {
+    /* ignore */
+  }
+  return "jazz";
 }
 
 export function createTransport(kit) {
@@ -168,11 +184,12 @@ export function createTransport(kit) {
     frame({ playing: false, slot: -1 });
   }
 
-  function start(buildLoop) {
+  async function start(buildLoop) {
+    await kit.load(kit.current);
     const ctx = kit.ensure();
     stop();
     playing = true;
-    let scheduledUntil = ctx.currentTime + 0.06;
+    let scheduledUntil = ctx.currentTime + 0.05;
     let first = true;
     const speedStarted = ctx.currentTime;
 
@@ -220,8 +237,11 @@ export function createTransport(kit) {
     start,
     stop,
     toggle(buildLoop) {
-      if (playing) stop();
-      else start(buildLoop);
+      if (playing) {
+        stop();
+        return Promise.resolve();
+      }
+      return start(buildLoop);
     },
     get playing() {
       return playing;

@@ -1,0 +1,21 @@
+DRSKit 2.1
+Source: https://drumgizmo.org/kits/DRSKit/
+Wiki: https://drumgizmo.org/wiki/doku.php?id=kits:drskit
+Recorded by the DrumGizmo team with a kit lent by Jes Eiler of DRSDrums.
+The kit is a kick, a snare, one rack tom, two floor toms, a Paiste Formula 602 hi-hat,
+two crash cymbals, and a Paiste Formula 602 ride. Thirteen microphones, including
+close mics, overheads, and room.
+
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+
+Attribution: Drum samples from DRSKit by the DrumGizmo team and Jes Eiler (DRSDrums), CC BY 4.0.
+https://drumgizmo.org/wiki/doku.php?id=kits:drskit
+
+Rock, Funk, and Jazz are different dynamic levels and microphone balances of that same recording.
+Rock keeps the close microphones forward. Funk keeps them tighter and a little brighter.
+Jazz brings up the overheads and the room, with a lighter stroke and a long ride.
+The snare bottom microphone is included so the snare wires stay audible.
+Hits are not replaced with a drum machine and are not cut down to a click.
+The cowbell is a separate CC0 agogo from Virtuosity Drums auxiliary percussion
+(Versilian Studios and Karoryfer Samples); it is not part of the main kit.

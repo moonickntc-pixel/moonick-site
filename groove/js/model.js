@@ -1,7 +1,7 @@
 // Drumgrid groove model: time, note grids, ABC, MIDI, URL, permutations.
 // No DOM. Safe to import from Node tests and the browser app.
 
-export const MAX_MEASURES = 10;
+export const MAX_MEASURES = 32;
 export const DEFAULT_TEMPO = 80;
 export const MIN_TEMPO = 20;
 export const MAX_TEMPO = 400;
@@ -544,6 +544,12 @@ function param(query, name, fallback = null) {
   return fallback;
 }
 
+export function queryHasGroove(query) {
+  if (!query) return false;
+  if (param(query, "c", null)) return true;
+  return param(query, "H", null) !== null || param(query, "S", null) !== null || param(query, "K", null) !== null;
+}
+
 export function fromQuery(query) {
   if (!query) return defaultGroove();
   const compact = param(query, "c", null);
@@ -1053,9 +1059,8 @@ function addSnare(kind, push) {
   if (kind === "accent") push("snare", 122);
   else if (kind === "ghost") push("snare", 42);
   else if (kind === "xstick") push("xstick", 96);
-  else if (kind === "buzz") {
-    for (let n = 0; n < 4; n++) push("snare", 78, n * 0.018);
-  } else if (kind === "flam") {
+  else if (kind === "buzz") push("buzz", 100);
+  else if (kind === "flam") {
     push("snare", 72, -0.028);
     push("snare", 114);
   } else if (kind === "drag") {

@@ -1,11 +1,45 @@
 import * as M from "./model.js";
-import { createKit, createTransport } from "./audio.js";
+import { createKit, createTransport, rememberedKit } from "./audio.js";
 
 const kit = createKit();
 const transport = createTransport(kit);
 
+const DRAFT_KEY = "drumgrid-draft";
+
+function readDraft() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    return M.fromQuery(raw.startsWith("?") ? raw : `?${raw}`);
+  } catch {
+    return null;
+  }
+}
+
+function loadInitialGroove() {
+  const search = location.search || "";
+  if (M.queryHasGroove(search)) return M.fromQuery(search);
+  return readDraft() || M.fromQuery(search);
+}
+
+function saveDraft(query) {
+  try {
+    localStorage.setItem(DRAFT_KEY, query);
+  } catch {
+    /* private mode or a full disk; the page still works */
+  }
+}
+
+function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 const state = {
-  groove: M.fromQuery(location.search || ""),
+  groove: loadInitialGroove(),
   past: [],
   future: [],
   abcDirty: false,
@@ -74,6 +108,7 @@ function redo() {
 function writeUrl() {
   const q = toQuery();
   history.replaceState(null, "", `${location.pathname}?${q}`);
+  saveDraft(q);
 }
 
 let urlTimer = 0;
@@ -135,6 +170,7 @@ function paintChrome() {
   const quarters = g.measures * g.top * (4 / g.bottom);
   const seconds = (quarters * 60) / g.tempo;
   $("playMeta").textContent = `${g.measures} bar${g.measures > 1 ? "s" : ""} · ${seconds.toFixed(1)}s`;
+  document.querySelectorAll("[data-kit]").forEach((btn) => btn.classList.toggle("on", btn.dataset.kit === kit.current));
   $("loopBtn").classList.toggle("on", transport.looping);
   $("playBtn").classList.toggle("playing", transport.playing);
   $("playIcon").innerHTML = transport.playing
@@ -223,8 +259,8 @@ function paintGrid() {
       cols += `<div class="col ${pipClass(perBeat, pos)}" data-col="${i}">${cells}</div>`;
       if ((s + 1) % group === 0 && s !== npm - 1) cols += '<div class="group-gap"></div>';
     }
-    const lineTop = 24 + 14 + (showStick ? 22 : 0);
-    const cellH = perBeat >= 24 ? 22 : perBeat >= 12 ? 24 : 28;
+    const lineTop = 36 + 20 + (showStick ? 32 : 0);
+    const cellH = perBeat >= 24 ? 40 : perBeat >= 12 ? 48 : 58;
     const tracks = rows
       .map((_, index) => `<i class="track" style="top:${lineTop + index * cellH + cellH / 2}px"></i>`)
       .join("");
@@ -245,6 +281,32 @@ function paintGrid() {
   }
   html += `</div><p class="hint">點格子寫音符。右鍵或按「進階」可以選重音、幽靈音、裝飾音。每一格上方的空格可以打歌詞，中文或英文都行。混合 12 是每拍 12 點，混合 24 是每拍 24 點。</p>`;
   $("grid").innerHTML = html;
+  requestAnimationFrame(fitWritingArea);
+}
+
+function fitWritingArea() {
+  const grid = $("grid");
+  const toolbar = $("toolbar");
+  const col = grid && grid.querySelector(".col");
+  if (!grid || !toolbar || !col || document.body.classList.contains("viewing")) return;
+  const density = Number(grid.dataset.density || 4);
+  const base = density >= 24 ? 40 : density >= 12 ? 48 : 58;
+  grid.style.setProperty("--cell-h", `${base}px`);
+  const rowCells = [...col.children].filter((el) => el.classList.contains("cell") && !el.classList.contains("slot-hidden"));
+  if (!rowCells.length) return;
+  const slack = window.innerHeight - toolbar.getBoundingClientRect().bottom;
+  if (slack > 20) {
+    const next = Math.min(128, base + slack / rowCells.length);
+    grid.style.setProperty("--cell-h", `${Math.round(next)}px`);
+  }
+  grid.querySelectorAll(".columns").forEach((columns) => {
+    const sample = columns.querySelector(".cell:not(.slot-hidden)");
+    if (!sample) return;
+    const h = sample.getBoundingClientRect().height;
+    columns.querySelectorAll(".track").forEach((track, index) => {
+      track.style.top = `${sample.offsetTop + index * h + h / 2}px`;
+    });
+  });
 }
 
 function escapeAttr(value) {
@@ -321,7 +383,7 @@ function renderNotation() {
   if (!state.abcDirty) $("abc").value = text;
   const host = $("sheet");
   host.classList.add("wide");
-  const width = Math.max(320, (host.clientWidth || $("sheetWrap").clientWidth) - 4);
+  const width = Math.max(320, $("sheetWrap").clientWidth - 16);
   const roomy = g.division <= 16;
   try {
     const tunes = window.ABCJS.renderAbc("sheet", text, {
@@ -329,10 +391,10 @@ function renderNotation() {
       staffwidth: width,
       paddingleft: 0,
       paddingright: 0,
-      scale: 1,
+      scale: roomy ? 1.72 : g.division >= 48 ? 1.2 : 1.4,
       wrap: {
-        minSpacing: roomy ? 2.6 : 1.6,
-        maxSpacing: roomy ? 18 : 4.5,
+        minSpacing: roomy ? 3.4 : 1.8,
+        maxSpacing: roomy ? 34 : 6,
         preferredMeasuresPerLine: 1,
       },
       selectionColor: "#bdebdd",
@@ -346,6 +408,24 @@ function renderNotation() {
     $("warnings").hidden = false;
     $("warnings").textContent = `The chart could not be drawn. ${error.message || error}`;
   }
+  enlargeNoteheads();
+  requestAnimationFrame(fitWritingArea);
+}
+
+function enlargeNoteheads() {
+  const svg = document.querySelector("#sheet svg");
+  if (!svg) return;
+  svg.querySelectorAll(".abcjs-notehead").forEach((path) => {
+    const box = path.getBBox();
+    if (!box.width || !box.height) return;
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    const drawn = path.getAttribute("d") || "";
+    const cross = drawn.includes("l ");
+    const scale = cross ? 1.55 : 1.08;
+    if (cross) path.classList.add("is-cross");
+    path.setAttribute("transform", `translate(${cx} ${cy}) scale(${scale}) translate(${-cx} ${-cy})`);
+  });
 }
 
 function buildLoop({ first, elapsed }) {
@@ -395,12 +475,43 @@ function buildLoop({ first, elapsed }) {
   return { hits, duration, countIn, slotTimes };
 }
 
-function togglePlay() {
-  if (!transport.playing) {
+function setSampleStatus(text) {
+  const el = $("sampleStatus");
+  if (!el) return;
+  el.hidden = !text;
+  el.textContent = text || "";
+}
+
+async function togglePlay() {
+  if (transport.playing) {
+    transport.stop();
+    paintChrome();
+    return;
+  }
+  kit.ensure();
+  if (!kit.has(kit.current)) setSampleStatus("載入音色中");
+  try {
+    await kit.load(kit.current);
     state.speed.base = state.groove.tempo;
     state.rotate = "1";
+    await transport.toggle(buildLoop);
+    setSampleStatus("");
+  } catch {
+    setSampleStatus("音色載入失敗");
   }
-  transport.toggle(buildLoop);
+  paintChrome();
+}
+
+async function chooseKit(id) {
+  if (kit.current === id && kit.has(id)) return;
+  if (!kit.has(id)) setSampleStatus("載入音色中");
+  paintChrome();
+  try {
+    await kit.select(id);
+    setSampleStatus("");
+  } catch {
+    setSampleStatus("音色載入失敗");
+  }
   paintChrome();
 }
 
@@ -418,13 +529,21 @@ transport.onFrame(({ playing, slot }) => {
   }
 });
 
-function preview(inst, value) {
-  if (!value) return;
+async function preview(inst, value) {
+  if (!value || inst === "sticking") return;
+  kit.ensure();
+  if (!kit.has(kit.current)) setSampleStatus("載入音色中");
+  try {
+    await kit.load(kit.current);
+    setSampleStatus("");
+  } catch {
+    setSampleStatus("音色載入失敗");
+    return;
+  }
   const g = M.emptyGroove({ division: 16, measures: 1 });
   g.showToms = 3;
-  if (inst === "sticking") return;
   g[inst][0] = value;
-  const when = kit.ensure().currentTime + 0.06;
+  const when = kit.ensure().currentTime + 0.04;
   for (const hit of M.hitsForGroove(g)) kit.play(hit.inst, hit.vel, when + hit.time);
 }
 
@@ -684,7 +803,8 @@ function openHelp(which) {
     openModal(`
       <h2>About Drumgrid</h2>
       <p>Drumgrid is an independent drum-groove editor. Create a pattern on the grid, read it as standard drum notation, hear it, print it, and share a link.</p>
-      <p>It is not affiliated with Mike Johnston or Mike's Lessons, and it does not use their name, logo, or drum samples. The drums you hear are synthesized in the browser.</p>
+      <p>It is not affiliated with Mike Johnston or Mike's Lessons, and it does not use their name, logo, or recordings.</p>
+      <p>鼓聲來自 DRSKit（CC BY 4.0）：DrumGizmo 團隊與 Jes Eiler（DRSDrums）錄音。Rock、Funk、Jazz 是同一套鼓的不同力道與麥克風平衡，保留鼓腔、小鼓鋼絲和鈸的餘音。</p>
       <p>Notation is drawn with <a href="https://abcjs.net/" target="_blank" rel="noreferrer">abcjs</a> (MIT). The ABC panel is the same text the chart is rendered from.</p>
       <div class="modal-actions"><button type="button" class="primary" data-action="close-modal">Done</button></div>`);
     return;
@@ -705,6 +825,7 @@ function openHelp(which) {
       <li><b>Metronome</b> options: solo, count-in, auto speed up, and an offset click that moves the strong beat to the e, &amp;, or a, or rotates each loop.</li>
       <li><b>Swing</b> delays the upbeats in playback only. 33% is a triplet shuffle. 50% is a dotted-eighth and sixteenth. The printed chart stays straight.</li>
       <li><b>Share</b> copies a link. Bookmark it, or paste the query string from another groove tool that uses TimeSig, Div, H, S, and K.</li>
+      <li>譜會自動留在這台電腦／手機的瀏覽器裡。</li>
       <li><b>Print</b> sends the chart to the printer. Download saves SVG, PNG, or a MIDI file.</li>
     </ul>
     <div class="modal-actions">
@@ -760,7 +881,7 @@ function handleAction(el, event) {
     closeFloaters();
     return;
   }
-  if (action === "theme") applySchool(el.dataset.school, { persist: true });
+  if (action === "kit") chooseKit(el.dataset.kit);
   else if (action === "division") changeDivision(Number(el.dataset.div));
   else if (action === "time") {
     const g = state.groove;
@@ -827,7 +948,10 @@ function handleAction(el, event) {
     commit(next);
   } else if (action === "help") openHelp("help");
   else if (action === "about") openHelp("about");
-  else if (action === "clear") commit(M.clearNotes(state.groove));
+  else if (action === "clear") {
+    clearDraft();
+    commit(M.clearNotes(state.groove));
+  }
   else if (action === "toms") {
     const next = M.cloneGroove(state.groove);
     next.showToms = (next.showToms + 1) % 4;
@@ -1009,15 +1133,11 @@ function hostSchool() {
 }
 
 function initialSchool() {
+  const locked = hostSchool();
+  if (locked) return locked;
   const query = new URLSearchParams(location.search).get("school");
   if (query === "rhythm" || query === "moonick") return query;
-  try {
-    const saved = localStorage.getItem("drumgrid-school");
-    if (saved === "rhythm" || saved === "moonick") return saved;
-  } catch {
-    /* private mode */
-  }
-  return hostSchool() || "rhythm";
+  return "rhythm";
 }
 
 function setMeta(id, value) {
@@ -1025,7 +1145,7 @@ function setMeta(id, value) {
   if (el) el.setAttribute("content", value);
 }
 
-function applySchool(school, { persist = false } = {}) {
+function applySchool(school) {
   const info = SCHOOLS[school] || SCHOOLS.rhythm;
   document.documentElement.dataset.school = school in SCHOOLS ? school : "rhythm";
   $("brandLogo").src = info.logo;
@@ -1034,8 +1154,6 @@ function applySchool(school, { persist = false } = {}) {
   $("railLogo").alt = "";
   $("brandName").textContent = info.name;
   $("brandHome").href = info.home;
-  $("themeRhythm").classList.toggle("on", school === "rhythm");
-  $("themeMoonick").classList.toggle("on", school === "moonick");
   const title = `鼓譜編寫工具｜${info.name}`;
   document.title = title;
   const image = new URL(info.og, location.href).href;
@@ -1048,13 +1166,6 @@ function applySchool(school, { persist = false } = {}) {
   $("favicon").href = info.logo;
   $("appleIcon").href = info.logo;
   document.querySelector('meta[name="theme-color"]').setAttribute("content", info.color);
-  if (persist) {
-    try {
-      localStorage.setItem("drumgrid-school", school);
-    } catch {
-      /* ignore */
-    }
-  }
 }
 
 function boot() {
@@ -1063,6 +1174,9 @@ function boot() {
   if (state.advanced) $("advancedBtn").classList.add("on");
   paint();
   renderPerm();
+  setSampleStatus("載入音色中");
+  kit.load(rememberedKit()).then(() => setSampleStatus("")).catch(() => setSampleStatus("音色載入失敗"));
+  window.addEventListener("resize", fitWritingArea);
 
   let lyricBase = null;
   $("grid").addEventListener("focusin", (event) => {

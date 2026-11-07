@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>鼓譜練習</title>
+    <meta name="description" content="在格子上寫鼓譜、打歌詞、聽節奏，並分享連結。節奏感與慕尼克音樂教室的鼓譜練習。" />
+    <meta name="theme-color" content="#2c4a3c" />
+    <link rel="icon" id="favicon" href="images/musicdance-logo.png" type="image/png" />
+    <link rel="apple-touch-icon" id="appleIcon" href="images/musicdance-logo.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" id="og-title" content="鼓譜練習｜節奏感" />
+    <meta property="og:description" id="og-description" content="在格子上寫鼓的節奏、填上歌詞、聽一遍，再把連結傳給學生。這是鼓譜練習，不是教室首頁。" />
+    <meta property="og:image" id="og-image" content="og-rhythm.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" id="og-image-alt" content="節奏感鼓譜練習：格子鼓譜與歌詞" />
+    <meta property="og:url" id="og-url" content="" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" id="twitter-title" content="鼓譜練習｜節奏感" />
+    <meta name="twitter:description" id="twitter-description" content="在格子上寫鼓的節奏、填上歌詞、聽一遍，再把連結傳給學生。這是鼓譜練習，不是教室首頁。" />
+    <meta name="twitter:image" id="twitter-image" content="og-rhythm.png" />
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="stylesheet" href="css/theme.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Playfair+Display:wght@600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet" />
+    <script>
+      (function () {
+        var h = location.hostname.toLowerCase().replace(/\.$/, "");
+        var host = h === "moonickmusic.com" || h.endsWith(".moonickmusic.com") ? "moonick" : h === "musicdance.com.tw" || h.endsWith(".musicdance.com.tw") ? "rhythm" : "";
+        var query = new URLSearchParams(location.search).get("school");
+        var saved = "";
+        try { saved = localStorage.getItem("drumgrid-school") || ""; } catch (e) {}
+        var school = query === "rhythm" || query === "moonick" ? query : saved === "rhythm" || saved === "moonick" ? saved : host || "rhythm";
+        document.documentElement.setAttribute("data-school", school);
+        var img = new URL(school === "moonick" ? "og-moonick.png" : "og-rhythm.png", location.href).href;
+        var title = school === "moonick" ? "鼓譜練習｜慕尼克" : "鼓譜練習｜節奏感";
+        var desc = "在格子上寫鼓的節奏、填上歌詞、聽一遍，再把連結傳給學生。這是鼓譜練習，不是教室首頁。";
+        function put(id, value) { var el = document.getElementById(id); if (el) el.setAttribute("content", value); }
+        put("og-image", img);
+        put("twitter-image", img);
+        put("og-title", title);
+        put("twitter-title", title);
+        put("og-description", desc);
+        put("twitter-description", desc);
+        put("og-url", location.href);
+        put("og-image-alt", school === "moonick" ? "慕尼克鼓譜練習：格子鼓譜與歌詞" : "節奏感鼓譜練習：格子鼓譜與歌詞");
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="app">
+      <aside id="rail" aria-label="Subdivision and edit tools">
+        <div class="brand" title="鼓譜練習">
+          <img id="railLogo" alt="" src="images/musicdance-logo.png" />
+        </div>
+        <button type="button" class="rail-btn" id="timeBtn" data-action="time">
+          <span class="frac" id="timeFrac"><sup>4</sup>/<sub>4</sub></span>
+          <span class="rail-sub">拍號</span>
+        </button>
+        <div id="divisionBtns"></div>
+        <button type="button" class="rail-btn edit-only" id="advancedBtn" data-action="advanced">進階</button>
+        <button type="button" class="rail-btn" id="viewBtn" data-action="view">只看<br />樂譜</button>
+        <button type="button" class="rail-btn edit-only" id="undoBtn" data-action="undo">復原</button>
+        <button type="button" class="rail-btn edit-only" id="redoBtn" data-action="redo">重做</button>
+      </aside>
+
+      <header id="brandbar">
+        <a class="brand-lockup" id="brandHome" href="https://www.musicdance.com.tw/">
+          <img id="brandLogo" alt="節奏感" src="images/musicdance-logo.png" />
+          <span>
+            <strong id="brandName">節奏感</strong>
+            <em id="brandTool">鼓譜練習</em>
+          </span>
+        </a>
+        <div class="theme-switch" role="group" aria-label="選擇教室主題">
+          <button type="button" id="themeRhythm" data-action="theme" data-school="rhythm">節奏感</button>
+          <button type="button" id="themeMoonick" data-action="theme" data-school="moonick">慕尼克</button>
+        </div>
+      </header>
+
+      <header id="top">
+        <div class="metro" role="group" aria-label="節拍器">
+          <span class="metro-label">節拍器</span>
+          <button type="button" data-metro="0">關</button>
+          <button type="button" data-metro="4">4分</button>
+          <button type="button" data-metro="8">8分</button>
+          <button type="button" data-metro="16">16分</button>
+          <button type="button" id="metroOptions" data-action="metro-options">選項</button>
+        </div>
+        <nav class="top-links">
+          <button type="button" data-action="permutations">排列練習</button>
+          <button type="button" data-action="grooves">節奏庫</button>
+          <button type="button" data-action="help">說明</button>
+        </nav>
+      </header>
+
+      <section id="player" aria-label="Playback">
+        <button type="button" id="playBtn" data-action="play" aria-label="Play">
+          <svg id="playIcon" viewBox="0 0 24 24" width="22" height="22"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+        </button>
+        <button type="button" id="loopBtn" data-action="loop" aria-label="Loop" class="on" title="Loop">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+        </button>
+        <div class="sliders">
+          <label class="slider">
+            <span>速度</span>
+            <input id="tempo" type="range" min="20" max="400" value="80" />
+            <input id="tempoNum" type="number" min="20" max="400" value="80" />
+          </label>
+          <label class="slider">
+            <span>搖擺</span>
+            <input id="swing" type="range" min="0" max="50" value="0" />
+            <output id="swingOut">0%</output>
+          </label>
+        </div>
+        <p id="playMeta"></p>
+      </section>
+
+      <main id="stage">
+        <section id="permPanel" class="noprint" hidden></section>
+        <p id="banner" class="banner noprint" hidden></p>
+        <div id="sheetWrap" class="paper">
+          <div id="sheet" aria-label="Drum notation"></div>
+          <div id="legend" hidden></div>
+        </div>
+        <p id="warnings" class="noprint" hidden></p>
+
+        <div id="meta" class="paper edit-only noprint">
+          <label>曲名 <input id="title" type="text" maxlength="80" /></label>
+          <label>作者 <input id="author" type="text" maxlength="80" /></label>
+          <label>註記 <input id="comments" type="text" maxlength="140" /></label>
+          <button type="button" id="legendBtn" data-action="legend" title="記號說明">圖例</button>
+        </div>
+
+        <div id="grid" class="paper edit-only"></div>
+
+        <div id="toolbar" class="noprint">
+          <button type="button" class="tool edit-only" data-action="clear"><b>全部清除</b><small>Clear</small></button>
+          <button type="button" class="tool edit-only" data-action="toms" id="tomsBtn"><b>通鼓</b><small>Toms</small><i id="tomDots"></i></button>
+          <button type="button" class="tool" data-action="stickings-menu"><b>手法</b><small>Stickings</small></button>
+          <button type="button" class="tool" data-action="download-menu"><b>下載</b><small>Download</small></button>
+          <button type="button" class="tool" data-action="print"><b>列印</b><small>Print</small></button>
+          <button type="button" class="tool" data-action="share"><b>分享</b><small>Share</small></button>
+        </div>
+
+        <section id="abcPanel" class="noprint">
+          <button type="button" id="abcToggle" data-action="abc-toggle">顯示 ABC 記譜</button>
+          <div id="abcBody" hidden>
+            <p>
+              ABC notation is the text behind the chart. Edit it and re-render, or save the file.
+              Changing the grid overwrites this box.
+              <a href="https://abcnotation.com/" target="_blank" rel="noreferrer">abcnotation.com</a>
+            </p>
+            <textarea id="abc" rows="12" spellcheck="false"></textarea>
+            <div class="abc-actions">
+              <button type="button" data-action="rerender">Re-render the music</button>
+              <button type="button" data-action="save-abc">Save ABC to file</button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="menu" class="menu" hidden role="menu"></div>
+    <div id="popover" class="popover" hidden></div>
+    <div id="modal" class="modal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true">
+        <button type="button" class="modal-x" data-action="close-modal" aria-label="Close">×</button>
+        <div id="modalBody"></div>
+      </div>
+    </div>
+    <div id="toast" hidden></div>
+
+    <script src="js/vendor/abcjs-basic-min.js"></script>
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>

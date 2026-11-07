@@ -989,7 +989,7 @@ const SCHOOLS = {
     home: "https://www.musicdance.com.tw/",
     og: "og-rhythm.png",
     color: "#2c4a3c",
-    alt: "節奏感鼓譜練習：格子鼓譜與歌詞",
+    alt: "節奏感鼓譜編寫工具：格子鼓譜與歌詞",
   },
   moonick: {
     name: "慕尼克",
@@ -997,7 +997,7 @@ const SCHOOLS = {
     home: "https://moonickmusic.com/",
     og: "og-moonick.png",
     color: "#111111",
-    alt: "慕尼克鼓譜練習：格子鼓譜與歌詞",
+    alt: "慕尼克鼓譜編寫工具：格子鼓譜與歌詞",
   },
 };
 
@@ -1036,7 +1036,7 @@ function applySchool(school, { persist = false } = {}) {
   $("brandHome").href = info.home;
   $("themeRhythm").classList.toggle("on", school === "rhythm");
   $("themeMoonick").classList.toggle("on", school === "moonick");
-  const title = `鼓譜練習｜${info.name}`;
+  const title = `鼓譜編寫工具｜${info.name}`;
   document.title = title;
   const image = new URL(info.og, location.href).href;
   setMeta("og-image", image);

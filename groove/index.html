@@ -3,22 +3,22 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>鼓譜練習</title>
-    <meta name="description" content="在格子上寫鼓譜、打歌詞、聽節奏，並分享連結。節奏感與慕尼克音樂教室的鼓譜練習。" />
+    <title>鼓譜編寫工具</title>
+    <meta name="description" content="在格子上寫鼓譜、打歌詞、聽節奏，並分享連結。節奏感與慕尼克音樂教室的鼓譜編寫工具。" />
     <meta name="theme-color" content="#2c4a3c" />
     <link rel="icon" id="favicon" href="images/musicdance-logo.png" type="image/png" />
     <link rel="apple-touch-icon" id="appleIcon" href="images/musicdance-logo.png" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" id="og-title" content="鼓譜練習｜節奏感" />
-    <meta property="og:description" id="og-description" content="在格子上寫鼓的節奏、填上歌詞、聽一遍，再把連結傳給學生。這是鼓譜練習，不是教室首頁。" />
+    <meta property="og:title" id="og-title" content="鼓譜編寫工具｜節奏感" />
+    <meta property="og:description" id="og-description" content="在格子上寫鼓的節奏、填上歌詞、聽一遍，再把連結傳給學生。這是鼓譜編寫工具，不是教室首頁。" />
     <meta property="og:image" id="og-image" content="og-rhythm.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" id="og-image-alt" content="節奏感鼓譜練習：格子鼓譜與歌詞" />
+    <meta property="og:image:alt" id="og-image-alt" content="節奏感鼓譜編寫工具：格子鼓譜與歌詞" />
     <meta property="og:url" id="og-url" content="" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" id="twitter-title" content="鼓譜練習｜節奏感" />
-    <meta name="twitter:description" id="twitter-description" content="在格子上寫鼓的節奏、填上歌詞、聽一遍，再把連結傳給學生。這是鼓譜練習，不是教室首頁。" />
+    <meta name="twitter:title" id="twitter-title" content="鼓譜編寫工具｜節奏感" />
+    <meta name="twitter:description" id="twitter-description" content="在格子上寫鼓的節奏、填上歌詞、聽一遍，再把連結傳給學生。這是鼓譜編寫工具，不是教室首頁。" />
     <meta name="twitter:image" id="twitter-image" content="og-rhythm.png" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="stylesheet" href="css/theme.css" />
@@ -35,8 +35,8 @@
         var school = query === "rhythm" || query === "moonick" ? query : saved === "rhythm" || saved === "moonick" ? saved : host || "rhythm";
         document.documentElement.setAttribute("data-school", school);
         var img = new URL(school === "moonick" ? "og-moonick.png" : "og-rhythm.png", location.href).href;
-        var title = school === "moonick" ? "鼓譜練習｜慕尼克" : "鼓譜練習｜節奏感";
-        var desc = "在格子上寫鼓的節奏、填上歌詞、聽一遍，再把連結傳給學生。這是鼓譜練習，不是教室首頁。";
+        var title = school === "moonick" ? "鼓譜編寫工具｜慕尼克" : "鼓譜編寫工具｜節奏感";
+        var desc = "在格子上寫鼓的節奏、填上歌詞、聽一遍，再把連結傳給學生。這是鼓譜編寫工具，不是教室首頁。";
         function put(id, value) { var el = document.getElementById(id); if (el) el.setAttribute("content", value); }
         put("og-image", img);
         put("twitter-image", img);
@@ -45,14 +45,14 @@
         put("og-description", desc);
         put("twitter-description", desc);
         put("og-url", location.href);
-        put("og-image-alt", school === "moonick" ? "慕尼克鼓譜練習：格子鼓譜與歌詞" : "節奏感鼓譜練習：格子鼓譜與歌詞");
+        put("og-image-alt", school === "moonick" ? "慕尼克鼓譜編寫工具：格子鼓譜與歌詞" : "節奏感鼓譜編寫工具：格子鼓譜與歌詞");
       })();
     </script>
   </head>
   <body>
     <div id="app">
       <aside id="rail" aria-label="Subdivision and edit tools">
-        <div class="brand" title="鼓譜練習">
+        <div class="brand" title="鼓譜編寫工具">
           <img id="railLogo" alt="" src="images/musicdance-logo.png" />
         </div>
         <button type="button" class="rail-btn" id="timeBtn" data-action="time">
@@ -71,7 +71,7 @@
           <img id="brandLogo" alt="節奏感" src="images/musicdance-logo.png" />
           <span>
             <strong id="brandName">節奏感</strong>
-            <em id="brandTool">鼓譜練習</em>
+            <em id="brandTool">鼓譜編寫工具</em>
           </span>
         </a>
         <div class="theme-switch" role="group" aria-label="選擇教室主題">

@@ -776,7 +776,7 @@ transport.onFrame(({ playing, slot }) => {
   document.querySelectorAll(".col.now").forEach((el) => el.classList.remove("now"));
   const heard = sourceGroove();
   const sameGrid = heard.division === state.groove.division && heard.hh.length === state.groove.hh.length;
-  if (playing && slot >= 0 && sameGrid) {
+  if (slot >= 0 && sameGrid) {
     const col = document.querySelector(`.col[data-col="${slot}"]`);
     if (col) col.classList.add("now");
   }

@@ -119,9 +119,40 @@ export function createKit() {
     return VOICES.includes(inst) ? inst : "snare";
   }
 
+  const active = new Set();
+
+  function unmute() {
+    if (!ctx || !master) return;
+    const now = ctx.currentTime;
+    master.gain.cancelScheduledValues(now);
+    master.gain.setValueAtTime(0.8, now);
+  }
+
+  function silence() {
+    if (!ctx) {
+      active.clear();
+      return;
+    }
+    const now = ctx.currentTime;
+    if (master) {
+      master.gain.cancelScheduledValues(now);
+      master.gain.setValueAtTime(0, now);
+    }
+    for (const src of active) {
+      try {
+        src.stop(now);
+      } catch {
+        /* already ended */
+      }
+    }
+    active.clear();
+    if (master) master.gain.setValueAtTime(0.8, now + 0.03);
+  }
+
   function play(inst, vel = 100, when = 0) {
     const map = buffers[current];
     if (!map) return;
+    unmute();
     const at = Math.max(ensure().currentTime, when);
     const voice = voiceFor(inst, vel);
     const buffer = map[voice];
@@ -135,11 +166,14 @@ export function createKit() {
     src.connect(gain);
     gain.connect(master);
     src.start(at);
+    active.add(src);
+    src.onended = () => active.delete(src);
   }
 
   return {
     ensure,
     play,
+    silence,
     load,
     select,
     onStatus(fn) {
@@ -167,6 +201,15 @@ export function rememberedKit() {
   return "jazz";
 }
 
+export function resumePoint(local, countIn, slotTimes) {
+  if (!(local >= countIn) || !slotTimes.length) return { musical: 0, slot: -1 };
+  let slot = 0;
+  for (let i = 0; i < slotTimes.length; i++) {
+    if (local + 0.02 >= slotTimes[i]) slot = i;
+  }
+  return { musical: Math.max(0, slotTimes[slot] - countIn), slot };
+}
+
 export function createTransport(kit) {
   let timer = null;
   let playing = false;
@@ -176,19 +219,60 @@ export function createTransport(kit) {
   let loopDur = 0;
   let countIn = 0;
   let slotTimes = [];
+  let resumeMusical = 0;
+  let pausedSlot = -1;
 
-  function stop() {
+  function remember() {
+    const ctx = kit.context;
+    if (!ctx) {
+      resumeMusical = 0;
+      pausedSlot = -1;
+      return;
+    }
+    const point = resumePoint(ctx.currentTime - loopStart, countIn, slotTimes);
+    resumeMusical = point.musical;
+    pausedSlot = point.slot;
+  }
+
+  function stop(cut = true) {
+    const was = playing;
     playing = false;
     if (timer) clearInterval(timer);
     timer = null;
-    frame({ playing: false, slot: -1 });
+    if (was && cut) remember();
+    else if (was) {
+      resumeMusical = 0;
+      pausedSlot = -1;
+    }
+    if (cut && kit.silence) kit.silence();
+    frame({ playing: false, slot: was ? pausedSlot : -1 });
+  }
+
+  function slicePlan(plan, offset) {
+    let hits = plan.hits;
+    let times = plan.slotTimes || [];
+    let duration = plan.duration;
+    let intro = plan.countIn || 0;
+    if (offset > 0 && intro) {
+      hits = hits.filter((hit) => hit.time >= intro - 0.0001).map((hit) => ({ ...hit, time: hit.time - intro }));
+      times = times.map((time) => time - intro);
+      duration -= intro;
+      intro = 0;
+    }
+    const start = offset > 0 ? Math.min(Math.max(0, offset), Math.max(0, duration - 0.03)) : 0;
+    if (start > 0) {
+      hits = hits.filter((hit) => hit.time >= start - 0.05).map((hit) => ({ ...hit, time: hit.time - start }));
+    }
+    return { hits, times, duration, intro, start };
   }
 
   async function start(buildLoop) {
     await kit.load(kit.current);
     const ctx = kit.ensure();
-    stop();
+    if (timer) clearInterval(timer);
     playing = true;
+    const offset = resumeMusical;
+    resumeMusical = 0;
     let scheduledUntil = ctx.currentTime + 0.05;
     let first = true;
     const speedStarted = ctx.currentTime;
@@ -198,20 +282,22 @@ export function createTransport(kit) {
       const now = ctx.currentTime;
       if (!first && now + 0.3 < scheduledUntil) return;
       if (!first && !loop) {
-        if (now >= scheduledUntil - 0.04) stop();
+        if (now >= scheduledUntil - 0.04) stop(false);
         return;
       }
+      const resume = first ? offset : 0;
       const plan = buildLoop({
         first,
         elapsed: now - speedStarted,
       });
+      const sliced = slicePlan(plan, resume);
       first = false;
-      loopStart = scheduledUntil;
-      loopDur = plan.duration;
-      countIn = plan.countIn || 0;
-      slotTimes = plan.slotTimes || [];
-      for (const hit of plan.hits) kit.play(hit.inst, hit.vel, scheduledUntil + hit.time);
-      scheduledUntil += Math.max(0.05, plan.duration);
+      loopStart = scheduledUntil - sliced.start;
+      loopDur = sliced.duration;
+      countIn = sliced.intro;
+      slotTimes = sliced.times;
+      for (const hit of sliced.hits) kit.play(hit.inst, hit.vel, scheduledUntil + hit.time);
+      scheduledUntil += Math.max(0.05, sliced.duration - sliced.start);
     };
 
     pump();
@@ -228,6 +314,7 @@ export function createTransport(kit) {
           }
         }
       }
+      pausedSlot = slot;
       frame({ playing: true, slot, local, countIn });
       pump();
     }, 40);

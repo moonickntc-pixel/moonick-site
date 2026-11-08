@@ -177,7 +177,7 @@ const SLIDE_SEC = 4, FADE_SEC = 1;
 // Google 表單欄位（entry ID 取自原表單 FB_PUBLIC_LOAD_DATA_；表單只有一頁，pageHistory=0）
 const E = {
   name:"entry.1533852387", parent:"entry.297686325", relation:"entry.437811702", phone:"entry.1237122548",
-  age:"entry.1353476259", email:"entry.1105098480", contact:"entry.620240045", gender:"entry.1613596884",
+  age:"entry.1353476259", email:"entry.1105098480", contact:"entry.620240045", lineId:"entry.2045160443", gender:"entry.1613596884",
   personality:"entry.935150233", practice:"entry.2036838828", level:"entry.213033094", reason:"entry.1878769903",
   music:"entry.1949528208", instr:"entry.1084453381", type:"entry.1486376278",
   source:"entry.1112476988", referrer:"entry.663361189", utm:"entry.673116146"
@@ -198,6 +198,7 @@ const Q = {
   phone:{t:"聯絡電話",kind:"tel",ph:"例：0912-345-678",req:true},
   email:{t:"電子信箱",kind:"email",ph:"name@example.com",hint:"可以不填。"},
   contact:{t:"希望用什麼方式聯絡您？",kind:"single",opts:o("電話","Line",["Messenger(FB臉書)","Messenger（Facebook）"]),req:true},
+  lineId:{t:"請留下您的 Line ID",kind:"text",ph:"例：your.line.id",req:true,hint:"請填 LINE 的搜尋 ID（在 LINE 點右上角設定 → 個人檔案裡看得到），不是顯示名稱。這樣老師才能找到您。"},
   instr:{t:"想學哪一種樂器？",kind:"multi",req:true,hint:"可以選多個。請先看<a href=\"../articles/drum-readiness-checklist/\">幾歲學爵士鼓／準備度檢查表</a>，確認孩子能不能開始上課。",opts:[
     ["爵士鼓 Drum sets 3y以上","爵士鼓"],
     ["流行鋼琴(鍵盤) piano & keyboard for pop music 3y以上","流行鋼琴（鍵盤）"],
@@ -237,12 +238,27 @@ landing();
 const SAVE_KEY="mk_form_v1", SAVE_DAYS=7;
 const store=(()=>{try{localStorage.setItem("mk_t","1");localStorage.removeItem("mk_t");return localStorage}catch(e){try{return sessionStorage}catch(e2){return null}}})();
 let A = {}, step = -1, openDay = null, resumed=false, userNav=false;
-const flow=()=>FLOW, total=()=>FLOW.length;
+// 選了 Line 才在聯絡方式後面插入 Line ID；電話 / Messenger 維持原本順序
+function flow(){
+  if(A.contact!=="Line") return FLOW;
+  const i=FLOW.indexOf("contact");
+  return FLOW.slice(0,i+1).concat("lineId",FLOW.slice(i+1));
+}
+const total=()=>flow().length;
 try{
   const d=JSON.parse((store&&store.getItem(SAVE_KEY))||"null");
-  if(d&&d.A&&Date.now()-(d.t||0)<SAVE_DAYS*864e5){A=d.A; if(typeof d.step==="number"&&d.step>=0){step=Math.min(d.step,FLOW.length);resumed=true}}
+  if(d&&d.A&&Date.now()-(d.t||0)<SAVE_DAYS*864e5){
+    A=d.A;
+    if(typeof d.step==="number"&&d.step>=0){step=Math.min(d.step,flow().length);resumed=true}
+  }
   else { const old=JSON.parse(sessionStorage.getItem("mk_ans")||"null"); if(old) A=old; }
 }catch(e){}
+// 聯絡方式不是 Line 時不保留 Line ID。舊草稿若已選 Line 但還沒填 ID，停在這一題，避免直接跳過。
+if(A.contact!=="Line") delete A.lineId;
+else if(typeof step==="number"&&step>=0){
+  const li=flow().indexOf("lineId");
+  if(li>=0&&!String(A.lineId||"").trim()&&step>li) step=li;
+}
 const save=()=>{try{store&&store.setItem(SAVE_KEY,JSON.stringify({A,step:typeof step==="number"?step:-1,t:Date.now()}))}catch(e){}};
 const clearSave=()=>{try{store&&store.removeItem(SAVE_KEY);sessionStorage.removeItem("mk_ans")}catch(e){}};
 const $=s=>document.querySelector(s);
@@ -256,7 +272,7 @@ const FOOTER=`<footer><div class="nm">慕尼克音樂 新北板橋校區</div>
  <a href="tel:0935581223">0935-581223</a> 黃小姐<br>
  新北市板橋區中正路 325 巷 47 號 1 樓（國光國小正對面）<br>
  新北市政府立案，新北府教社字第1140838285號<br>
- <a href="${LINE_URL}" target="_blank" rel="noopener">官方 LINE @595zatgi</a>　<a href="https://moonickmusic.com" target="_blank" rel="noopener">moonickmusic.com</a>　<a href="/refund-policy/">收費與退費辦法</a><div class="ver">版本 1019f</div><div class="other-campuses" aria-label="慕尼克音樂其他校區"><p class="other-campuses-title">慕尼克音樂其他校區</p><p class="other-campuses-list">新竹金山｜<a href="https://lin.ee/yTyzzwn" target="_blank" rel="noopener">官方 LINE</a>　竹北高鐵｜<a href="https://lin.ee/hqizjrH" target="_blank" rel="noopener">官方 LINE</a>　竹北縣府｜<a href="https://lin.ee/cB0Wevx" target="_blank" rel="noopener">官方 LINE</a>　台南安南｜<a href="https://lin.ee/sumxFW9" target="_blank" rel="noopener">官方 LINE</a></p></div></footer>`;
+ <a href="${LINE_URL}" target="_blank" rel="noopener">官方 LINE @595zatgi</a>　<a href="https://moonickmusic.com" target="_blank" rel="noopener">moonickmusic.com</a>　<a href="/refund-policy/">收費與退費辦法</a><div class="ver">版本 1019g</div><div class="other-campuses" aria-label="慕尼克音樂其他校區"><p class="other-campuses-title">慕尼克音樂其他校區</p><p class="other-campuses-list">新竹金山｜<a href="https://lin.ee/yTyzzwn" target="_blank" rel="noopener">官方 LINE</a>　竹北高鐵｜<a href="https://lin.ee/hqizjrH" target="_blank" rel="noopener">官方 LINE</a>　竹北縣府｜<a href="https://lin.ee/cB0Wevx" target="_blank" rel="noopener">官方 LINE</a>　台南安南｜<a href="https://lin.ee/sumxFW9" target="_blank" rel="noopener">官方 LINE</a></p></div></footer>`;
 const BACK=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5m6-6-6 6 6 6"/></svg>`;
 const CHEV=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
 
@@ -336,7 +352,9 @@ function upd(){
 function pick(key,q,v){
   const els=document.querySelectorAll(".opt");
   if(q.kind==="single"){
-    A[key]=v; save(); els.forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===v)); setTimeout(next,240);
+    A[key]=v;
+    if(key==="contact"&&v!=="Line") delete A.lineId;
+    save(); els.forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===v)); setTimeout(next,240);
   } else {
     const arr=A[key]||[]; A[key]=arr.includes(v)?arr.filter(x=>x!==v):arr.concat(v); save();
     els.forEach(b=>b.setAttribute("aria-pressed",A[key].includes(b.dataset.v)));
@@ -423,6 +441,7 @@ function buildParams(){
   const p=new URLSearchParams();
   const add=(k,v)=>{if(v!==undefined&&v!==null&&String(v).trim()!=="") p.append(k,String(v).trim())};
   ["name","parent","relation","age","email","contact","gender","practice","level","type"].forEach(k=>add(E[k],A[k])); add(E.phone,phoneNum(A.phone));
+  if(A.contact==="Line") add(E.lineId,A.lineId);
   ["personality","reason","music","instr"].forEach(k=>(A[k]||[]).forEach(v=>add(E[k],v)));
   (A.source||[]).forEach(v=>{ if(v==="其他"){ p.append(E.source,"__other_option__"); add(E.source+".other_option_response",A.source_other||""); } else add(E.source,v); });
   const L=landing(); add(E.referrer,L.ref||"直接進站"); add(E.utm,L.utm);

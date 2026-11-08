@@ -19,9 +19,14 @@ export const DIVISIONS = [
 export const HH_ARTICULATIONS = [
   ["off", "Off"],
   ["normal", "Hi-hat normal"],
-  ["open", "Hi-hat open"],
+  ["half", "半開"],
+  ["open", "開"],
+  ["closed_plus", "開完後閉合"],
+  ["foot_only", "只關沒打到"],
   ["accent", "Hi-hat accent"],
   ["crash", "Crash"],
+  ["crash_tie", "Crash 延音"],
+  ["crash_roll", "Crash 滾奏"],
   ["ride", "Ride"],
   ["ride_bell", "Ride Bell"],
   ["cow_bell", "Cow Bell"],
@@ -34,9 +39,10 @@ export const SNARE_ARTICULATIONS = [
   ["off", "Off"],
   ["normal", "Snare Normal"],
   ["accent", "Snare Accent"],
-  ["ghost", "Ghost Note"],
+  ["ghost", "幽靈音"],
+  ["rimshot", "Rim-shot"],
   ["xstick", "Cross Stick"],
-  ["buzz", "Buzz Stroke"],
+  ["buzz", "Buzz"],
   ["flam", "Flam"],
   ["drag", "Drag"],
 ];
@@ -45,6 +51,7 @@ export const KICK_ARTICULATIONS = [
   ["off", "Off"],
   ["normal", "Kick Normal"],
   ["splash", "Hi-hat foot"],
+  ["foot_open", "腳踩打開"],
   ["both", "Kick & Hi-hat foot"],
 ];
 
@@ -418,8 +425,13 @@ export function reverseStickings(g) {
 const HH_TO_CHAR = {
   normal: "x",
   open: "o",
+  half: "h",
+  closed_plus: "p",
+  foot_only: "f",
   accent: "X",
   crash: "c",
+  crash_tie: "t",
+  crash_roll: "w",
   ride: "r",
   ride_bell: "B",
   cow_bell: "m",
@@ -434,6 +446,7 @@ const SNARE_TO_CHAR = {
   normal: "o",
   accent: "O",
   ghost: "g",
+  rimshot: "q",
   xstick: "x",
   buzz: "b",
   flam: "f",
@@ -441,7 +454,7 @@ const SNARE_TO_CHAR = {
 };
 const CHAR_TO_SNARE = invert(SNARE_TO_CHAR);
 
-const KICK_TO_CHAR = { normal: "o", splash: "x", both: "X" };
+const KICK_TO_CHAR = { normal: "o", splash: "x", foot_open: "p", both: "X" };
 const CHAR_TO_KICK = invert(KICK_TO_CHAR);
 
 const TOM_TO_CHAR = { normal: "o" };
@@ -912,27 +925,58 @@ function restMarks(units, division) {
   return parts.join("");
 }
 
-function abcToken(g, idx) {
+function soundingParts(g, idx) {
   const parts = [];
   const kick = g.kick[idx];
-  if (kick === "normal" || kick === "both") parts.push(decorateSnareLike(PITCH.kick, null));
-  if (kick === "splash" || kick === "both") parts.push(PITCH.foot);
+  if (kick === "normal" || kick === "both") parts.push(PITCH.kick);
+  if (kick === "splash" || kick === "both" || kick === "foot_open") parts.push(PITCH.foot);
   if (g.showToms >= 3 && g.tom3[idx]) parts.push(PITCH.tom3);
   const snare = g.snare[idx];
   if (snare) parts.push(snarePitch(snare));
   if (g.showToms >= 2 && g.tom2[idx]) parts.push(PITCH.tom2);
   if (g.showToms >= 1 && g.tom1[idx]) parts.push(PITCH.tom1);
   const hh = g.hh[idx];
-  if (hh) parts.push(hhPitch(hh));
+  if (hh && hh !== "foot_only") parts.push(hhPitch(hh));
+  const placeholder = hh === "foot_only" && parts.length === 0;
+  if (placeholder) parts.push(PITCH.hat);
+  return { parts, placeholder, floatPlus: hh === "foot_only" && !placeholder };
+}
+
+export function staffMarks(g) {
+  const total = Math.min(g.hh.length, notesPerMeasure(g.division, g.top, g.bottom) * g.measures);
+  const marks = [];
+  for (let i = 0; i < total; i++) {
+    const { parts, placeholder, floatPlus } = soundingParts(g, i);
+    if (parts.length === 0) continue;
+    const snare = g.snare[i];
+    const kick = g.kick[i];
+    const hh = g.hh[i];
+    const heads = {};
+    if (snare === "ghost") heads.c = { ghost: true };
+    if (snare === "rimshot") heads.c = { rim: true };
+    if (snare === "buzz") heads.c = { buzz: true };
+    if (kick === "foot_open") heads.D = { footOpen: true };
+    if (hh === "half") heads.g = { half: true };
+    if (hh === "open") heads.g = { open: true };
+    if (hh === "closed_plus") heads.g = { plus: true };
+    if (hh === "crash_tie") heads.b = { tie: true };
+    if (hh === "crash_roll") heads.b = { roll: true };
+    if (placeholder) heads.g = { hide: true, plus: true };
+    marks.push({ heads, floatPlus });
+  }
+  return marks;
+}
+
+function abcToken(g, idx) {
+  const { parts } = soundingParts(g, idx);
+  const snare = g.snare[idx];
+  const hh = g.hh[idx];
   let token = parts.length === 0 ? "z" : parts.length === 1 ? parts[0] : `[${parts.join("")}]`;
   const decos = [];
   if (snare === "accent" || hh === "accent" || hh === "click_accent") decos.push("!accent!");
-  if (hh === "open") decos.push("!open!");
-  if (snare === "buzz") decos.push("!tremolo!");
   token = decos.join("") + token;
   if (snare === "flam") token = "{/c}" + token;
   if (snare === "drag") token = "{/cc}" + token;
-  if (snare === "ghost") token = '"^( )"' + token;
   const lyric = cleanAnnotation(g.lyrics && g.lyrics[idx]);
   const stick =
     g.showStickings && g.sticking[idx]
@@ -960,17 +1004,16 @@ function snarePitch(kind) {
   return PITCH.snare;
 }
 
-function decorateSnareLike(pitch) {
-  return pitch;
-}
-
 function hhPitch(kind) {
   switch (kind) {
     case "open":
-      return PITCH.hatOpen;
+    case "half":
+    case "closed_plus":
     case "accent":
       return PITCH.hat;
     case "crash":
+    case "crash_tie":
+    case "crash_roll":
       return PITCH.crash;
     case "ride":
       return PITCH.ride;
@@ -1052,12 +1095,14 @@ export function hitsForGroove(g, { solo = false } = {}) {
 function addKick(kind, push) {
   if (kind === "normal" || kind === "both") push("kick", 112);
   if (kind === "splash" || kind === "both") push("foot", 90);
+  if (kind === "foot_open") push("hatOpen", 96);
 }
 
 function addSnare(kind, push) {
   if (!kind) return;
   if (kind === "accent") push("snare", 122);
   else if (kind === "ghost") push("snare", 42);
+  else if (kind === "rimshot") push("snare", 124);
   else if (kind === "xstick") push("xstick", 96);
   else if (kind === "buzz") push("buzz", 100);
   else if (kind === "flam") {
@@ -1076,11 +1121,25 @@ function addHat(kind, push) {
     case "open":
       push("hatOpen", 100);
       break;
+    case "half":
+      push("hatOpen", 84);
+      break;
+    case "closed_plus":
+      push("hat", 96);
+      break;
+    case "foot_only":
+      push("foot", 90);
+      break;
     case "accent":
       push("hat", 122);
       break;
     case "crash":
+    case "crash_tie":
       push("crash", 110);
+      break;
+    case "crash_roll":
+      push("crash", 104);
+      push("crash", 88, 0.06);
       break;
     case "ride":
       push("ride", 96);

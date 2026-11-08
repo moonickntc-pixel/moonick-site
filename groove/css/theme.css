@@ -280,7 +280,7 @@ html[data-school] .modal button.primary {
   font-size: 16px;
 }
 html[data-school] #abcToggle { color: var(--accent-press); font-size: 16px; }
-html[data-school] .add-measure { color: var(--accent); }
+html[data-school] .add-measure { color: var(--accent); background: transparent; }
 html[data-school] .close-measure { color: var(--accent-press); }
 
 @media (max-width: 860px) {
@@ -299,4 +299,90 @@ html[data-school] .close-measure { color: var(--accent-press); }
   html[data-school] #top { height: auto; }
   html[data-school] #player { height: auto; }
   html[data-school] #stage { margin: 0; }
+}
+
+@media (max-width: 520px) {
+  html[data-school] #brandbar {
+    height: 52px;
+    min-height: 0;
+    flex-wrap: nowrap;
+    padding: 0 12px;
+    border-bottom-width: 3px;
+  }
+  html[data-school] .brand-lockup { gap: 8px; }
+  html[data-school] .brand-lockup img {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+  }
+  html[data-school] .brand-lockup strong { font-size: 18px; }
+  html[data-school] .brand-lockup em {
+    margin-top: 0;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+  }
+  html[data-school] #rail,
+  html[data-school] #top,
+  html[data-school] #player {
+    background: var(--player-bg);
+    color: var(--player-text);
+    border: 0;
+  }
+  html[data-school] #rail { height: 42px; }
+  html[data-school] .rail-btn {
+    min-height: 0;
+    height: 30px;
+    color: var(--player-text);
+    background: rgba(255, 255, 255, 0.1);
+    font-size: 13px;
+  }
+  html[data-school] .rail-btn .frac,
+  html[data-school] .rail-sub { color: var(--player-text); }
+  html[data-school] .rail-btn.on,
+  html[data-school] .rail-btn.on .frac,
+  html[data-school] .rail-btn.on .rail-sub {
+    background: var(--rail-on);
+    color: var(--rail-on-text);
+  }
+  html[data-school] #top { height: 36px; }
+  html[data-school] .metro-label,
+  html[data-school] .metro button,
+  html[data-school] .top-links button {
+    font-size: 13px;
+    min-height: 28px;
+  }
+  html[data-school] #player { height: auto; }
+  html[data-school] #playBtn,
+  html[data-school] #loopBtn {
+    width: 40px;
+    height: 40px;
+    box-shadow: none;
+  }
+  html[data-school] .kit-switch button {
+    min-height: 32px;
+    font-size: 12px;
+    border-radius: 999px;
+  }
+  html[data-school] .slider {
+    font-size: 12px;
+    grid-template-columns: 28px minmax(0, 1fr) 34px;
+  }
+  html[data-school] #tempoNum { font-size: 15px; width: 34px; }
+  html[data-school] #sheetWrap {
+    margin: 0;
+    padding: 2px 0 0;
+    border-radius: 16px 16px 0 0;
+    box-shadow: none;
+  }
+  html[data-school] #grid {
+    margin: 0;
+    border-radius: 0 0 16px 16px;
+    box-shadow: 0 10px 24px rgba(36, 49, 43, 0.08);
+  }
+  html[data-school] #meta {
+    margin: 10px 0 0;
+    border-radius: 14px;
+  }
+  html[data-school] #toolbar { padding: 10px 0 0; gap: 8px; }
+  html[data-school] .tool { min-height: 48px; border-radius: 12px; }
 }

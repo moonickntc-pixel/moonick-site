@@ -181,7 +181,7 @@ function paintChrome() {
 function legendHtml() {
   const items = [
     ["×", "Closed hi-hat"],
-    ["○", "Open hi-hat"],
+    ["×o", "開"],
     [">×", "Accent"],
     ["◉", "Ride"],
     ["◆", "Ride bell"],
@@ -189,9 +189,14 @@ function legendHtml() {
     ["⌂", "Cowbell"],
     ["●", "Snare / kick / tom"],
     [">", "Snare accent"],
-    ["( )", "Ghost"],
+    ["( )", "幽靈音"],
+    ["○", "Rim-shot"],
     ["×", "Cross-stick"],
-    ["///", "Buzz"],
+    ["z", "Buzz"],
+    ["ø", "半開"],
+    ["o", "開"],
+    ["+", "開完後閉合 / 只關沒打到"],
+    ["×o", "腳踩打開"],
     ["♫", "Flam"],
     ["××", "Drag"],
     ["x", "Hi-hat foot"],
@@ -235,7 +240,7 @@ function paintGrid() {
         ? "混合 24：每拍 24 點。藍線是六連音（每 4 點），金線是八連音（每 3 點）。16 分音符每 6 點，8 分三連音每 8 點。"
         : "";
   let html = mixNote ? `<p class="mix-key">${mixNote}</p>` : "";
-  html += '<div class="measures">';
+  html += '<div class="editor-row"><div class="measures">';
   for (let m = 0; m < g.measures; m++) {
     const labels = [`<div class="lyric-spacer">歌詞</div>`, `<div class="beat-spacer"></div>`];
     if (showStick) labels.push(`<button type="button" class="stick-label" data-label="sticking" data-m="${m}">Stickings</button>`);
@@ -259,7 +264,7 @@ function paintGrid() {
       cols += `<div class="col ${pipClass(perBeat, pos)}" data-col="${i}">${cells}</div>`;
       if ((s + 1) % group === 0 && s !== npm - 1) cols += '<div class="group-gap"></div>';
     }
-    const lineTop = 36 + 20 + (showStick ? 32 : 0);
+    const lineTop = 48 + 28 + (showStick ? 40 : 0);
     const cellH = perBeat >= 24 ? 40 : perBeat >= 12 ? 48 : 58;
     const tracks = rows
       .map((_, index) => `<i class="track" style="top:${lineTop + index * cellH + cellH / 2}px"></i>`)
@@ -276,10 +281,11 @@ function paintGrid() {
       </div>
     </section>`;
   }
+  html += `</div>`;
   if (g.measures < M.MAX_MEASURES) {
     html += '<button type="button" class="add-measure" data-action="add-measure" aria-label="Add measure">+</button>';
   }
-  html += `</div><p class="hint">點格子寫音符。右鍵或按「進階」可以選重音、幽靈音、裝飾音。每一格上方的空格可以打歌詞，中文或英文都行。混合 12 是每拍 12 點，混合 24 是每拍 24 點。</p>`;
+  html += `</div><p class="hint">點格子寫音符。右鍵或按「進階」可以選重音、幽靈音、Rim-shot、半開、開完後閉合、只關沒打到、腳踩打開、Buzz。每一格上方的空格可以打歌詞，中文或英文都行。混合 12 是每拍 12 點，混合 24 是每拍 24 點。</p>`;
   $("grid").innerHTML = html;
   requestAnimationFrame(fitWritingArea);
 }
@@ -295,7 +301,7 @@ function fitWritingArea() {
   const rowCells = [...col.children].filter((el) => el.classList.contains("cell") && !el.classList.contains("slot-hidden"));
   if (!rowCells.length) return;
   const slack = window.innerHeight - toolbar.getBoundingClientRect().bottom;
-  if (slack > 20) {
+  if (slack > 20 && window.innerWidth > 520) {
     const next = Math.min(128, base + slack / rowCells.length);
     grid.style.setProperty("--cell-h", `${Math.round(next)}px`);
   }
@@ -348,9 +354,14 @@ function markHtml(inst, value, index) {
     const glyph = {
       null: "×",
       normal: "×",
-      open: "○",
+      half: "×",
+      open: "×",
+      closed_plus: "×",
+      foot_only: "+",
       accent: "›",
       crash: "✱",
+      crash_tie: "✱",
+      crash_roll: "✱",
       ride: "◉",
       ride_bell: "◆",
       cow_bell: "⌂",
@@ -358,15 +369,18 @@ function markHtml(inst, value, index) {
       click: "○",
       click_accent: "●",
     }[value || null];
-    return `<span class="mark">${glyph || "×"}</span>`;
+    const mod = { half: "ø", open: "o", closed_plus: "+", crash_tie: "—", crash_roll: "∿" }[value] || "";
+    return `<span class="mark">${glyph || "×"}</span>${mod ? `<i class="hat-mod">${mod}</i>` : ""}`;
   }
   if (inst === "snare") {
-    const glyph = { ghost: "( )", xstick: "×", buzz: "///", flam: "♫", drag: "××", accent: "›" }[value] || "";
-    return `<span class="head"></span><span class="mark">${glyph}</span>`;
+    const glyph = { xstick: "×", buzz: "z", flam: "♫", drag: "××", accent: "›" }[value] || "";
+    const paren = value === "ghost" ? `<i class="ghost-paren left">(</i><i class="ghost-paren right">)</i>` : "";
+    return `<span class="head"></span><span class="mark">${glyph}</span>${paren}`;
   }
   if (inst === "kick") {
-    const splash = value === "splash" || value === "both";
-    return `<span class="head"></span><span class="mark">${splash ? "×" : ""}</span>`;
+    const splash = value === "splash" || value === "both" || value === "foot_open";
+    const mod = value === "foot_open" ? `<i class="hat-mod">o</i>` : "";
+    return `<span class="head"></span><span class="mark">${splash ? "×" : ""}</span>${mod}`;
   }
   return `<span class="head"></span><span class="mark"></span>`;
 }
@@ -383,18 +397,23 @@ function renderNotation() {
   if (!state.abcDirty) $("abc").value = text;
   const host = $("sheet");
   host.classList.add("wide");
-  const width = Math.max(320, $("sheetWrap").clientWidth - 16);
+  const width = Math.max(280, $("sheetWrap").clientWidth - 16);
   const roomy = g.division <= 16;
+  const narrow = window.innerWidth <= 520;
+  const scale = narrow
+    ? roomy ? 1.18 : g.division >= 48 ? 0.92 : 1.02
+    : roomy ? 1.72 : g.division >= 48 ? 1.2 : 1.4;
   try {
     const tunes = window.ABCJS.renderAbc("sheet", text, {
       add_classes: true,
+      accentAbove: true,
       staffwidth: width,
       paddingleft: 0,
       paddingright: 0,
-      scale: roomy ? 1.72 : g.division >= 48 ? 1.2 : 1.4,
+      scale,
       wrap: {
-        minSpacing: roomy ? 3.4 : 1.8,
-        maxSpacing: roomy ? 34 : 6,
+        minSpacing: narrow ? (roomy ? 1.5 : 1.1) : roomy ? 3.4 : 1.8,
+        maxSpacing: narrow ? (roomy ? 6 : 2.8) : roomy ? 34 : 6,
         preferredMeasuresPerLine: 1,
       },
       selectionColor: "#bdebdd",
@@ -409,6 +428,7 @@ function renderNotation() {
     $("warnings").textContent = `The chart could not be drawn. ${error.message || error}`;
   }
   enlargeNoteheads();
+  if (!state.abcDirty) paintRockschoolMarks(sourceGroove());
   requestAnimationFrame(fitWritingArea);
 }
 
@@ -422,10 +442,243 @@ function enlargeNoteheads() {
     const cy = box.y + box.height / 2;
     const drawn = path.getAttribute("d") || "";
     const cross = drawn.includes("l ");
-    const scale = cross ? 1.55 : 1.08;
+    const scale = cross ? 1.28 : 1.08;
     if (cross) path.classList.add("is-cross");
     path.setAttribute("transform", `translate(${cx} ${cy}) scale(${scale}) translate(${-cx} ${-cy})`);
   });
+  revealStaffTop(svg);
+}
+
+function paintRockschoolMarks(groove) {
+  const svg = document.querySelector("#sheet svg");
+  if (!svg) return;
+  const marks = M.staffMarks(groove);
+  const notes = [...svg.querySelectorAll("g.abcjs-note")].filter(
+    (note) => !note.classList.contains("abcjs-grace") && !note.closest(".abcjs-grace")
+  );
+  if (marks.length !== notes.length) return;
+  notes.forEach((note, index) => paintNoteMarks(note, marks[index]));
+  revealStaffTop(svg);
+}
+
+function paintNoteMarks(note, mark) {
+  const heads = [...note.querySelectorAll(".abcjs-notehead")];
+  heads.forEach((head) => {
+    const name = head.getAttribute("data-name");
+    const spec = name && mark.heads[name];
+    if (!spec) return;
+    const box = headBox(head);
+    if (spec.hide) {
+      head.style.display = "none";
+      if (heads.length === 1) {
+        [...note.children].forEach((el) => {
+          if (!el.classList.contains("rs-mark")) el.style.display = "none";
+        });
+      }
+    }
+    if (spec.ghost) parenthesis(note, box);
+    if (spec.rim) ring(note, box.x, box.y, box.rx * 1.15, box.ry * 1.2);
+    if (spec.buzz) buzzMark(note, box);
+    if (spec.footOpen || spec.open) circleAbove(note, box, false);
+    if (spec.half) circleAbove(note, box, true);
+    if (spec.plus) plusMark(note, box.x - (spec.hide ? 0 : 0.3), spec.hide ? box.y : box.top - 3.6, spec.hide ? 2.7 : 2.35);
+    if (spec.tie) tieMark(note, box);
+    if (spec.roll) rollMark(note, box);
+  });
+  if (mark.floatPlus) {
+    const anchor = heads[0] ? headBox(heads[0]) : null;
+    const y = staffHatY(note);
+    if (anchor && y != null) plusMark(note, anchor.x, y, 2.4);
+  }
+}
+
+function headBox(head) {
+  const box = head.getBBox();
+  const scale = head.classList.contains("is-cross") ? 1.28 : 1.08;
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  return {
+    x,
+    y,
+    rx: (box.width / 2) * scale,
+    ry: (box.height / 2) * scale,
+    top: y - (box.height / 2) * scale,
+  };
+}
+
+function staffHatY(note) {
+  const wrap = note.closest(".abcjs-staff-wrapper");
+  const staff = wrap && wrap.querySelector(".abcjs-staff");
+  if (!staff) return null;
+  const ys = [...staff.querySelectorAll("path")].map((path) => path.getBBox().y).sort((a, b) => a - b);
+  if (ys.length < 2) return null;
+  const space = (ys[ys.length - 1] - ys[0]) / (ys.length - 1);
+  return ys[0] - space * 0.46;
+}
+
+function svgEl(parent, name, attrs) {
+  const el = document.createElementNS("http://www.w3.org/2000/svg", name);
+  el.setAttribute("class", "rs-mark");
+  for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, value);
+  parent.appendChild(el);
+  return el;
+}
+
+function parenthesis(parent, box) {
+  const gap = box.rx + 2.5;
+  const ry = Math.max(box.ry + 2.1, 5.2);
+  const bow = 3.5;
+  svgEl(parent, "path", {
+    d: `M ${box.x - gap} ${box.y - ry} C ${box.x - gap - bow} ${box.y - ry * 0.2} ${box.x - gap - bow} ${box.y + ry * 0.2} ${box.x - gap} ${box.y + ry}`,
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": "1.05",
+    "stroke-linecap": "round",
+  });
+  svgEl(parent, "path", {
+    d: `M ${box.x + gap} ${box.y - ry} C ${box.x + gap + bow} ${box.y - ry * 0.2} ${box.x + gap + bow} ${box.y + ry * 0.2} ${box.x + gap} ${box.y + ry}`,
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": "1.05",
+    "stroke-linecap": "round",
+  });
+}
+
+function ring(parent, cx, cy, rx, ry) {
+  svgEl(parent, "ellipse", {
+    cx,
+    cy,
+    rx,
+    ry,
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": "0.9",
+  });
+}
+
+function circleAbove(parent, box, slash) {
+  const r = 3.05;
+  const cx = box.x - 0.35;
+  const cy = box.top - r - 0.45;
+  ring(parent, cx, cy, r, r);
+  if (!slash) return;
+  svgEl(parent, "line", {
+    x1: cx - r * 0.92,
+    y1: cy + r * 0.92,
+    x2: cx + r * 0.92,
+    y2: cy - r * 0.92,
+    stroke: "currentColor",
+    "stroke-width": "1.15",
+    "stroke-linecap": "round",
+  });
+}
+
+function plusMark(parent, x, y, arm) {
+  svgEl(parent, "line", {
+    x1: x - arm,
+    y1: y,
+    x2: x + arm,
+    y2: y,
+    stroke: "currentColor",
+    "stroke-width": "0.95",
+    "stroke-linecap": "round",
+  });
+  svgEl(parent, "line", {
+    x1: x,
+    y1: y - arm,
+    x2: x,
+    y2: y + arm,
+    stroke: "currentColor",
+    "stroke-width": "0.95",
+    "stroke-linecap": "round",
+  });
+}
+
+function buzzMark(parent, box) {
+  const stem = parent.querySelector(".abcjs-stem");
+  let x = box.x + box.rx + 1;
+  let y = box.y;
+  if (stem) {
+    const b = stem.getBBox();
+    x = b.x + b.width + 0.4;
+    y = b.y + b.height * 0.62;
+  }
+  const text = svgEl(parent, "text", {
+    x,
+    y,
+    fill: "currentColor",
+    "font-size": "8.5",
+    "font-family": "Times New Roman, serif",
+    "font-style": "italic",
+  });
+  text.textContent = "z";
+}
+
+function tieMark(parent, box) {
+  const x = box.x + box.rx + 0.4;
+  const y = box.y;
+  svgEl(parent, "path", {
+    d: `M ${x} ${y} C ${x + 5} ${y - 3.4} ${x + 12} ${y - 3.4} ${x + 16} ${y - 0.4}`,
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": "0.85",
+    "stroke-linecap": "round",
+  });
+}
+
+function rollMark(parent, box) {
+  const x = box.x + box.rx + 1.2;
+  const y = box.y - 0.4;
+  let d = `M ${x} ${y}`;
+  for (let i = 0; i < 3; i++) d += ` q 1.7 -2.3 3.4 0 q 1.7 2.3 3.4 0`;
+  svgEl(parent, "path", {
+    d,
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": "0.9",
+    "stroke-linecap": "round",
+  });
+}
+
+function revealStaffTop(svg) {
+  const box = svg.viewBox && svg.viewBox.baseVal;
+  const widthAttr = parseFloat(svg.getAttribute("width")) || 0;
+  const heightAttr = parseFloat(svg.getAttribute("height")) || 0;
+  const x = box && box.width ? box.x : 0;
+  const y = box && box.height ? box.y : 0;
+  const w = box && box.width ? box.width : widthAttr;
+  const h = box && box.height ? box.height : heightAttr;
+  if (w && h) {
+    const frame = svg.getBoundingClientRect();
+    if (frame.width && frame.height) {
+      const scaleY = h / frame.height;
+      let above = 0;
+      let below = 0;
+      svg.querySelectorAll("path, text, line, rect, use").forEach((el) => {
+        const rect = el.getBoundingClientRect();
+        if (!rect.width && !rect.height) return;
+        above = Math.max(above, frame.top - rect.top);
+        below = Math.max(below, rect.bottom - frame.bottom);
+      });
+      const padTop = (above + 10) * scaleY;
+      const padBottom = (below + 6) * scaleY;
+      if (padTop >= 0.5 || padBottom >= 0.5) {
+        svg.setAttribute("viewBox", `${x} ${y - padTop} ${w} ${h + padTop + padBottom}`);
+        if (heightAttr) svg.setAttribute("height", String(heightAttr * ((h + padTop + padBottom) / h)));
+      }
+    }
+  }
+  // The phone sheet scrolls sideways, so overflow-y cannot stay visible.
+  // Size the box to the painted staff or the bottom lines get clipped.
+  const sheet = svg.closest("#sheet");
+  if (!sheet) return;
+  const svgRect = svg.getBoundingClientRect();
+  let bottom = svgRect.bottom;
+  svg.querySelectorAll(".abcjs-staff path").forEach((line) => {
+    bottom = Math.max(bottom, line.getBoundingClientRect().bottom);
+  });
+  const painted = Math.ceil(bottom - sheet.getBoundingClientRect().top) + 4;
+  if (painted > 0) sheet.style.minHeight = `${painted}px`;
 }
 
 function buildLoop({ first, elapsed }) {

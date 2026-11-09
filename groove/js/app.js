@@ -1372,6 +1372,7 @@ const SCHOOLS = {
     name: "節奏感",
     logo: "images/musicdance-logo.png",
     home: "https://www.musicdance.com.tw/",
+    homeLabel: "← 回節奏感官網",
     og: "og-rhythm.png",
     color: "#2c4a3c",
     alt: "節奏感鼓譜編寫工具：格子鼓譜與歌詞",
@@ -1380,6 +1381,7 @@ const SCHOOLS = {
     name: "慕尼克",
     logo: "images/moonick-logo.png",
     home: "https://moonickmusic.com/",
+    homeLabel: "← 回慕尼克官網",
     og: "og-moonick.png",
     color: "#111111",
     alt: "慕尼克鼓譜編寫工具：格子鼓譜與歌詞",
@@ -1415,6 +1417,8 @@ function applySchool(school) {
   $("railLogo").alt = "";
   $("brandName").textContent = info.name;
   $("brandHome").href = info.home;
+  $("homeBack").href = info.home;
+  $("homeBack").textContent = info.homeLabel;
   const title = `鼓譜編寫工具｜${info.name}`;
   document.title = title;
   const image = new URL(info.og, location.href).href;

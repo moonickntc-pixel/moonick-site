@@ -74,6 +74,7 @@
             <em id="brandTool">鼓譜編寫工具</em>
           </span>
         </a>
+        <a class="home-back" id="homeBack" href="https://moonickmusic.com/">← 回慕尼克官網</a>
         <script>
           (function () {
             var moonick = window.__drumSchool === "moonick";
@@ -87,6 +88,9 @@
             logo.alt = name;
             document.getElementById("brandName").textContent = name;
             document.getElementById("brandHome").href = home;
+            var back = document.getElementById("homeBack");
+            back.href = home;
+            back.textContent = moonick ? "← 回慕尼克官網" : "← 回節奏感官網";
             var icon = document.getElementById("favicon");
             var apple = document.getElementById("appleIcon");
             if (icon) icon.href = src;

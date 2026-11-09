@@ -1,6 +1,6 @@
 {
-  "name": "聽力訓練｜慕尼克",
-  "short_name": "聽力訓練",
+  "name": "音感訓練｜慕尼克",
+  "short_name": "音感訓練",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

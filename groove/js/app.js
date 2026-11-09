@@ -296,15 +296,11 @@ function fitWritingArea() {
   const col = grid && grid.querySelector(".col");
   if (!grid || !toolbar || !col || document.body.classList.contains("viewing")) return;
   const density = Number(grid.dataset.density || 4);
-  const base = density >= 24 ? 40 : density >= 12 ? 48 : 58;
+  const narrow = window.innerWidth <= 520;
+  const base = narrow ? (density >= 24 ? 36 : density >= 12 ? 42 : 46) : 24;
   grid.style.setProperty("--cell-h", `${base}px`);
   const rowCells = [...col.children].filter((el) => el.classList.contains("cell") && !el.classList.contains("slot-hidden"));
   if (!rowCells.length) return;
-  const slack = window.innerHeight - toolbar.getBoundingClientRect().bottom;
-  if (slack > 20 && window.innerWidth > 520) {
-    const next = Math.min(128, base + slack / rowCells.length);
-    grid.style.setProperty("--cell-h", `${Math.round(next)}px`);
-  }
   grid.querySelectorAll(".columns").forEach((columns) => {
     const sample = columns.querySelector(".cell:not(.slot-hidden)");
     if (!sample) return;
@@ -397,12 +393,17 @@ function renderNotation() {
   if (!state.abcDirty) $("abc").value = text;
   const host = $("sheet");
   host.classList.add("wide");
-  const width = Math.max(280, $("sheetWrap").clientWidth - 16);
+  const hostWidth = Math.max(280, $("sheetWrap").clientWidth - 16);
   const roomy = g.division <= 16;
   const narrow = window.innerWidth <= 520;
   const scale = narrow
     ? roomy ? 1.18 : g.division >= 48 ? 0.92 : 1.02
-    : roomy ? 1.72 : g.division >= 48 ? 1.2 : 1.4;
+    : 1;
+  // abcjs draws the 5 lines at a fixed size inside `staffwidth`, then we fit
+  // that line to the card. A full-width engraving stays about 40px tall.
+  // Engraving narrower, then fitting, brings the lines and noteheads up to
+  // about 75px — the size a teacher can read from a laptop.
+  const width = narrow ? hostWidth : Math.round(Math.min(hostWidth, hostWidth * 0.56));
   try {
     const tunes = window.ABCJS.renderAbc("sheet", text, {
       add_classes: true,
@@ -412,9 +413,9 @@ function renderNotation() {
       paddingright: 0,
       scale,
       wrap: {
-        minSpacing: narrow ? (roomy ? 1.5 : 1.1) : roomy ? 3.4 : 1.8,
-        maxSpacing: narrow ? (roomy ? 6 : 2.8) : roomy ? 34 : 6,
-        preferredMeasuresPerLine: 1,
+        minSpacing: narrow ? (roomy ? 1.5 : 1.1) : g.division >= 24 ? 0.3 : roomy ? 0.8 : 0.5,
+        maxSpacing: narrow ? (roomy ? 6 : 2.8) : g.division >= 24 ? 4 : roomy ? 8 : 6,
+        preferredMeasuresPerLine: narrow || g.division >= 24 ? 1 : g.measures,
       },
       selectionColor: "#bdebdd",
     });
@@ -641,44 +642,51 @@ function rollMark(parent, box) {
 }
 
 function revealStaffTop(svg) {
-  const box = svg.viewBox && svg.viewBox.baseVal;
-  const widthAttr = parseFloat(svg.getAttribute("width")) || 0;
-  const heightAttr = parseFloat(svg.getAttribute("height")) || 0;
-  const x = box && box.width ? box.x : 0;
-  const y = box && box.height ? box.y : 0;
-  const w = box && box.width ? box.width : widthAttr;
-  const h = box && box.height ? box.height : heightAttr;
-  if (w && h) {
-    const frame = svg.getBoundingClientRect();
-    if (frame.width && frame.height) {
-      const scaleY = h / frame.height;
-      let above = 0;
-      let below = 0;
-      svg.querySelectorAll("path, text, line, rect, use").forEach((el) => {
-        const rect = el.getBoundingClientRect();
-        if (!rect.width && !rect.height) return;
-        above = Math.max(above, frame.top - rect.top);
-        below = Math.max(below, rect.bottom - frame.bottom);
-      });
-      const padTop = (above + 10) * scaleY;
-      const padBottom = (below + 6) * scaleY;
-      if (padTop >= 0.5 || padBottom >= 0.5) {
-        svg.setAttribute("viewBox", `${x} ${y - padTop} ${w} ${h + padTop + padBottom}`);
-        if (heightAttr) svg.setAttribute("height", String(heightAttr * ((h + padTop + padBottom) / h)));
-      }
-    }
-  }
-  // The phone sheet scrolls sideways, so overflow-y cannot stay visible.
-  // Size the box to the painted staff or the bottom lines get clipped.
   const sheet = svg.closest("#sheet");
   if (!sheet) return;
-  const svgRect = svg.getBoundingClientRect();
-  let bottom = svgRect.bottom;
-  svg.querySelectorAll(".abcjs-staff path").forEach((line) => {
-    bottom = Math.max(bottom, line.getBoundingClientRect().bottom);
+  // abcjs `scale` is a CSS transform, so the ink draws outside the layout
+  // box and the card below stays empty. Drop the transform and size the
+  // svg from the ink instead.
+  // paintRockschoolMarks calls this again after the transform is gone, so
+  // remember the engraving zoom (phone uses 1.18) on the svg.
+  let zoom = parseFloat(svg.dataset.staffZoom || "");
+  if (!zoom) {
+    zoom = parseFloat((String(svg.style.transform || "").match(/scale\(\s*([\d.]+)/) || [])[1] || "1") || 1;
+    svg.dataset.staffZoom = String(zoom);
+  }
+  svg.style.transform = "none";
+  const layoutW = parseFloat(svg.getAttribute("width")) || sheet.clientWidth || 1;
+  const layoutH = parseFloat(svg.getAttribute("height")) || layoutW;
+  if (!svg.getAttribute("viewBox")) svg.setAttribute("viewBox", `0 0 ${layoutW} ${layoutH}`);
+  const view = svg.viewBox.baseVal;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  svg.querySelectorAll(".abcjs-staff, .abcjs-note, .abcjs-clef, .abcjs-time-signature, .abcjs-tempo, .abcjs-beam, .abcjs-ledger, .abcjs-decoration, .rs-mark, text").forEach((el) => {
+    let box;
+    try { box = el.getBBox(); } catch { return; }
+    if (!box || (!box.width && !box.height)) return;
+    minY = Math.min(minY, box.y);
+    maxY = Math.max(maxY, box.y + box.height);
   });
-  const painted = Math.ceil(bottom - sheet.getBoundingClientRect().top) + 4;
-  if (painted > 0) sheet.style.minHeight = `${painted}px`;
+  if (!(minY < maxY) || !view.width) return;
+  const padTop = 3;
+  const padBottom = 5;
+  const nextY = minY - padTop;
+  const nextH = maxY - minY + padTop + padBottom;
+  const nextW = view.width;
+  svg.setAttribute("viewBox", `${view.x} ${nextY} ${nextW} ${nextH}`);
+  svg.setAttribute("preserveAspectRatio", "xMinYMin meet");
+  const narrow = window.innerWidth <= 520;
+  // Phone keeps the engraving zoom and scrolls sideways. Desktop fits the
+  // line to the card so a shorter engraving becomes a readable staff.
+  const displayWidth = narrow ? nextW * zoom : Math.max(1, sheet.clientWidth || nextW);
+  const displayHeight = displayWidth * (nextH / nextW);
+  svg.setAttribute("width", String(displayWidth));
+  svg.setAttribute("height", String(displayHeight));
+  svg.style.width = narrow ? `${displayWidth}px` : "100%";
+  svg.style.height = `${displayHeight}px`;
+  svg.style.aspectRatio = `${nextW} / ${nextH}`;
+  sheet.style.minHeight = `${Math.ceil(displayHeight)}px`;
 }
 
 function buildLoop({ first, elapsed }) {

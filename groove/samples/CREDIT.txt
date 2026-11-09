@@ -16,6 +16,13 @@ Rock, Funk, and Jazz are different dynamic levels and microphone balances of tha
 Rock keeps the close microphones forward. Funk keeps them tighter and a little brighter.
 Jazz brings up the overheads and the room, with a lighter stroke and a long ride.
 The snare bottom microphone is included so the snare wires stay audible.
+Snare articulations use several DRSKit velocity layers, and each layer is a different recorded hit so a repeated note does not play the identical sample:
+- Ghost notes: quiet layers (rock 4/6/8, funk 3/4/6, jazz 2/3/4), saved as ghost.mp3, ghost-b.mp3, ghost-c.mp3.
+- Normal hits: middle layers (rock 16/18/20, funk 12/14/16, jazz 8/10/12), saved as snare.mp3, snare-b.mp3, snare-c.mp3.
+- Accents: louder layers (rock 24/26/27, funk 18/20/22, jazz 14/16/18), saved as snareAccent.mp3, snareAccent-b.mp3, snareAccent-c.mp3.
+- Rim-shots: the hardest center hits (rock 28/29, funk 24/26, jazz 20/22), saved as snareRim.mp3 and snareRim-b.mp3.
+- Cross-sticks: Snare_rim layers (rock 6/10/14, funk 4/8/12, jazz 3/5/7), saved as xstick.mp3, xstick-b.mp3, xstick-c.mp3.
+A buzz is three quick quiet-to-normal snare hits. A flam is a ghost grace note plus an accent. A drag is two ghosts plus a normal hit.
 Hits are not replaced with a drum machine and are not cut down to a click.
 The cowbell is a separate CC0 agogo from Virtuosity Drums auxiliary percussion
 (Versilian Studios and Karoryfer Samples); it is not part of the main kit.

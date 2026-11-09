@@ -810,6 +810,8 @@ export function toAbc(g) {
     `M:${g.top}/${g.bottom}`,
     `L:1/${unit}`,
     "%%stretchlast 1",
+    "%%staffsep 8",
+    "%%sysstaffsep 8",
     `Q:1/4=${g.tempo}`,
     "K:C perc",
     abcHeader(),
@@ -1100,19 +1102,22 @@ function addKick(kind, push) {
 
 function addSnare(kind, push) {
   if (!kind) return;
-  if (kind === "accent") push("snare", 122);
-  else if (kind === "ghost") push("snare", 42);
-  else if (kind === "rimshot") push("snare", 124);
-  else if (kind === "xstick") push("xstick", 96);
-  else if (kind === "buzz") push("buzz", 100);
-  else if (kind === "flam") {
-    push("snare", 72, -0.028);
-    push("snare", 114);
+  if (kind === "accent") push("snareAccent", 112);
+  else if (kind === "ghost") push("ghost", 40);
+  else if (kind === "rimshot") push("snareRim", 120);
+  else if (kind === "xstick") push("xstick", 84);
+  else if (kind === "buzz") {
+    push("ghost", 46);
+    push("ghost", 42, 0.018);
+    push("snare", 78, 0.04);
+  } else if (kind === "flam") {
+    push("ghost", 48, -0.03);
+    push("snareAccent", 108);
   } else if (kind === "drag") {
-    push("snare", 64, -0.05);
-    push("snare", 70, -0.028);
-    push("snare", 112);
-  } else push("snare", 100);
+    push("ghost", 36, -0.05);
+    push("ghost", 44, -0.028);
+    push("snare", 96);
+  } else push("snare", 92);
 }
 
 function addHat(kind, push) {

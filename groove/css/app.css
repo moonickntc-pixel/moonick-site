@@ -32,7 +32,8 @@ button:disabled { opacity: 0.4; cursor: default; }
   background: #323232;
   border-right: 2px solid #000;
   z-index: 20;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 .brand {
   height: 52px;
@@ -167,10 +168,18 @@ button:disabled { opacity: 0.4; cursor: default; }
   flex-direction: column;
   width: calc(100% - var(--rail));
 }
+#sheetWrap { order: 1; }
+#warnings { order: 2; }
+#grid { order: 3; }
+#meta { order: 4; }
+#toolbar { order: 5; }
+#abcPanel { order: 6; }
+#permPanel { order: 0; }
+#banner { order: 0; }
 .paper { background: var(--paper); color: var(--ink); }
-#sheetWrap { padding: 22px 10px 8px; overflow: visible; }
-#sheet { min-height: 220px; overflow-x: auto; overflow-y: visible; max-width: 100%; padding-top: 4px; }
-#sheet svg { width: 100% !important; max-width: 100%; height: auto; display: block; overflow: visible; }
+#sheetWrap { padding: 6px 8px 0; overflow: visible; }
+#sheet { min-height: 0; overflow-x: auto; overflow-y: visible; max-width: 100%; padding-top: 0; }
+#sheet svg { width: 100%; max-width: 100%; height: auto; display: block; overflow: visible; }
 #legend {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -435,6 +444,50 @@ button:disabled { opacity: 0.4; cursor: default; }
   line-height: 1;
 }
 .hint { margin: 8px 8px 0; color: #888; font-size: 12px; }
+@media (max-height: 940px) {
+  #grid .hint { display: none; }
+}
+
+@media (min-width: 521px) {
+  #meta {
+    order: 2;
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.5fr) auto;
+    gap: 8px;
+    align-items: center;
+    padding: 2px 10px 4px;
+  }
+  #meta label {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  #meta label span { flex: 0 0 auto; white-space: nowrap; }
+  #meta input { width: auto; flex: 1 1 0; min-width: 0; height: 28px; padding: 2px 8px; font-size: 14px; }
+  #legendBtn, html[data-school] #legendBtn { margin-left: 0; min-height: 28px; height: 28px; padding: 0 12px; font-size: 14px; }
+  #grid { order: 3; padding: 0 6px 4px; }
+  #toolbar { order: 4; padding: 4px 8px 8px; }
+  #abcPanel { order: 5; padding: 2px 12px 10px; }
+  .labels { width: 72px; }
+  .labels button { font-size: 12px; padding-right: 4px; }
+  .labels button.stick-label { height: 22px; font-size: 12px; }
+  .lyric-spacer { height: 20px; font-size: 12px; padding-bottom: 0; }
+  .lyric, .lyric:focus { height: 20px; font-size: 12px; }
+  .beat-spacer, .beat-no { height: 16px; font-size: 11px; }
+  .head { width: 14px; height: 14px; border-width: 2px; }
+  .cell.hh .mark, .cell.hh.on .mark { font-size: 12px; -webkit-text-stroke-width: 0.15px; }
+  .col { min-width: 0; }
+  .group-gap { width: 3px; }
+  .measures { flex-wrap: wrap; overflow: visible; gap: 2px 6px; }
+  .measure { flex: 1 1 0; min-width: 0; }
+  .measure-no { font-size: 11px; line-height: 14px; right: 16px; }
+  .close-measure { width: 16px; height: 16px; font-size: 14px; }
+  .add-measure { width: 32px; height: 32px; font-size: 28px; align-self: center; }
+  .editor-row { align-items: stretch; }
+  html[data-school] #toolbar .tool { min-height: 34px; padding: 2px 8px; font-size: 14px; }
+}
 
 #toolbar {
   display: flex;
@@ -620,25 +673,46 @@ body.viewing #viewBtn { display: flex; }
     gap: 6px;
     align-items: center;
     border-bottom: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
     scrollbar-width: none;
   }
   #rail::-webkit-scrollbar { display: none; }
+  #divisionBtns { display: contents; }
   .brand { display: none; }
   .rail-btn {
     width: auto;
     height: 30px;
     min-height: 0;
+    flex: 0 0 auto;
     flex-direction: row;
+    align-items: center;
     gap: 3px;
     padding: 0 9px;
     border: 0;
     border-radius: 999px;
     font-size: 13px;
+    line-height: 1;
     white-space: nowrap;
+    overflow: hidden;
   }
   .rail-btn br { display: none; }
-  .rail-btn .frac { font-size: 14px; }
+  .rail-btn .frac { font-size: 13px; line-height: 1; }
+  .rail-btn .frac sup,
+  .rail-btn .frac sub {
+    font-size: inherit;
+    line-height: 1;
+    vertical-align: baseline;
+    position: static;
+  }
   .rail-sub { display: none; }
+  .cell.hh .mark,
+  .cell.hh.on .mark {
+    font-size: 18px;
+    -webkit-text-stroke-width: 0.25px;
+  }
+  #grid[data-density="12"] .cell.hh .mark { font-size: 16px; }
+  #grid[data-density="24"] .cell.hh .mark { font-size: 14px; }
 
   #top {
     height: 36px;
@@ -714,6 +788,7 @@ body.viewing #viewBtn { display: flex; }
     border-radius: 16px 16px 0 0;
   }
   #sheet { padding-top: 0; overflow-x: auto; }
+  #sheet svg { max-width: none; }
   #warnings { order: 2; margin: 6px 2px; }
   #grid {
     order: 3;

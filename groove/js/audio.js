@@ -3,9 +3,19 @@
 const VOICES = [
   "kick",
   "snare",
+  "snare-b",
+  "snare-c",
   "snareAccent",
+  "snareAccent-b",
+  "snareAccent-c",
+  "snareRim",
+  "snareRim-b",
   "ghost",
+  "ghost-b",
+  "ghost-c",
   "xstick",
+  "xstick-b",
+  "xstick-c",
   "buzz",
   "hat",
   "hatOpen",
@@ -20,6 +30,22 @@ const VOICES = [
   "tom2",
   "tom3",
 ];
+
+const LAYER_POOLS = {
+  snare: ["snare", "snare-b", "snare-c"],
+  snareAccent: ["snareAccent", "snareAccent-b", "snareAccent-c"],
+  snareRim: ["snareRim", "snareRim-b"],
+  ghost: ["ghost", "ghost-b", "ghost-c"],
+  xstick: ["xstick", "xstick-b", "xstick-c"],
+};
+
+const ARTICULATION_GAIN = {
+  ghost: 0.42,
+  snare: 0.8,
+  snareAccent: 1.05,
+  snareRim: 1.12,
+  xstick: 0.72,
+};
 
 export const KITS = [
   { id: "rock", label: "Rock 搖滾" },
@@ -65,7 +91,7 @@ export function createKit() {
     const context = ensure();
     let cache = null;
     try {
-      if ("caches" in window) cache = await caches.open("drumgrid-drums-v3");
+      if ("caches" in window) cache = await caches.open("drumgrid-drums-v4");
     } catch {
       cache = null;
     }
@@ -109,14 +135,26 @@ export function createKit() {
     return load(kit);
   }
 
+  const roundRobin = {};
+
   function voiceFor(inst, vel) {
     if (inst === "snare") {
-      if (vel < 60) return "ghost";
-      if (vel >= 115) return "snareAccent";
+      if (vel < 55) return "ghost";
+      if (vel >= 126) return "snareRim";
+      if (vel >= 108) return "snareAccent";
       return "snare";
     }
     if (inst === "clickSoft") return "click";
-    return VOICES.includes(inst) ? inst : "snare";
+    if (LAYER_POOLS[inst] || VOICES.includes(inst)) return inst;
+    return "snare";
+  }
+
+  function pickSample(map, name) {
+    const pool = (LAYER_POOLS[name] || [name]).filter((id) => map[id]);
+    const choices = pool.length ? pool : [name];
+    const index = roundRobin[name] || 0;
+    roundRobin[name] = index + 1;
+    return choices[index % choices.length];
   }
 
   const active = new Set();
@@ -154,14 +192,15 @@ export function createKit() {
     if (!map) return;
     unmute();
     const at = Math.max(ensure().currentTime, when);
-    const voice = voiceFor(inst, vel);
+    const voice = pickSample(map, voiceFor(inst, vel));
     const buffer = map[voice];
     if (!buffer) return;
     const src = ctx.createBufferSource();
     src.buffer = buffer;
     const gain = ctx.createGain();
     const amount = Math.max(0.05, Math.min(1, vel / 127));
-    const peak = inst === "clickSoft" ? 0.45 * amount : 0.42 + 0.58 * amount;
+    const shaped = ARTICULATION_GAIN[voiceFor(inst, vel)];
+    const peak = shaped != null ? shaped * (0.92 + 0.08 * amount) : inst === "clickSoft" ? 0.45 * amount : 0.42 + 0.58 * amount;
     gain.gain.setValueAtTime(peak, at);
     src.connect(gain);
     gain.connect(master);
@@ -201,15 +240,6 @@ export function rememberedKit() {
   return "jazz";
 }
 
-export function resumePoint(local, countIn, slotTimes) {
-  if (!(local >= countIn) || !slotTimes.length) return { musical: 0, slot: -1 };
-  let slot = 0;
-  for (let i = 0; i < slotTimes.length; i++) {
-    if (local + 0.02 >= slotTimes[i]) slot = i;
-  }
-  return { musical: Math.max(0, slotTimes[slot] - countIn), slot };
-}
-
 export function createTransport(kit) {
   let timer = null;
   let playing = false;
@@ -219,51 +249,13 @@ export function createTransport(kit) {
   let loopDur = 0;
   let countIn = 0;
   let slotTimes = [];
-  let resumeMusical = 0;
-  let pausedSlot = -1;
-
-  function remember() {
-    const ctx = kit.context;
-    if (!ctx) {
-      resumeMusical = 0;
-      pausedSlot = -1;
-      return;
-    }
-    const point = resumePoint(ctx.currentTime - loopStart, countIn, slotTimes);
-    resumeMusical = point.musical;
-    pausedSlot = point.slot;
-  }
 
   function stop(cut = true) {
-    const was = playing;
     playing = false;
     if (timer) clearInterval(timer);
     timer = null;
-    if (was && cut) remember();
-    else if (was) {
-      resumeMusical = 0;
-      pausedSlot = -1;
-    }
     if (cut && kit.silence) kit.silence();
-    frame({ playing: false, slot: was ? pausedSlot : -1 });
-  }
-
-  function slicePlan(plan, offset) {
-    let hits = plan.hits;
-    let times = plan.slotTimes || [];
-    let duration = plan.duration;
-    let intro = plan.countIn || 0;
-    if (offset > 0 && intro) {
-      hits = hits.filter((hit) => hit.time >= intro - 0.0001).map((hit) => ({ ...hit, time: hit.time - intro }));
-      times = times.map((time) => time - intro);
-      duration -= intro;
-      intro = 0;
-    }
-    const start = offset > 0 ? Math.min(Math.max(0, offset), Math.max(0, duration - 0.03)) : 0;
-    if (start > 0) {
-      hits = hits.filter((hit) => hit.time >= start - 0.05).map((hit) => ({ ...hit, time: hit.time - start }));
-    }
-    return { hits, times, duration, intro, start };
+    frame({ playing: false, slot: -1 });
   }
 
   async function start(buildLoop) {
@@ -271,8 +263,6 @@ export function createTransport(kit) {
     const ctx = kit.ensure();
     if (timer) clearInterval(timer);
     playing = true;
-    const offset = resumeMusical;
-    resumeMusical = 0;
     let scheduledUntil = ctx.currentTime + 0.05;
     let first = true;
     const speedStarted = ctx.currentTime;
@@ -285,19 +275,17 @@ export function createTransport(kit) {
         if (now >= scheduledUntil - 0.04) stop(false);
         return;
       }
-      const resume = first ? offset : 0;
       const plan = buildLoop({
         first,
         elapsed: now - speedStarted,
       });
-      const sliced = slicePlan(plan, resume);
       first = false;
-      loopStart = scheduledUntil - sliced.start;
-      loopDur = sliced.duration;
-      countIn = sliced.intro;
-      slotTimes = sliced.times;
-      for (const hit of sliced.hits) kit.play(hit.inst, hit.vel, scheduledUntil + hit.time);
-      scheduledUntil += Math.max(0.05, sliced.duration - sliced.start);
+      loopStart = scheduledUntil;
+      loopDur = plan.duration;
+      countIn = plan.countIn || 0;
+      slotTimes = plan.slotTimes || [];
+      for (const hit of plan.hits) kit.play(hit.inst, hit.vel, scheduledUntil + hit.time);
+      scheduledUntil += Math.max(0.05, plan.duration);
     };
 
     pump();
@@ -314,7 +302,6 @@ export function createTransport(kit) {
           }
         }
       }
-      pausedSlot = slot;
       frame({ playing: true, slot, local, countIn });
       pump();
     }, 40);

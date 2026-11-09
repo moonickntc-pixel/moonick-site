@@ -1,0 +1,17 @@
+{
+  "name": "聽力訓練｜慕尼克",
+  "short_name": "聽力訓練",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f4f1",
+  "theme_color": "#111111",
+  "lang": "zh-Hant",
+  "icons": [
+    {
+      "src": "apple-touch-moonick.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

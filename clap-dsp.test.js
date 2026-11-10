@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createClapDetector, sensitivityProfile } from "./clap-dsp.js";
+import { createClapDetector, sensitivityProfile } from "./clap-dsp-v4.js";
 
 function rng(seed) {
   let state = seed >>> 0;
@@ -413,6 +413,44 @@ test("512 取樣一塊時，48k 與 44.1k 的小聲拍手一樣數得到", () =>
     });
     assert.ok(result.hits >= 7, JSON.stringify(result.times));
     assert.ok(result.extras <= 1);
+  }
+});
+
+test("電腦喇叭延遲 6 到 25 毫秒、沒有拍手，不會被當成拍手", () => {
+  for (const rate of [44100, 48000]) {
+    for (const delay of [0.006, 0.012, 0.025]) {
+      for (const bleedGain of [0.05, 0.2, 0.4]) {
+        const result = scenario({
+          rate,
+          clapAmp: 0,
+          bleedGain,
+          delay,
+          sensitivity: 1,
+          beats: 6,
+        });
+        assert.equal(
+          result.detected,
+          0,
+          `${rate} 延遲 ${delay} 增益 ${bleedGain} 數到 ${result.detected} ${result.times}`,
+        );
+      }
+    }
+  }
+});
+
+test("同一段喇叭聲再疊明顯更響的拍手，要聽得到", () => {
+  for (const rate of [44100, 48000]) {
+    const result = scenario({
+      rate,
+      clapAmp: 0.55,
+      bleedGain: 0.2,
+      delay: 0.008,
+      clapsOnBeat: true,
+      sensitivity: 1,
+      beats: 6,
+    });
+    assert.ok(result.hits >= 5, `${rate} 對上 ${result.hits}/${result.expected} ${result.times}`);
+    assert.ok(result.extras <= 1, `${rate} 多算 ${result.extras}`);
   }
 });
 

@@ -3,7 +3,7 @@ import test from "node:test";
 import fs from "node:fs";
 
 const source = fs.readFileSync(
-  new URL("./_next/static/chunks/3i738334mbht2.js", import.meta.url),
+  new URL("./_next/static/chunks/3i738334mbht2-v4.js", import.meta.url),
   "utf8",
 );
 
@@ -39,4 +39,7 @@ test("麥克風加歌曲不留任何合成打擊，點螢幕的聽題目仍留�
     true,
   );
   assert.equal(source.includes('t.quietSong="mic"===ee.input&&!!a'), true);
+  assert.equal(source.includes("this.master&&this.master.connect(c,0,1)}catch"), false);
+  assert.equal(source.includes("playedAt.some"), true);
+  assert.equal(source.includes("lastExcess"), true);
 });

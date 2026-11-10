@@ -1,7 +1,20 @@
-// 拍手偵測。麥克風聽到的是「延遲並縮小的播放聲」加上拍手。
-// 先用一小段測試聲估計喇叭到麥克風的延遲與增益，
-// 之後只有比「對齊後的播放能量 × 增益」明顯更大的突增才算拍手。
-// 不在拍點上挖空，因為小朋友的拍手就是打在拍子上。
+// 拍手偵測。
+// 沒有播放聲時，沿用舊版的「變化量＋過零率」，但地板比 0.052 低，
+// 筆電和手機的普通拍手才聽得見。
+// 有播放聲時，把對齊後的喇叭參考扣掉，只要求多出來一點，再加上一點高頻瞬態。
+// 校正嗶聲的整段，以及播放剛開始的約 0.15 秒，都不算拍手。
+
+export function sensitivityProfile(sensitivity) {
+  const sens = Math.min(5, Math.max(1, Math.round(Number(sensitivity) || 1)));
+  const t = (sens - 1) / 4;
+  return {
+    sens,
+    minRms: 0.0035 * Math.pow(0.34, t),
+    ratio: 3.3 * Math.pow(0.7, t),
+    zcrMin: 0.048 - t * 0.018,
+    leak: 0.3 - t * 0.12,
+  };
+}
 
 export function createClapDetector(sampleRate) {
   const rate = sampleRate > 0 ? sampleRate : 48000;
@@ -9,19 +22,25 @@ export function createClapDetector(sampleRate) {
   const mask = ringSize - 1;
   const micRing = new Float32Array(ringSize);
   const refRing = new Float32Array(ringSize);
+  const micDelta = new Float32Array(4096);
   let write = 0;
   let seen = 0;
   let sensitivity = 1;
-  let noise = 0.004;
+  let noise = 0.00055;
   let prevMic = 0;
   let cooldown = 0;
   let delaySamples = 0;
   let gain = 0;
+  let wide = true;
   let calibrating = false;
   let calMic = null;
   let calRef = null;
   let calAt = 0;
-  const calNeed = Math.floor(0.55 * rate);
+  let suppressUntil = 0;
+  let playbackHeld = false;
+  let holdUntil = 0;
+  const calNeed = Math.floor(0.62 * rate);
+  const alpha = Math.exp((-2 * Math.PI * 2400) / rate);
 
   function setSensitivity(value) {
     sensitivity = Math.min(5, Math.max(1, Math.round(Number(value) || 1)));
@@ -31,10 +50,17 @@ export function createClapDetector(sampleRate) {
     calibrating = true;
     gain = 0;
     delaySamples = 0;
+    wide = true;
     calMic = new Float32Array(calNeed);
     calRef = new Float32Array(calNeed);
     calAt = 0;
-    cooldown = 0.55;
+    suppressUntil = seen + Math.floor(0.7 * rate);
+    cooldown = 0;
+  }
+
+  function sampleAt(ring, absolute) {
+    if (absolute < 0 || absolute >= seen) return 0;
+    return ring[absolute & mask];
   }
 
   function push(micBlock, refBlock) {
@@ -61,20 +87,30 @@ export function createClapDetector(sampleRate) {
       calibrating = false;
       calMic = null;
       calRef = null;
-      const ok = found.confidence >= 0.35 && found.gain > 0.008 && found.gain < 4;
-      if (ok) {
+      const minDelay = Math.round(0.008 * rate);
+      const plausible =
+        found.confidence >= 0.35 &&
+        found.gain >= 0.015 &&
+        found.gain <= 1.2 &&
+        found.delaySamples >= minDelay &&
+        found.micRms >= 0.0025;
+      if (plausible) {
         delaySamples = found.delaySamples;
-        gain = found.gain;
+        gain = Math.min(1.05, Math.max(0.02, found.gain));
+        wide = false;
       } else {
         delaySamples = 0;
         gain = 0;
+        wide = true;
       }
-      cooldown = 0.08;
+      cooldown = 0.04;
       calibration = {
-        ok,
-        delaySeconds: delaySamples / rate,
-        gain,
+        ok: plausible,
+        delaySeconds: plausible ? delaySamples / rate : 0,
+        gain: plausible ? gain : 0,
         confidence: found.confidence,
+        refRms: found.refRms,
+        micRms: found.micRms,
       };
     }
 
@@ -89,86 +125,192 @@ export function createClapDetector(sampleRate) {
     };
   }
 
-  function sampleAt(ring, absolute) {
-    if (absolute < 0 || absolute >= seen) return 0;
-    return ring[absolute & mask];
-  }
-
-  function deltaStats(ring, start, length, previous) {
+  function analyze(start, length) {
     let energy = 0;
     let crossings = 0;
-    let prev = previous;
+    let prev = prevMic;
     let high = 0;
     let highPrev = 0;
-    const alpha = Math.exp((-2 * Math.PI * 1800) / rate);
+    const n = Math.min(length, micDelta.length);
     for (let i = 0; i < length; i += 1) {
-      const sample = sampleAt(ring, start + i);
+      const sample = sampleAt(micRing, start + i);
       const delta = sample - prev;
+      if (i < n) micDelta[i] = delta;
       energy += delta * delta;
       if ((sample >= 0 && prev < 0) || (sample < 0 && prev >= 0)) crossings += 1;
-      const band = alpha * (highPrev + sample - prev);
+      const band = alpha * (highPrev + delta);
       high += band * band;
       highPrev = band;
       prev = sample;
     }
+    prevMic = prev;
     return {
       rms: Math.sqrt(energy / length),
+      energy,
       zcr: crossings / length,
       high: Math.sqrt(high / length),
-      prev,
+    };
+  }
+
+  function waveformAt(start, length, lag, micEnergy) {
+    let prev = sampleAt(refRing, start - lag - 1);
+    let refEnergy = 0;
+    let dot = 0;
+    let high = 0;
+    let highPrev = 0;
+    for (let i = 0; i < length; i += 1) {
+      const sample = sampleAt(refRing, start - lag + i);
+      const delta = sample - prev;
+      prev = sample;
+      refEnergy += delta * delta;
+      dot += micDelta[i] * delta;
+      const band = alpha * (highPrev + delta);
+      high += band * band;
+      highPrev = band;
+    }
+    if (refEnergy < 1e-8 || micEnergy < 1e-12) return null;
+    return {
+      corr: dot / Math.sqrt(refEnergy * micEnergy),
+      gain: dot / refEnergy,
+      refRms: Math.sqrt(refEnergy / length),
+      refHigh: Math.sqrt(high / length),
+      lag,
+    };
+  }
+
+  function envelopeScore(start, length, lag, hop) {
+    let dot = 0;
+    let left = 0;
+    let right = 0;
+    for (let p = 0; p + hop <= length; p += hop) {
+      let micAbs = 0;
+      let refAbs = 0;
+      let prev = sampleAt(refRing, start - lag + p - 1);
+      for (let k = 0; k < hop; k += 1) {
+        micAbs += Math.abs(micDelta[p + k] || 0);
+        const sample = sampleAt(refRing, start - lag + p + k);
+        const delta = sample - prev;
+        prev = sample;
+        refAbs += Math.abs(delta);
+      }
+      dot += micAbs * refAbs;
+      left += micAbs * micAbs;
+      right += refAbs * refAbs;
+    }
+    if (left < 1e-10 || right < 1e-10) return 0;
+    return dot / Math.sqrt(left * right);
+  }
+
+  function refLevel(start, length, lag) {
+    let prev = sampleAt(refRing, start - lag - 1);
+    let energy = 0;
+    for (let i = 0; i < length; i += 1) {
+      const sample = sampleAt(refRing, start - lag + i);
+      const delta = sample - prev;
+      prev = sample;
+      energy += delta * delta;
+    }
+    return Math.sqrt(energy / length);
+  }
+
+  function align(start, length, micEnergy) {
+    const minLag = Math.round(0.01 * rate);
+    const maxLag = Math.round(0.18 * rate);
+    let refPeak = 0;
+    const peakStep = Math.max(16, Math.round(0.004 * rate));
+    for (let lag = minLag; lag <= maxLag; lag += peakStep) {
+      const level = refLevel(start, length, lag);
+      if (level > refPeak) refPeak = level;
+    }
+    let center = delaySamples > 0 ? delaySamples : minLag;
+    let radius = Math.round(0.012 * rate);
+    if (wide || delaySamples <= 0) {
+      const hop = Math.max(8, Math.round(0.002 * rate));
+      let bestEnv = 0;
+      center = minLag;
+      for (let lag = minLag; lag <= maxLag; lag += hop) {
+        const score = envelopeScore(start, length, lag, hop);
+        if (score > bestEnv) {
+          bestEnv = score;
+          center = lag;
+        }
+      }
+      radius = hop + 2;
+    }
+    let best = null;
+    const from = Math.max(minLag, center - radius);
+    const to = Math.min(maxLag, center + radius);
+    for (let lag = from; lag <= to; lag += 1) {
+      const found = waveformAt(start, length, lag, micEnergy);
+      if (!found) continue;
+      if (!best || found.corr > best.corr) best = found;
+    }
+    if (!best || best.gain <= 0) {
+      return { bleed: 0, high: 0, corr: best ? best.corr : 0, fit: 0, refPeak };
+    }
+    const corrNeed = wide ? 0.52 : 0.38;
+    if (best.corr < corrNeed) return { bleed: 0, high: 0, corr: best.corr, fit: 0, refPeak };
+    if (best.lag <= Math.round(0.008 * rate) && best.corr > 0.92 && best.gain > 0.8) {
+      return { bleed: 0, high: 0, corr: best.corr, fit: 0, refPeak };
+    }
+    let fit = Math.min(1.05, best.gain);
+    if (!wide && gain > 0) fit = Math.min(fit, Math.max(gain * 1.5, gain + 0.05));
+    if (best.corr > 0.72) {
+      delaySamples = best.lag;
+      if (wide && best.corr > 0.8 && best.gain > 0.02 && best.gain < 1.15) wide = false;
+    }
+    return {
+      bleed: Math.max(0, fit) * best.refRms,
+      high: Math.max(0, fit) * best.refHigh,
+      corr: best.corr,
+      fit,
+      refPeak: Math.max(refPeak, best.refRms),
     };
   }
 
   function judge(length) {
-    const sens = sensitivity;
-    const minRms = 0.06 - sens * 0.008;
-    const ratio = 6.4 - sens * 0.7;
-    const zcrMin = 0.12 - sens * 0.012;
-    // 純喇叭回授的能量比大約是 1。拍手疊上去才會超過。
-    // 靈敏度 1 要比較明確的突增；5 比較容易算進去。
-    const headroom = 1.24 - (sens - 1) * 0.03;
+    const profile = sensitivityProfile(sensitivity);
     const start = seen - length;
-    const micStats = deltaStats(micRing, start, length, prevMic);
-    prevMic = micStats.prev;
+    const mic = analyze(start, length);
+    if (mic.rms < noise * 3) noise = noise * 0.97 + mic.rms * 0.03;
+    else noise = noise * 0.998 + mic.rms * 0.002;
+    const floor = Math.max(profile.minRms, noise * profile.ratio);
+    if (calibrating || seen < suppressUntil || seen < holdUntil) {
+      return { onset: false, rms: mic.rms, hot: false };
+    }
+    if (mic.rms < floor * 0.42) {
+      return { onset: false, rms: mic.rms, hot: false };
+    }
 
-    if (micStats.rms < noise * 3) noise = noise * 0.97 + micStats.rms * 0.03;
-    else noise = noise * 0.998 + micStats.rms * 0.002;
+    const fit = align(start, length, mic.energy);
+    const playback = fit.bleed > floor * 0.4 && fit.corr >= (wide ? 0.52 : 0.38);
+    if (playback && !playbackHeld) {
+      playbackHeld = true;
+      holdUntil = seen + Math.floor(0.15 * rate);
+      return { onset: false, rms: mic.rms, hot: false };
+    }
 
-    const floor = Math.max(minRms, noise * ratio);
-    let predicted = 0;
-    let bestRef = 0;
-    let bestHigh = 0;
-    if (gain > 0) {
-      const tol = Math.round(0.012 * rate);
-      const step = Math.max(1, Math.round(0.001 * rate));
-      const from = Math.max(0, delaySamples - tol);
-      const to = delaySamples + tol;
-      for (let lag = from; lag <= to; lag += step) {
-        const before = sampleAt(refRing, start - lag - 1);
-        const stats = deltaStats(refRing, start - lag, length, before);
-        if (stats.rms > bestRef) {
-          bestRef = stats.rms;
-          bestHigh = stats.high;
-        }
+    // 沒有對得起來的播放聲：跟舊偵測一樣，只看變化量和過零率。
+    // 參考聲很響卻還沒鎖到延遲時，先不當拍手，避免第一下鼓聲漏判。
+    if (!playback) {
+      if (wide && (fit.refPeak || 0) > floor * 2.2 && mic.rms < (fit.refPeak || 0) * 1.2) {
+        return { onset: false, rms: mic.rms, hot: false };
       }
-      predicted = gain * bestRef;
+      const onset = cooldown <= 0 && mic.rms > floor && mic.zcr > profile.zcrMin;
+      return { onset, rms: mic.rms, hot: mic.rms > floor * 0.72 };
     }
 
-    const threshold = Math.max(floor, predicted * headroom);
-    let spectralOk = true;
-    if (predicted > floor * 0.45) {
-      const explained = gain * bestHigh;
-      const excess = micStats.high - explained;
-      spectralOk = excess > 0.28 * Math.max(minRms * 0.45, explained);
-    }
-    const hot = micStats.rms > threshold * 0.72;
+    const excess = Math.sqrt(Math.max(0, mic.rms * mic.rms - fit.bleed * fit.bleed));
+    const hfExcess = mic.high - fit.high;
+    const line = Math.max(floor * 0.9, fit.bleed * profile.leak);
+    const energyOk = excess > line;
+    const hfOk = hfExcess > Math.max(0.0009, floor * 0.18);
+    const strong = excess > Math.max(floor * 2.2, fit.bleed * 0.62);
     const onset =
-      !calibrating &&
       cooldown <= 0 &&
-      micStats.rms > threshold &&
-      micStats.zcr > zcrMin &&
-      spectralOk;
-    return { onset, rms: micStats.rms, hot, predicted, threshold };
+      mic.zcr > profile.zcrMin * 0.7 &&
+      (strong || (energyOk && hfOk));
+    return { onset, rms: mic.rms, hot: excess > line * 0.72 };
   }
 
   return {
@@ -176,7 +318,7 @@ export function createClapDetector(sampleRate) {
     startCalibration,
     push,
     snapshot() {
-      return { delaySamples, gain, sensitivity, calibrating };
+      return { delaySamples, gain, sensitivity, calibrating, wide };
     },
   };
 }
@@ -187,8 +329,16 @@ export function estimatePath(ref, mic, sampleRate) {
   const length = Math.min(ref.length, mic.length);
   const maxDelay = Math.min(length - 1, Math.floor(0.28 * sampleRate));
   if (length < 32 || maxDelay < 2) {
-    return { delaySamples: 0, gain: 0, confidence: 0 };
+    return { delaySamples: 0, gain: 0, confidence: 0, micRms: 0, refRms: 0 };
   }
+  let micEnergyAll = 0;
+  let refEnergyAll = 0;
+  for (let i = 0; i < length; i += 1) {
+    micEnergyAll += mic[i] * mic[i];
+    refEnergyAll += ref[i] * ref[i];
+  }
+  const micRms = Math.sqrt(micEnergyAll / length);
+  const refRms = Math.sqrt(refEnergyAll / length);
   const coarse = Math.max(2, Math.round(sampleRate / 12000));
   let bestLag = 0;
   let bestCorr = 0;
@@ -232,5 +382,7 @@ export function estimatePath(ref, mic, sampleRate) {
     delaySamples: bestLag,
     gain: bestGain > 0 ? bestGain : 0,
     confidence: bestCorr,
+    micRms,
+    refRms,
   };
 }

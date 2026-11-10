@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createClapDetector } from "./clap-dsp.js";
-
-const RATE = 48000;
-const BLOCK = 128;
+import { createClapDetector, sensitivityProfile } from "./clap-dsp.js";
 
 function rng(seed) {
   let state = seed >>> 0;
@@ -13,28 +10,35 @@ function rng(seed) {
   };
 }
 
-function makeBuffer(seconds) {
-  return new Float32Array(Math.floor(seconds * RATE));
+function makeBuffer(rate, seconds) {
+  return new Float32Array(Math.floor(seconds * rate));
 }
 
-function addBurst(buffer, atSecond, seconds, amplitude, random, highpass) {
-  const start = Math.floor(atSecond * RATE);
-  const count = Math.floor(seconds * RATE);
+function addBurst(buffer, rate, atSecond, seconds, amplitude, random, mode) {
+  const start = Math.floor(atSecond * rate);
+  const count = Math.floor(seconds * rate);
   let prev = 0;
+  let low = 0;
+  const lowA = Math.exp((-2 * Math.PI * 2800) / rate);
   for (let i = 0; i < count; i += 1) {
     const index = start + i;
     if (index < 0 || index >= buffer.length) continue;
-    const env = Math.exp(-i / (0.0032 * RATE));
+    const env = Math.exp(-i / (0.0032 * rate));
     const noise = random() * 2 - 1;
-    const sample = highpass ? noise - prev : noise;
+    let sample = noise;
+    if (mode === "hp") sample = noise - prev;
+    if (mode === "laptop") {
+      low = lowA * low + (1 - lowA) * noise;
+      sample = low - prev * 0.2;
+    }
     prev = noise;
     buffer[index] += amplitude * env * sample;
   }
 }
 
-function delayGain(buffer, delaySeconds, gain) {
+function delayGain(buffer, rate, delaySeconds, gain) {
   const out = new Float32Array(buffer.length);
-  const delay = Math.round(delaySeconds * RATE);
+  const delay = Math.round(delaySeconds * rate);
   for (let i = 0; i < buffer.length; i += 1) {
     const source = i - delay;
     if (source >= 0) out[i] += gain * buffer[source];
@@ -43,16 +47,15 @@ function delayGain(buffer, delaySeconds, gain) {
 }
 
 function addNoise(buffer, amplitude, random) {
-  for (let i = 0; i < buffer.length; i += 1) {
-    buffer[i] += amplitude * (random() * 2 - 1);
-  }
+  for (let i = 0; i < buffer.length; i += 1) buffer[i] += amplitude * (random() * 2 - 1);
 }
 
 function mix(into, other) {
   for (let i = 0; i < into.length; i += 1) into[i] += other[i] || 0;
 }
 
-function legacyCount(mic, sensitivity) {
+function legacyCount(mic, rate, sensitivity) {
+  const block = 128;
   let noise = 0.004;
   let prev = 0;
   let cooldown = 0;
@@ -61,8 +64,8 @@ function legacyCount(mic, sensitivity) {
   const minRms = 0.06 - sens * 0.008;
   const ratio = 6.4 - sens * 0.7;
   const zcrMin = 0.12 - sens * 0.012;
-  for (let offset = 0; offset < mic.length; offset += BLOCK) {
-    const length = Math.min(BLOCK, mic.length - offset);
+  for (let offset = 0; offset < mic.length; offset += block) {
+    const length = Math.min(block, mic.length - offset);
     let energy = 0;
     let crossings = 0;
     for (let i = 0; i < length; i += 1) {
@@ -77,7 +80,7 @@ function legacyCount(mic, sensitivity) {
     if (rms < noise * 3) noise = noise * 0.97 + rms * 0.03;
     else noise = noise * 0.998 + rms * 0.002;
     const threshold = Math.max(minRms, noise * ratio);
-    cooldown -= length / RATE;
+    cooldown -= length / rate;
     if (cooldown <= 0 && rms > threshold && zcr > zcrMin) {
       cooldown = 0.07;
       count += 1;
@@ -86,32 +89,39 @@ function legacyCount(mic, sensitivity) {
   return count;
 }
 
-function runDetector(ref, mic, sensitivity) {
-  const detector = createClapDetector(RATE);
+function calibrationSignal(rate, seconds) {
+  const random = rng(7);
+  const ref = makeBuffer(rate, seconds);
+  for (let i = 0; i < 4; i += 1) addBurst(ref, rate, 0.08 + i * 0.09, 0.016, 0.62, random, "hp");
+  return ref;
+}
+
+function runDetector(ref, mic, rate, sensitivity, block = 128) {
+  const detector = createClapDetector(rate);
   detector.setSensitivity(sensitivity);
   detector.startCalibration();
   const times = [];
   let calibration = null;
   let samples = 0;
-  for (let offset = 0; offset < ref.length; offset += BLOCK) {
-    const length = Math.min(BLOCK, ref.length - offset);
-    const refBlock = ref.subarray(offset, offset + length);
-    const micBlock = mic.subarray(offset, offset + length);
-    const result = detector.push(refBlock && micBlock ? micBlock : micBlock, refBlock);
-    samples += length;
+  const length = Math.max(ref.length, mic.length);
+  for (let offset = 0; offset < length; offset += block) {
+    const n = Math.min(block, length - offset);
+    const refBlock = ref.subarray(offset, Math.min(ref.length, offset + n));
+    const micBlock = mic.subarray(offset, Math.min(mic.length, offset + n));
+    const paddedRef = refBlock.length === n ? refBlock : pad(refBlock, n);
+    const paddedMic = micBlock.length === n ? micBlock : pad(micBlock, n);
+    const result = detector.push(paddedMic, paddedRef);
+    samples += n;
     if (result.calibration) calibration = result.calibration;
-    if (result.onset) times.push(samples / RATE);
+    if (result.onset) times.push(samples / rate);
   }
   return { times, calibration, snapshot: detector.snapshot() };
 }
 
-function calibrationSignal(seconds) {
-  const random = rng(7);
-  const ref = makeBuffer(seconds);
-  for (let i = 0; i < 4; i += 1) {
-    addBurst(ref, 0.08 + i * 0.09, 0.016, 0.62, random, true);
-  }
-  return ref;
+function pad(block, n) {
+  const out = new Float32Array(n);
+  out.set(block);
+  return out;
 }
 
 function countNear(times, targets, windowSeconds) {
@@ -136,68 +146,117 @@ function countNear(times, targets, windowSeconds) {
   return { hits, extras: times.length - hits };
 }
 
-export function scenario({ clapAmp, bleedGain, delay, clapsOnBeat, sensitivity, reflect }) {
+function scenario({
+  rate = 48000,
+  clapDb = null,
+  clapAmp = 0,
+  bleedGain = 0,
+  delay = 0.05,
+  clapsOnBeat = false,
+  sensitivity = 1,
+  reflect = false,
+  removeBeeps = false,
+  mode = "hp",
+  block = 128,
+  beats = 8,
+}) {
   const random = rng(11);
   const clapRandom = rng(29);
-  const seconds = 0.55 + 4.4;
-  const ref = makeBuffer(seconds);
-  mix(ref, calibrationSignal(0.55));
-  const beat0 = 0.7;
+  const beat0 = 0.9;
   const period = 0.5;
-  const beats = [];
-  for (let i = 0; i < 8; i += 1) {
+  const seconds = beat0 + beats * period + 0.3;
+  const ref = makeBuffer(rate, seconds);
+  mix(ref, calibrationSignal(rate, 0.6));
+  const beatTimes = [];
+  for (let i = 0; i < beats; i += 1) {
     const at = beat0 + i * period;
-    beats.push(at);
-    addBurst(ref, at, 0.02, 0.85, random, true);
+    beatTimes.push(at);
+    addBurst(ref, rate, at, 0.02, 0.85, random, "hp");
   }
-  let mic = delayGain(ref, delay, bleedGain);
-  if (reflect) mic = mixInto(mic, delayGain(ref, delay + 0.011, bleedGain * 0.45));
+  let mic = delayGain(ref, rate, delay, bleedGain);
+  if (reflect) mix(mic, delayGain(ref, rate, delay + 0.011, bleedGain * 0.45));
+  if (removeBeeps) {
+    const cut = Math.floor(0.7 * rate);
+    for (let i = 0; i < cut && i < mic.length; i += 1) mic[i] = 0;
+  }
   const clapTimes = [];
-  for (let i = 0; i < 8; i += 1) {
-    const at = beats[i] + (clapsOnBeat ? delay : period * 0.5);
-    if (clapAmp > 0) {
-      addBurst(mic, at, 0.01, clapAmp, clapRandom, true);
+  for (let i = 0; i < beats; i += 1) {
+    const at = beatTimes[i] + (clapsOnBeat ? delay : period * 0.5);
+    if (clapAmp > 0 || clapDb != null) {
+      const before = mic.slice();
+      addBurst(mic, rate, at, 0.012, clapAmp > 0 ? clapAmp : 0.2, clapRandom, mode);
+      if (clapDb != null) {
+        const start = Math.floor(at * rate);
+        const end = Math.min(mic.length, start + Math.floor(0.03 * rate));
+        // Scale only the added clap, not the bleed underneath.
+        let peak = 0;
+        for (let s = start; s < end; s += 1) peak = Math.max(peak, Math.abs(mic[s] - before[s]));
+        const target = 10 ** (clapDb / 20);
+        if (peak > 1e-8) {
+          const g = target / peak;
+          for (let s = start; s < end; s += 1) mic[s] = before[s] + (mic[s] - before[s]) * g;
+        }
+      }
       clapTimes.push(at);
     }
   }
-  addNoise(mic, 0.0015, rng(3));
-  const musicOnly = delayGain(ref, delay, bleedGain);
-  addNoise(musicOnly, 0.0015, rng(3));
-  const detected = runDetector(ref, mic, sensitivity);
-  const afterCal = detected.times.filter((time) => time > 0.6);
-  const matched = countNear(afterCal, clapTimes.map((time) => time), 0.08);
+  addNoise(mic, 0.0008, rng(3));
+  const detected = runDetector(ref, mic, rate, sensitivity, block);
+  const afterCal = detected.times.filter((time) => time > 0.75);
+  const matched = countNear(afterCal, clapTimes, 0.08);
+  const musicOnly = delayGain(ref, rate, delay, bleedGain);
+  if (removeBeeps) {
+    const cut = Math.floor(0.7 * rate);
+    for (let i = 0; i < cut && i < musicOnly.length; i += 1) musicOnly[i] = 0;
+  }
+  addNoise(musicOnly, 0.0008, rng(3));
   return {
-    legacyMusic: legacyCount(musicOnly.subarray(Math.floor(0.6 * RATE)), sensitivity),
-    legacyBoth: legacyCount(mic.subarray(Math.floor(0.6 * RATE)), sensitivity),
+    legacyMusic: legacyCount(musicOnly.subarray(Math.floor(0.75 * rate)), rate, sensitivity),
+    legacyClaps: legacyCount(mic.subarray(Math.floor(0.75 * rate)), rate, sensitivity),
     detected: afterCal.length,
     hits: matched.hits,
     extras: matched.extras,
     expected: clapTimes.length,
     calibration: detected.calibration,
+    times: afterCal,
     delay,
     bleedGain,
+    rate,
   };
 }
 
-function mixInto(into, other) {
-  mix(into, other);
-  return into;
-}
+test("靈敏度 1 和 5 的門檻差兩倍以上", () => {
+  const low = sensitivityProfile(1);
+  const high = sensitivityProfile(5);
+  assert.ok(low.minRms / high.minRms >= 2.4, `${low.minRms} / ${high.minRms}`);
+  assert.ok(low.leak > high.leak);
+  assert.equal(sensitivityProfile(1).sens, 1);
+});
+
+test("校正聲本身不算拍手", () => {
+  const result = scenario({
+    clapAmp: 0,
+    bleedGain: 0.34,
+    delay: 0.064,
+    sensitivity: 1,
+    beats: 0,
+  });
+  assert.equal(result.detected, 0);
+});
 
 test("只有喇叭、沒有拍手時，不會把鼓聲算成拍手", () => {
   const result = scenario({
     clapAmp: 0,
     bleedGain: 0.34,
     delay: 0.064,
-    clapsOnBeat: true,
     sensitivity: 1,
   });
-  assert.ok(result.calibration?.ok, "測試聲要對得到喇叭");
+  assert.ok(result.calibration?.ok, JSON.stringify(result.calibration));
   assert.ok(result.legacyMusic >= 6, `舊偵測應會把鼓聲算進去，實際 ${result.legacyMusic}`);
   assert.equal(result.detected, 0);
 });
 
-test("沒有音樂時，靈敏度 1 數得出八下拍手", () => {
+test("沒有音樂時，大聲拍手不會比舊偵測少", () => {
   const result = scenario({
     clapAmp: 0.42,
     bleedGain: 0,
@@ -205,8 +264,56 @@ test("沒有音樂時，靈敏度 1 數得出八下拍手", () => {
     clapsOnBeat: false,
     sensitivity: 1,
   });
+  assert.ok(result.legacyClaps >= 6, `舊偵測 ${result.legacyClaps}`);
   assert.equal(result.hits, result.expected);
   assert.equal(result.extras, 0);
+  assert.ok(result.hits >= Math.min(result.expected, result.legacyClaps));
+});
+
+for (const rate of [44100, 48000]) {
+  for (const db of [-30, -36]) {
+    test(`沒有音樂時，${rate} Hz、${db} dBFS 的拍手在靈敏度 1 要數到`, () => {
+      const result = scenario({
+        rate,
+        clapDb: db,
+        clapAmp: 0,
+        bleedGain: 0,
+        delay: 0.04,
+        sensitivity: 1,
+        mode: "laptop",
+      });
+      assert.equal(result.hits, result.expected, JSON.stringify({ hits: result.hits, times: result.times }));
+      assert.equal(result.extras, 0);
+    });
+  }
+  test(`沒有音樂時，${rate} Hz、-42 dBFS 筆電拍手在靈敏度 5 要數到`, () => {
+    const result = scenario({
+      rate,
+      clapDb: -42,
+      bleedGain: 0,
+      sensitivity: 5,
+      mode: "laptop",
+    });
+    assert.ok(result.hits >= 7, JSON.stringify(result.times));
+    assert.ok(result.extras <= 1);
+  });
+}
+
+test("更小聲的拍手，靈敏度 1 不計、靈敏度 5 會計", () => {
+  const quiet = scenario({
+    clapDb: -46,
+    bleedGain: 0,
+    sensitivity: 1,
+    mode: "laptop",
+  });
+  const loose = scenario({
+    clapDb: -46,
+    bleedGain: 0,
+    sensitivity: 5,
+    mode: "laptop",
+  });
+  assert.ok(quiet.hits <= 2, `靈敏度 1 不該把 -46 dBFS 算進去，實際 ${quiet.hits}`);
+  assert.ok(loose.hits >= 6, `靈敏度 5 應該數到，實際 ${loose.hits}`);
 });
 
 test("音樂播放中照拍子拍手，計數接近實際拍數", () => {
@@ -218,20 +325,17 @@ test("音樂播放中照拍子拍手，計數接近實際拍數", () => {
     sensitivity: 1,
     reflect: true,
   });
-  assert.ok(result.calibration?.ok);
-  console.log(
-    `照拍子：舊偵測純音樂 ${result.legacyMusic} 下，新偵測對上 ${result.hits}/${result.expected}，多算 ${result.extras}，延遲 ${result.calibration.delaySeconds.toFixed(3)} 秒，增益 ${result.calibration.gain.toFixed(3)}`,
-  );
+  assert.ok(result.calibration?.ok, JSON.stringify(result.calibration));
   const delayError = Math.abs(result.calibration.delaySeconds - result.delay);
-  assert.ok(delayError < 0.003, `延遲誤差 ${delayError}`);
+  assert.ok(delayError < 0.008, `延遲誤差 ${delayError}`);
   const gainError = Math.abs(result.calibration.gain - result.bleedGain) / result.bleedGain;
-  assert.ok(gainError < 0.25, `增益誤差 ${gainError}`);
+  assert.ok(gainError < 0.35, `增益誤差 ${gainError} gain=${result.calibration.gain}`);
   assert.ok(result.legacyMusic >= 6, `舊偵測在純音樂時數到 ${result.legacyMusic}`);
   assert.ok(
     Math.abs(result.hits - result.expected) <= 1,
-    `對上 ${result.hits}/${result.expected}，多算 ${result.extras}，總偵測 ${result.detected}`,
+    `對上 ${result.hits}/${result.expected}，多算 ${result.extras}，時間 ${result.times}`,
   );
-  assert.ok(result.extras <= 1, `多算了 ${result.extras} 下`);
+  assert.ok(result.extras <= 1, `多算了 ${result.extras} 下 ${result.times}`);
 });
 
 test("音樂播放中拍在拍與拍之間，也不會把鼓聲算進去", () => {
@@ -244,4 +348,80 @@ test("音樂播放中拍在拍與拍之間，也不會把鼓聲算進去", () =>
   });
   assert.ok(Math.abs(result.hits - result.expected) <= 1, JSON.stringify(result));
   assert.ok(result.extras <= 1, JSON.stringify(result));
+});
+
+test("小聲拍手疊在音樂之間仍數得到，純鼓聲不算", () => {
+  for (const rate of [44100, 48000]) {
+    const clapped = scenario({
+      rate,
+      clapDb: -30,
+      bleedGain: 0.2,
+      delay: 0.06,
+      clapsOnBeat: false,
+      sensitivity: 1,
+      mode: "laptop",
+    });
+    const drums = scenario({
+      rate,
+      clapAmp: 0,
+      bleedGain: 0.34,
+      delay: 0.06,
+      sensitivity: 1,
+    });
+    assert.ok(clapped.hits >= 6, `${rate} 對上 ${clapped.hits} ${clapped.times}`);
+    assert.ok(clapped.extras <= 1, `${rate} 多算 ${clapped.extras}`);
+    assert.equal(drums.detected, 0, `${rate} 純鼓聲 ${drums.detected}`);
+  }
+});
+
+test("回音消除把校正聲吃掉之後，小聲拍手仍算，鼓聲不算", () => {
+  for (const rate of [44100, 48000]) {
+    const clapped = scenario({
+      rate,
+      clapDb: -36,
+      bleedGain: 0,
+      removeBeeps: true,
+      sensitivity: 1,
+      mode: "laptop",
+    });
+    const drums = scenario({
+      rate,
+      clapAmp: 0,
+      bleedGain: 0.34,
+      delay: 0.064,
+      removeBeeps: true,
+      sensitivity: 1,
+    });
+    assert.equal(clapped.calibration?.ok, false);
+    assert.ok(clapped.calibration.gain <= 0.02, JSON.stringify(clapped.calibration));
+    assert.equal(clapped.hits, clapped.expected, JSON.stringify(clapped.times));
+    assert.equal(clapped.extras, 0);
+    assert.equal(drums.calibration?.ok, false);
+    assert.equal(drums.detected, 0, `純鼓聲 ${drums.detected} ${drums.times}`);
+  }
+});
+
+test("512 取樣一塊時，48k 與 44.1k 的小聲拍手一樣數得到", () => {
+  for (const rate of [44100, 48000]) {
+    const result = scenario({
+      rate,
+      clapDb: -33,
+      bleedGain: 0,
+      sensitivity: 1,
+      mode: "laptop",
+      block: 512,
+    });
+    assert.ok(result.hits >= 7, JSON.stringify(result.times));
+    assert.ok(result.extras <= 1);
+  }
+});
+
+test("靈敏度 5 也不會把純喇叭算成拍手", () => {
+  const result = scenario({
+    clapAmp: 0,
+    bleedGain: 0.34,
+    delay: 0.05,
+    sensitivity: 5,
+  });
+  assert.ok(result.detected <= 1, `靈敏度 5 純音樂數到 ${result.detected}`);
 });

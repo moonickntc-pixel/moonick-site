@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>節奏挑戰</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&amp;display=swap">
+<link rel="stylesheet" href="game.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <div>
+      <p class="school">慕尼克音樂新北板橋校區</p>
+      <h1 id="levelTitle">第 1 關</h1>
+    </div>
+    <div class="head-side">
+      <p class="mark">節奏挑戰</p>
+      <button id="full" type="button">全螢幕</button>
+    </div>
+  </header>
+  <p id="bpmLabel" class="bpm">這首歌 100.0 BPM</p>
+  <input id="bpm" type="range" min="60" max="200" step="0.1" value="100" aria-label="速度">
+  <div id="levels" class="levels"></div>
+  <p class="refresh">重新整理這頁，五關的題目都會換一組。每一關會隨機有一題變成老師照片。</p>
+  <p id="status" class="status" aria-live="polite">按開始。先聽一遍，再換你打。</p>
+  <div id="cards" class="cards"></div>
+  <p id="result" class="result" aria-live="polite" hidden></p>
+  <div class="actions">
+    <button id="start" type="button">開始</button>
+    <button id="settings" type="button" aria-expanded="false">設定</button>
+  </div>
+  <div id="panel" class="panel" hidden>
+    <p class="panel-title">判定寬度</p>
+    <div class="seg" id="feel">
+      <button type="button" data-feel="strict">嚴格</button>
+      <button type="button" data-feel="standard">標準</button>
+      <button type="button" data-feel="wide">寬鬆</button>
+    </div>
+    <p class="panel-title">麥克風要多大聲才算</p>
+    <div class="seg" id="sensitivity">
+      <button type="button" data-threshold="0.1">比較敏感</button>
+      <button type="button" data-threshold="0.2">標準</button>
+      <button type="button" data-threshold="0.32">要比較大聲</button>
+    </div>
+    <p class="hint">80 分以上才打開下一關。用麥克風時請戴耳機。</p>
+    <button id="closePanel" type="button">關閉</button>
+  </div>
+  <div id="modes" class="modes" role="group" aria-label="輸入方式">
+    <button type="button" data-mode="tap">拍打</button>
+    <button type="button" data-mode="mic">麥克風</button>
+    <button type="button" data-mode="key">空白鍵</button>
+  </div>
+  <div id="micBox" class="mic-box" hidden>
+    <label for="mic">用哪一支麥克風</label>
+    <select id="mic"></select>
+    <p class="hint">請戴耳機。預備拍和示範播放的時候，麥克風不收聲，避免把節拍器聽成你在打。</p>
+  </div>
+  <p id="message" class="message" role="alert" hidden></p>
+</div>
+<script src="score.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+{
+  "_note": "暱稱和照片以各教室官網師資頁為準。慕尼克用 moonickmusic.com 師資頁，節奏感用 musicdance.com.tw 師資頁。某個教室的師資頁沒有這位老師，檔名留空，遊戲就不會出現。換照片時，用師資頁上的檔案覆蓋同一個檔名。",
+  "teachers": [
+    {
+      "id": "anan",
+      "name": "安安",
+      "moonick": "moonick/anan.jpg",
+      "rhythm": "rhythm/anan.jpg"
+    },
+    {
+      "id": "xiaoyou",
+      "name": "小佑",
+      "moonick": "moonick/xiaoyou.jpg",
+      "rhythm": "rhythm/xiaoyou.jpg"
+    },
+    {
+      "id": "xiaojiang",
+      "name": "小江",
+      "moonick": "moonick/xiaojiang.jpg",
+      "rhythm": "rhythm/xiaojiang.jpg"
+    },
+    {
+      "id": "shaoqi",
+      "name": "劭奇",
+      "moonick": "moonick/shaoqi.jpg",
+      "rhythm": "rhythm/shaoqi.jpg"
+    },
+    {
+      "id": "tongge",
+      "name": "通哥",
+      "moonick": "moonick/tongge.jpg",
+      "rhythm": "rhythm/tongge.jpg"
+    },
+    {
+      "id": "mantou",
+      "name": "饅頭",
+      "moonick": "moonick/mantou.jpg",
+      "rhythm": "rhythm/mantou.jpg"
+    }
+  ]
+}

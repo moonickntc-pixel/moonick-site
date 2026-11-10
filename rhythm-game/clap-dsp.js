@@ -121,6 +121,9 @@ export function createClapDetector(sampleRate) {
       onset: verdict.onset,
       rms: verdict.rms,
       hot: verdict.hot,
+      excess: verdict.excess || 0,
+      bleed: verdict.bleed || 0,
+      playback: !!verdict.playback,
       calibration,
     };
   }
@@ -214,7 +217,8 @@ export function createClapDetector(sampleRate) {
   }
 
   function align(start, length, micEnergy) {
-    const minLag = Math.round(0.01 * rate);
+    // 筆電喇叭離麥克風很近，延遲可能只有幾毫秒，不能從 10ms 才開始找。
+    const minLag = 0;
     const maxLag = Math.round(0.18 * rate);
     let refPeak = 0;
     const peakStep = Math.max(16, Math.round(0.004 * rate));
@@ -238,20 +242,29 @@ export function createClapDetector(sampleRate) {
       radius = hop + 2;
     }
     let best = null;
-    const from = Math.max(minLag, center - radius);
-    const to = Math.min(maxLag, center + radius);
-    for (let lag = from; lag <= to; lag += 1) {
-      const found = waveformAt(start, length, lag, micEnergy);
-      if (!found) continue;
-      if (!best || found.corr > best.corr) best = found;
-    }
+    const consider = (found) => {
+      if (found && (!best || found.corr > best.corr)) best = found;
+    };
+    // 筆電喇叭到麥克風常常只有 6–25 毫秒，這段用逐樣本對，避免對到旁邊。
+    const shortTo = Math.min(maxLag, Math.round(0.03 * rate));
+    for (let lag = 0; lag <= shortTo; lag += 1) consider(waveformAt(start, length, lag, micEnergy));
+    const from = Math.max(shortTo, center - radius);
+    const to = Math.min(maxLag, Math.max(center + radius, shortTo));
+    for (let lag = from; lag <= to; lag += 1) consider(waveformAt(start, length, lag, micEnergy));
+    const song = refPeak > 0.0035;
     if (!best || best.gain <= 0) {
-      return { bleed: 0, high: 0, corr: best ? best.corr : 0, fit: 0, refPeak };
+      return { bleed: 0, high: 0, corr: best ? best.corr : 0, fit: 0, refPeak, reject: song };
     }
-    const corrNeed = wide ? 0.52 : 0.38;
-    if (best.corr < corrNeed) return { bleed: 0, high: 0, corr: best.corr, fit: 0, refPeak };
-    if (best.lag <= Math.round(0.008 * rate) && best.corr > 0.92 && best.gain > 0.8) {
-      return { bleed: 0, high: 0, corr: best.corr, fit: 0, refPeak };
+    // 幾乎零延遲、增益又接近 1，才是虛擬音訊把自己接回來。
+    // 延遲很短但增益明顯小於 1，是喇叭漏進麥克風，要扣掉，不能當成沒有播放。
+    const virtualLoop =
+      best.lag <= Math.round(0.003 * rate) && best.corr > 0.98 && best.gain > 0.92;
+    if (virtualLoop) {
+      return { bleed: 0, high: 0, corr: best.corr, fit: 0, refPeak, reject: true };
+    }
+    const corrNeed = wide ? 0.34 : 0.26;
+    if (best.corr < corrNeed) {
+      return { bleed: 0, high: 0, corr: best.corr, fit: 0, refPeak, reject: song };
     }
     let fit = Math.min(1.05, best.gain);
     if (!wide && gain > 0) fit = Math.min(fit, Math.max(gain * 1.5, gain + 0.05));
@@ -259,12 +272,24 @@ export function createClapDetector(sampleRate) {
       delaySamples = best.lag;
       if (wide && best.corr > 0.8 && best.gain > 0.02 && best.gain < 1.15) wide = false;
     }
+    let prev = sampleAt(refRing, start - best.lag - 1);
+    let residualEnergy = 0;
+    for (let i = 0; i < length; i += 1) {
+      const sample = sampleAt(refRing, start - best.lag + i);
+      const delta = sample - prev;
+      prev = sample;
+      const err = (micDelta[i] || 0) - fit * delta;
+      residualEnergy += err * err;
+    }
     return {
       bleed: Math.max(0, fit) * best.refRms,
       high: Math.max(0, fit) * best.refHigh,
       corr: best.corr,
       fit,
+      residual: Math.sqrt(residualEnergy / length),
       refPeak: Math.max(refPeak, best.refRms),
+      reject: false,
+      lag: best.lag,
     };
   }
 
@@ -284,39 +309,35 @@ export function createClapDetector(sampleRate) {
 
     const fit = align(start, length, mic.energy);
     const refPeak = fit.refPeak || 0;
-    const playback =
-      fit.bleed > floor * 0.28 &&
-      fit.corr >= (wide ? 0.3 : 0.24) &&
-      fit.fit > 0;
+    const songPlaying = refPeak > Math.max(0.0035, floor * 0.5);
+    // 對齊結果要真的解釋掉麥克風裡的一大部分，才算扣到喇叭。
+    // 歌曲正在播卻對不齊：直接拒絕，不能走「沒有播放聲」那條。
+    const explains = fit.fit > 0 && fit.corr >= 0.25 && fit.bleed > floor * 0.2;
+    if (fit.reject || (songPlaying && !explains)) {
+      return { onset: false, rms: mic.rms, hot: false, excess: 0, bleed: fit.bleed || 0, playback: true };
+    }
+    const playback = explains;
     if (playback && !playbackHeld) {
       playbackHeld = true;
       holdUntil = seen + Math.floor(0.15 * rate);
-      return { onset: false, rms: mic.rms, hot: false };
+      return { onset: false, rms: mic.rms, hot: false, excess: 0, bleed: fit.bleed, playback: true };
     }
-
-    // 參考聲這個當下有拍點，但還不能穩穩扣掉：先不當拍手。
-    // 比喇叭參考還明顯大一截的，才可能是真的拍手。
-    if (!playback && refPeak > floor * 1.4 && mic.rms < refPeak * 0.9) {
-      return { onset: false, rms: mic.rms, hot: false };
-    }
-
-    // 沒有對得起來的播放聲：跟舊偵測一樣，只看變化量和過零率。
     if (!playback) {
       const onset = cooldown <= 0 && mic.rms > floor && mic.zcr > profile.zcrMin;
-      return { onset, rms: mic.rms, hot: mic.rms > floor * 0.72 };
+      return {
+        onset,
+        rms: mic.rms,
+        hot: mic.rms > floor * 0.72,
+        excess: mic.rms,
+        bleed: 0,
+        playback: false,
+      };
     }
-
-    const excess = Math.sqrt(Math.max(0, mic.rms * mic.rms - fit.bleed * fit.bleed));
-    const hfExcess = mic.high - fit.high;
-    const line = Math.max(floor * 0.9, fit.bleed * profile.leak);
-    const energyOk = excess > line;
-    const hfOk = hfExcess > Math.max(0.0009, floor * 0.18);
-    const strong = excess > Math.max(floor * 2.2, fit.bleed * 0.62);
-    const onset =
-      cooldown <= 0 &&
-      mic.zcr > profile.zcrMin * 0.7 &&
-      (strong || (energyOk && hfOk));
-    return { onset, rms: mic.rms, hot: excess > line * 0.72 };
+    const excess = fit.residual || 0;
+    // 扣掉對齊後的喇叭，剩下的要明顯更大，才算拍手。
+    const line = Math.max(floor * 1.35, fit.bleed * 0.85);
+    const onset = cooldown <= 0 && excess > line && mic.zcr > profile.zcrMin * 0.7;
+    return { onset, rms: mic.rms, hot: excess > line * 0.72, excess, bleed: fit.bleed, playback: true };
   }
 
   return {

@@ -29,7 +29,7 @@ test("去鼓後長度不變，持續的音還在，鼓的攻擊變小", () => {
   assert.ok(toneOut > toneIn * 0.72, `旋律剩 ${toneOut / toneIn}`);
   const hitIn = rms(mix, Math.floor(0.2 * rate), Math.floor(0.23 * rate));
   const hitOut = rms(out, Math.floor(0.2 * rate), Math.floor(0.23 * rate));
-  assert.ok(hitOut < hitIn * 0.55, `鼓的攻擊剩 ${hitOut / hitIn}`);
+  assert.ok(hitOut < hitIn * 0.22, `鼓的攻擊剩 ${hitOut / hitIn}`);
   let best = -Infinity;
   let bestLag = 0;
   for (let lag = -4; lag <= 4; lag += 1) {
@@ -43,4 +43,28 @@ test("去鼓後長度不變，持續的音還在，鼓的攻擊變小", () => {
     }
   }
   assert.ok(Math.abs(bestLag) <= 1, `旋律偏移 ${bestLag} 個取樣`);
+});
+
+test("hi-hat 那種高頻 click 也會被壓掉", () => {
+  const rate = 44100;
+  const n = rate;
+  const click = new Float32Array(n);
+  let state = 9;
+  const random = () => {
+    state = (Math.imul(1664525, state) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+  const at = Math.floor(0.25 * rate);
+  let prev = 0;
+  for (let i = 0; i < Math.floor(0.007 * rate); i += 1) {
+    const noise = random() * 2 - 1;
+    const sample = noise - prev;
+    prev = noise;
+    click[at + i] = 0.8 * Math.exp(-i / (0.0012 * rate)) * sample;
+  }
+  const out = softenDrums(click, rate);
+  assert.equal(out.length, click.length);
+  const before = rms(click, at, at + Math.floor(0.012 * rate));
+  const after = rms(out, at, at + Math.floor(0.012 * rate));
+  assert.ok(after < before * 0.18, `click 剩 ${after / before}`);
 });

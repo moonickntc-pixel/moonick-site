@@ -283,19 +283,25 @@ export function createClapDetector(sampleRate) {
     }
 
     const fit = align(start, length, mic.energy);
-    const playback = fit.bleed > floor * 0.4 && fit.corr >= (wide ? 0.52 : 0.38);
+    const refPeak = fit.refPeak || 0;
+    const playback =
+      fit.bleed > floor * 0.28 &&
+      fit.corr >= (wide ? 0.3 : 0.24) &&
+      fit.fit > 0;
     if (playback && !playbackHeld) {
       playbackHeld = true;
       holdUntil = seen + Math.floor(0.15 * rate);
       return { onset: false, rms: mic.rms, hot: false };
     }
 
+    // 參考聲這個當下有拍點，但還不能穩穩扣掉：先不當拍手。
+    // 比喇叭參考還明顯大一截的，才可能是真的拍手。
+    if (!playback && refPeak > floor * 1.4 && mic.rms < refPeak * 0.9) {
+      return { onset: false, rms: mic.rms, hot: false };
+    }
+
     // 沒有對得起來的播放聲：跟舊偵測一樣，只看變化量和過零率。
-    // 參考聲很響卻還沒鎖到延遲時，先不當拍手，避免第一下鼓聲漏判。
     if (!playback) {
-      if (wide && (fit.refPeak || 0) > floor * 2.2 && mic.rms < (fit.refPeak || 0) * 1.2) {
-        return { onset: false, rms: mic.rms, hot: false };
-      }
       const onset = cooldown <= 0 && mic.rms > floor && mic.zcr > profile.zcrMin;
       return { onset, rms: mic.rms, hot: mic.rms > floor * 0.72 };
     }

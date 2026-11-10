@@ -1,0 +1,90 @@
+# Publishes the site with actions/deploy-pages.
+# The branch-based Pages deploy uploads the files, then GitHub fails while
+# syncing them ("Deployment failed, try again later"). This workflow uses the
+# repository token to cancel that stuck deployment and try the publish again.
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  actions: write
+
+concurrency:
+  group: pages-actions-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Clear a stuck Pages deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          repo="${{ github.repository }}"
+          gh api --method POST "/repos/${repo}/actions/runs/42727912725/cancel"
+          for sha in $(git log -8 --format=%H); do
+            status=$(gh api "/repos/${repo}/pages/deployments/${sha}" --jq .status)
+            echo "pages deployment ${sha} status=${status}"
+            case "$status" in
+              deployment_queued|syncing_files|building|deployment_failed)
+                gh api --method POST "/repos/${repo}/pages/deployments/${sha}/cancel"
+                ;;
+            esac
+          done
+          gh api --method PUT -H "Accept: application/vnd.github+json" \
+            "/repos/${repo}/pages" \
+            -f build_type=workflow \
+            -f cname=moonickmusic.com
+          echo "pages site:"
+          gh api "/repos/${repo}/pages" --jq '{status,build_type,cname,html_url}'
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Deploy to GitHub Pages
+        id: try1
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: Wait and deploy again
+        if: steps.try1.outcome == 'failure'
+        run: sleep 60
+
+      - name: Deploy to GitHub Pages (second try)
+        id: try2
+        if: steps.try1.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: Wait and deploy a third time
+        if: steps.try1.outcome == 'failure' && steps.try2.outcome == 'failure'
+        run: sleep 90
+
+      - name: Deploy to GitHub Pages (third try)
+        id: deploy
+        if: steps.try1.outcome == 'failure' && steps.try2.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+
+      - name: Record the successful publish
+        if: steps.try1.outcome == 'success' || steps.try2.outcome == 'success'
+        run: echo "page_url=${{ steps.try1.outputs.page_url || steps.try2.outputs.page_url }}"

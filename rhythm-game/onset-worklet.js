@@ -18,9 +18,14 @@ class OnsetProcessor extends AudioWorkletProcessor {
   }
 
   process(inputs) {
-    const channels = inputs[0] || [];
-    const mic = channels[0];
-    const reference = channels[1];
+    const first = inputs[0] || [];
+    const second = inputs[1] || [];
+    let mic = first[0];
+    let reference = second[0] && second[0].length ? second[0] : first[1];
+    // 播放參考要留著。就算和麥克風很像，也當成「有播放」，不能改傳靜音。
+    if ((!mic || mic.length === 0) && reference && reference.length) {
+      mic = reference;
+    }
     if (!mic || mic.length === 0) {
       if (this.emptySince < 0) this.emptySince = currentTime;
       if (!this.reportedSilent && currentTime - this.emptySince > 0.4) {
@@ -36,10 +41,7 @@ class OnsetProcessor extends AudioWorkletProcessor {
     this.emptySince = -1;
 
     const silent = new Float32Array(mic.length);
-    const result = this.detector.push(
-      mic,
-      reference && reference.length === mic.length ? reference : silent,
-    );
+    const result = this.detector.push(mic, reference && reference.length ? reference : silent);
     if (result.calibration) {
       this.port.postMessage({
         type: "calibration",
@@ -47,10 +49,19 @@ class OnsetProcessor extends AudioWorkletProcessor {
         delaySeconds: result.calibration.delaySeconds,
         gain: result.calibration.gain,
         confidence: result.calibration.confidence,
+        refRms: result.calibration.refRms,
+        micRms: result.calibration.micRms,
       });
     }
     if (result.onset) {
-      this.port.postMessage({ type: "onset", time: currentTime, rms: result.rms });
+      this.port.postMessage({
+        type: "onset",
+        time: currentTime,
+        rms: result.rms,
+        excess: result.excess,
+        bleed: result.bleed,
+        playback: result.playback,
+      });
     }
 
     this.blocks += 1;

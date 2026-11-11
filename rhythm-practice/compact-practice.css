@@ -133,6 +133,8 @@ html:has([data-testid="play"]) .rhythm-key svg {
   height: 36px;
   width: auto;
   max-width: 100%;
+  display: block;
+  margin-inline: auto; /* 譜面小圖（線＋音符整組）在鈕內水平置中 */
 }
 
 html:has([data-testid="play"]) .rhythm-key span,

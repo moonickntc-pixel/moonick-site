@@ -214,3 +214,195 @@ html:has([data-testid="play"]) .rhythm-key .text-\[15px\] {
     font-size: 12px;
   }
 }
+
+/* 一般電腦螢幕（寬度 1024 以上）：作答畫面改滿版，譜與按鈕放大佔滿視窗。手機與平板直向維持上一版。 */
+@media (min-width: 1024px) {
+  html:has([data-testid="play"]) .mx-auto.flex.min-h-dvh {
+    max-width: none;
+    width: 100%;
+    padding: 12px 24px 16px;
+    min-height: 100dvh;
+    height: 100dvh;
+    box-sizing: border-box;
+  }
+
+  html:has([data-testid="play"]) header {
+    margin-bottom: 10px;
+  }
+
+  html:has([data-testid="play"]) header h1 {
+    font-size: 28px;
+  }
+
+  html:has([data-testid="play"]) header img.h-16,
+  html:has([data-testid="play"]) header img.h-14 {
+    height: 40px;
+    width: 40px;
+  }
+
+  html:has([data-testid="play"]) header .mt-4 {
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  html:has([data-testid="play"]) header button {
+    flex: 0 0 auto;
+    height: 42px;
+    min-height: 42px;
+    padding: 0 18px;
+    font-size: 15px;
+  }
+
+  html:has([data-testid="play"]) main.flex.flex-col {
+    flex: 1 1 auto;
+    min-height: 0;
+    gap: 10px;
+  }
+
+  html:has([data-testid="play"]) main > section.flex.flex-col {
+    flex: 1 1 auto;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    grid-template-rows: auto 1fr auto auto auto;
+    column-gap: 20px;
+    row-gap: 12px;
+    align-items: stretch;
+  }
+
+  /* 題目譜在上、播放與提交靠下，中間留白，和右邊作答區同高 */
+  html:has([data-testid="play"]) main > section > :has([data-testid="staff"]) {
+    grid-row: 1;
+  }
+  html:has([data-testid="play"]) main > section > :has(> [data-testid="play"]) {
+    grid-row: 3;
+  }
+  html:has([data-testid="play"]) main > section > p[aria-live] {
+    grid-row: 4;
+  }
+  html:has([data-testid="play"]) main > section > :has(> [data-testid="submit"]) {
+    grid-row: 5;
+  }
+
+  html:has([data-testid="play"]) .panel.p-3,
+  html:has([data-testid="play"]) .panel.sm\:p-4,
+  html:has([data-testid="play"]) .panel {
+    padding: 12px 16px;
+    box-sizing: border-box;
+  }
+
+  /* 蓋過短螢幕時把譜縮小到 0.68 的規則，改回接近原尺寸並略放大 */
+  html:has([data-testid="play"]) [data-testid="staff"] {
+    zoom: 1;
+  }
+
+  html:has([data-testid="play"]) [data-testid="play"] {
+    height: 56px;
+    min-height: 56px;
+    font-size: 20px;
+    padding: 0 24px;
+  }
+
+  html:has([data-testid="play"]) [data-testid="play"] svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  html:has([data-testid="play"]) p[aria-live] {
+    font-size: 16px;
+  }
+
+  html:has([data-testid="play"]) :has(> [data-testid="submit"]) button {
+    height: 48px;
+    min-height: 48px;
+    font-size: 16px;
+    padding: 0 16px;
+  }
+
+  html:has([data-testid="play"]) main > section > [data-testid="keyboard"] {
+    align-self: stretch;
+    height: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    align-content: stretch;
+  }
+
+  html:has([data-testid="play"]) .rhythm-key {
+    height: 100%;
+    padding: 8px 8px 10px;
+    gap: 4px;
+    box-shadow: 0 3px 0 var(--key-shadow);
+  }
+
+  html:has([data-testid="play"]) .rhythm-key svg {
+    height: 56px;
+  }
+
+  html:has([data-testid="play"]) .rhythm-key span,
+  html:has([data-testid="play"]) .rhythm-key .text-\[15px\] {
+    font-size: 15px;
+    line-height: 1.25;
+  }
+}
+
+@media (min-width: 1024px) and (min-height: 860px) {
+  html:has([data-testid="play"]) [data-testid="staff"] {
+    zoom: 1.12;
+  }
+
+  html:has([data-testid="play"]) .rhythm-key svg {
+    height: 64px;
+  }
+
+  html:has([data-testid="play"]) .rhythm-key span,
+  html:has([data-testid="play"]) .rhythm-key .text-\[15px\] {
+    font-size: 16px;
+  }
+
+  html:has([data-testid="play"]) [data-testid="play"] {
+    height: 60px;
+    min-height: 60px;
+    font-size: 22px;
+  }
+}
+
+@media (min-width: 1440px) {
+  html:has([data-testid="play"]) .mx-auto.flex.min-h-dvh {
+    padding: 16px 32px 20px;
+  }
+
+  html:has([data-testid="play"]) [data-testid="staff"] {
+    zoom: 1.18;
+  }
+
+  html:has([data-testid="play"]) .rhythm-key svg {
+    height: 70px;
+  }
+
+  html:has([data-testid="play"]) .rhythm-key span,
+  html:has([data-testid="play"]) .rhythm-key .text-\[15px\] {
+    font-size: 17px;
+  }
+}
+
+@media (min-width: 1920px) {
+  html:has([data-testid="play"]) .mx-auto.flex.min-h-dvh {
+    padding: 20px 40px 24px;
+  }
+
+  html:has([data-testid="play"]) [data-testid="staff"] {
+    zoom: 1.28;
+  }
+
+  html:has([data-testid="play"]) header h1 {
+    font-size: 32px;
+  }
+
+  html:has([data-testid="play"]) .rhythm-key svg {
+    height: 80px;
+  }
+
+  html:has([data-testid="play"]) .rhythm-key span,
+  html:has([data-testid="play"]) .rhythm-key .text-\[15px\] {
+    font-size: 18px;
+  }
+}

@@ -877,12 +877,42 @@ function layoutBar(tokens, division, group) {
   return beats.join(" ");
 }
 
+// Plain and single-dotted lengths only (no double dots), as fractions of a whole note.
+const SIMPLE_LENGTHS = new Set(
+  [1, 0.5, 0.25, 0.125, 0.0625, 0.03125, 0.75, 0.375, 0.1875, 0.09375, 0.046875].map((value) =>
+    value.toFixed(10)
+  )
+);
+
+// Within one beat, a hit lasts until the next hit (or the end of the beat), so
+// "1 . . a" reads as a dotted 8th + 16th and "1 . & ." as two 8ths, with no
+// filler 16th rests. Rests only appear before the first hit of the beat.
+// "e" and "a" only reads as 16th rest, 8th, 16th.
 function collapseStraight(tokens, division) {
+  if (division === 8 || division === 16) return sustainBeat(tokens, division);
   return renderPieceRun(
     tokens.map((token) => (token === "z" ? { rest: 1 } : { text: token })),
     division,
     false
   );
+}
+
+function sustainBeat(tokens, division) {
+  const unit = 1 / abcUnit(division);
+  const onsets = [];
+  tokens.forEach((token, i) => {
+    if (token !== "z") onsets.push(i);
+  });
+  if (onsets.length === 0) return restMarks(tokens.length, division);
+  let out = onsets[0] > 0 ? restMarks(onsets[0], division) : "";
+  onsets.forEach((start, k) => {
+    const end = k + 1 < onsets.length ? onsets[k + 1] : tokens.length;
+    let take = end - start;
+    while (take > 1 && !SIMPLE_LENGTHS.has((take * unit).toFixed(10))) take--;
+    out += take === 1 ? tokens[start] : tokens[start] + take;
+    if (end - start > take) out += restMarks(end - start - take, division);
+  });
+  return out;
 }
 
 function renderPieceRun(pieces, division, separateTuplets) {

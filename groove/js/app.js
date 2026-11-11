@@ -302,7 +302,7 @@ function fitWritingArea() {
   const rowCells = [...col.children].filter((el) => el.classList.contains("cell") && !el.classList.contains("slot-hidden"));
   if (!rowCells.length) return;
   grid.querySelectorAll(".columns").forEach((columns) => {
-    const sample = columns.querySelector(".cell:not(.slot-hidden)");
+    const sample = columns.querySelector(".cell:not(.slot-hidden):not(.sticking)");
     if (!sample) return;
     const h = sample.getBoundingClientRect().height;
     columns.querySelectorAll(".track").forEach((track, index) => {

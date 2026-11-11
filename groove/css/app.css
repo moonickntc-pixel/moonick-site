@@ -473,6 +473,7 @@ button:disabled { opacity: 0.4; cursor: default; }
   .labels { width: 72px; }
   .labels button { font-size: 12px; padding-right: 4px; }
   .labels button.stick-label { height: 22px; font-size: 12px; }
+  .cell.stick, .cell.sticking { height: 22px; font-size: 13px; }
   .lyric-spacer { height: 20px; font-size: 12px; padding-bottom: 0; }
   .lyric, .lyric:focus { height: 20px; font-size: 12px; }
   .beat-spacer, .beat-no { height: 16px; font-size: 11px; }

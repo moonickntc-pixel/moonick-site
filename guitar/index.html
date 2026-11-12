@@ -94,7 +94,17 @@ article .offer-btns .btn.form{background:#FCFBF8;color:var(--goldt);border:1.5px
 article .offer-btns .btn.tel{background:var(--gold);color:#fff}
 article .offer h2,article .offer p,article .offer li,article .offer a{overflow-wrap:break-word;word-break:normal}
 @media(max-width:719px){article .offer{padding:16px 14px 14px;margin:24px 0 14px}article .offer-btns .btn{white-space:normal}}
-.ptable-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;margin:8px 0 12px}.ptable{width:100%;border-collapse:collapse;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.06)}.ptable th,.ptable td{padding:10px 12px;vertical-align:top;text-align:left;border-bottom:1px solid #e4ddd2}.ptable th{background:var(--navy);color:#FCFBF8;font-weight:700;border-bottom:3px solid var(--gold);white-space:nowrap}.ptable td:first-child{color:var(--navy);font-weight:700;white-space:nowrap}.ptable tr:last-child td{border-bottom:0}</style>
+.ptable-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;margin:8px 0 12px}.ptable{width:100%;border-collapse:collapse;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.06)}.ptable th,.ptable td{padding:10px 12px;vertical-align:top;text-align:left;border-bottom:1px solid #e4ddd2}.ptable th{background:var(--navy);color:#FCFBF8;font-weight:700;border-bottom:3px solid var(--gold);white-space:nowrap}.ptable td:first-child{color:var(--navy);font-weight:700;white-space:nowrap}.ptable tr:last-child td{border-bottom:0}/* parent reviews */
+.reviews{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;padding-bottom:6px;max-width:100%;align-items:flex-start;margin:0 0 8px}
+.review{flex:0 0 86%;scroll-snap-align:start;margin:0}
+.review blockquote{margin:0;font-size:.95rem;line-height:1.7}
+.review footer{background:transparent;color:var(--grey);text-align:left;padding:0;margin:12px 0 0;border:0;font-size:.85rem;font-weight:700;line-height:1.5}
+.review cite{font-style:normal}
+@media (min-width:720px){
+.reviews{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);overflow:visible;gap:16px;align-items:start}
+.review{flex:none}
+}
+</style>
 </head>
 <body>
 <div class="top"><a class="brand" href="../"><img src="/moonick_logo_header.png" alt="慕尼克音樂 logo" width="40" height="40">慕尼克音樂 新北板橋校區</a>
@@ -169,6 +179,11 @@ article .offer h2,article .offer p,article .offer li,article .offer a{overflow-w
 <a class="btn tel" href="https://forms.gle/RLBckeKtsLccNnim8" target="_blank" rel="noopener">填預約表單</a>
 <a class="btn form" href="https://line.me/R/ti/p/@595zatgi" target="_blank" rel="noopener">加入官方 LINE</a>
 </div>
+</div>
+
+<div class="offer" id="reviews">
+<h2>家長怎麼說</h2>
+<div class="reviews"><article class="card review"><blockquote>非常感謝小江老師！ 雖然已經是大朋友了 但能在忙碌的工作與生活之餘， 能擁有一個舒適、自在的環境來培養興趣 真的是一件非常難得且幸福的事！ 小江老師不僅擁有豐富的教學經驗，更具備多元且扎實的音樂專業，無論是吉他、爵士鼓、歌唱、貝斯，甚至是詞曲創作，都能自在地交流與討論。 最讚嘆的是，老師從不因為學生的程度、年齡或自身條件而有所區別，始終保持耐心，依照每個人的步調，去活化上課的內容 在學習的過程中，沒有令人喘不過氣的壓力，也不會因為遇到困難而感到挫折，反而能在輕鬆愉快的氛圍中，不知不覺地累積進步與成就感。 謝謝小江老師<footer><cite>咪拎｜Google 評論</cite></footer></blockquote></article><article class="card review"><blockquote>在慕尼克學音樂，不只是上課而已。 老師專業又有耐心，不走制式流程，而是看見每個孩子的特質，陪他們找到自己的聲音。 孩子在這裡有很大的發展空間，也被真正尊重與鼓勵。 慕尼克不只是音樂教室，更像一個充滿愛的大家庭<footer><cite>minmin Lin｜Google 評論</cite></footer></blockquote></article></div>
 </div>
 <h2 id="faq">常見問題 FAQ</h2>
 <details><summary>學吉他要多久？學吉他難嗎？要先學什麼？</summary><p>一期 12 堂課，每堂 50 分鐘。第 1–2 堂先認識吉他、調音、拿 pick，學會 C 調和弦和基本刷法；第 9–12 堂就能把第一首自選歌完整彈完。零基礎也不用怕，六線譜、和弦譜、級數譜各種譜都可以用，但我們更重視不看譜的聽感訓練。譜只是解釋聽覺的工具，太早學看譜，孩子反而會少掉很多練耳朵的機會。老師因材施教，會視每位學生的學習速度調整進度，不會死板地按表操課、照本宣科。</p></details>

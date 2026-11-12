@@ -94,7 +94,17 @@ article .offer-btns .btn.form{background:#FCFBF8;color:var(--goldt);border:1.5px
 article .offer-btns .btn.tel{background:var(--gold);color:#fff}
 article .offer h2,article .offer p,article .offer li,article .offer a{overflow-wrap:break-word;word-break:normal}
 @media(max-width:719px){article .offer{padding:16px 14px 14px;margin:24px 0 14px}article .offer-btns .btn{white-space:normal}}
-.ptable-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;margin:8px 0 12px}.ptable{width:100%;border-collapse:collapse;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.06)}.ptable th,.ptable td{padding:10px 12px;vertical-align:top;text-align:left;border-bottom:1px solid #e4ddd2}.ptable th{background:var(--navy);color:#FCFBF8;font-weight:700;border-bottom:3px solid var(--gold);white-space:nowrap}.ptable td:first-child{color:var(--navy);font-weight:700;white-space:nowrap}.ptable tr:last-child td{border-bottom:0}</style>
+.ptable-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;margin:8px 0 12px}.ptable{width:100%;border-collapse:collapse;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.06)}.ptable th,.ptable td{padding:10px 12px;vertical-align:top;text-align:left;border-bottom:1px solid #e4ddd2}.ptable th{background:var(--navy);color:#FCFBF8;font-weight:700;border-bottom:3px solid var(--gold);white-space:nowrap}.ptable td:first-child{color:var(--navy);font-weight:700;white-space:nowrap}.ptable tr:last-child td{border-bottom:0}/* parent reviews */
+.reviews{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;padding-bottom:6px;max-width:100%;align-items:flex-start;margin:0 0 8px}
+.review{flex:0 0 86%;scroll-snap-align:start;margin:0}
+.review blockquote{margin:0;font-size:.95rem;line-height:1.7}
+.review footer{background:transparent;color:var(--grey);text-align:left;padding:0;margin:12px 0 0;border:0;font-size:.85rem;font-weight:700;line-height:1.5}
+.review cite{font-style:normal}
+@media (min-width:720px){
+.reviews{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);overflow:visible;gap:16px;align-items:start}
+.review{flex:none}
+}
+</style>
 </head>
 <body>
 <div class="top"><a class="brand" href="../"><img src="/moonick_logo_header.png" alt="慕尼克音樂 logo" width="40" height="40">慕尼克音樂 板橋校區</a>
@@ -168,6 +178,11 @@ article .offer h2,article .offer p,article .offer li,article .offer a{overflow-w
 <a class="btn tel" href="https://forms.gle/RLBckeKtsLccNnim8" target="_blank" rel="noopener">填預約表單</a>
 <a class="btn form" href="https://line.me/R/ti/p/@595zatgi" target="_blank" rel="noopener">加入官方 LINE</a>
 </div>
+</div>
+
+<div class="offer" id="reviews">
+<h2>家長怎麼說</h2>
+<div class="reviews"><article class="card review"><blockquote>很推薦安安老師！教學認真又有耐心，會細心引導孩子，並適時給予鼓勵，讓孩子在開心的氣氛中學習爵士鼓，慢慢累積自信。謝謝安安老師用心教導，讓孩子享受音樂和打鼓的樂趣！<footer><cite>Ai Ni Lu (Hayley)｜Google 評論</cite></footer></blockquote></article><article class="card review"><blockquote>很少遇到讓孩子這麼期待上課的音樂教室。老師們幾乎樣樣都會，還會給孩子很多表演跟發揮的舞台，累積表演經驗，也更有自信了。 課堂上氣氛很好，老師不像只是教課，更像朋友一樣陪著孩子學習，身為家長真的很感謝。<footer><cite>李小菱｜Google 評論</cite></footer></blockquote></article><article class="card review"><blockquote>老師教學非常認真，也很有耐心，能依孩子的狀況調整教學方式，和孩子的互動自然又溫暖，孩子每次上課都很期待。老師本身精通多項樂器，課程內容多元、有深度，能讓孩子接觸不同的音樂元素，培養真正的興趣。教室環境乾淨明亮、設備完善，整體學習氛圍很舒服，家長也很放心，真心推薦這間音樂教室。<footer><cite>Sandy Chuang｜Google 評論</cite></footer></blockquote></article></div>
 </div>
 <h2 id="faq">常見問題 FAQ</h2>
 <details><summary>3、4 歲可以學爵士鼓嗎？</summary><p>可以的！只要孩子能數到 10 並拍出指定次數、分得清左右手、聽得懂簡單的組合指令，就可以開始上課。教室內的鼓椅和小鼓架都可以配合孩子的身高調整。</p></details>

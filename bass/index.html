@@ -94,7 +94,17 @@ article .offer-btns .btn.form{background:#FCFBF8;color:var(--goldt);border:1.5px
 article .offer-btns .btn.tel{background:var(--gold);color:#fff}
 article .offer h2,article .offer p,article .offer li,article .offer a{overflow-wrap:break-word;word-break:normal}
 @media(max-width:719px){article .offer{padding:16px 14px 14px;margin:24px 0 14px}article .offer-btns .btn{white-space:normal}}
-.ptable-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;margin:8px 0 12px}.ptable{width:100%;border-collapse:collapse;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.06)}.ptable th,.ptable td{padding:10px 12px;vertical-align:top;text-align:left;border-bottom:1px solid #e4ddd2}.ptable th{background:var(--navy);color:#FCFBF8;font-weight:700;border-bottom:3px solid var(--gold);white-space:nowrap}.ptable td:first-child{color:var(--navy);font-weight:700;white-space:nowrap}.ptable tr:last-child td{border-bottom:0}</style>
+.ptable-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;margin:8px 0 12px}.ptable{width:100%;border-collapse:collapse;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.06)}.ptable th,.ptable td{padding:10px 12px;vertical-align:top;text-align:left;border-bottom:1px solid #e4ddd2}.ptable th{background:var(--navy);color:#FCFBF8;font-weight:700;border-bottom:3px solid var(--gold);white-space:nowrap}.ptable td:first-child{color:var(--navy);font-weight:700;white-space:nowrap}.ptable tr:last-child td{border-bottom:0}/* parent reviews */
+.reviews{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;padding-bottom:6px;max-width:100%;align-items:flex-start;margin:0 0 8px}
+.review{flex:0 0 86%;scroll-snap-align:start;margin:0}
+.review blockquote{margin:0;font-size:.95rem;line-height:1.7}
+.review footer{background:transparent;color:var(--grey);text-align:left;padding:0;margin:12px 0 0;border:0;font-size:.85rem;font-weight:700;line-height:1.5}
+.review cite{font-style:normal}
+@media (min-width:720px){
+.reviews{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);overflow:visible;gap:16px;align-items:start}
+.review{flex:none}
+}
+</style>
 </head>
 <body>
 <div class="top"><a class="brand" href="../"><img src="/moonick_logo_header.png" alt="慕尼克音樂 logo" width="40" height="40">慕尼克音樂 新北板橋校區</a>
@@ -145,6 +155,11 @@ article .offer h2,article .offer p,article .offer li,article .offer a{overflow-w
 <a class="btn tel" href="https://forms.gle/RLBckeKtsLccNnim8" target="_blank" rel="noopener">填預約表單</a>
 <a class="btn form" href="https://line.me/R/ti/p/@595zatgi" target="_blank" rel="noopener">加入官方 LINE</a>
 </div>
+</div>
+
+<div class="offer" id="reviews">
+<h2>家長怎麼說</h2>
+<div class="reviews"><article class="card review"><blockquote>非常感謝小江老師！ 雖然已經是大朋友了 但能在忙碌的工作與生活之餘， 能擁有一個舒適、自在的環境來培養興趣 真的是一件非常難得且幸福的事！ 小江老師不僅擁有豐富的教學經驗，更具備多元且扎實的音樂專業，無論是吉他、爵士鼓、歌唱、貝斯，甚至是詞曲創作，都能自在地交流與討論。 最讚嘆的是，老師從不因為學生的程度、年齡或自身條件而有所區別，始終保持耐心，依照每個人的步調，去活化上課的內容 在學習的過程中，沒有令人喘不過氣的壓力，也不會因為遇到困難而感到挫折，反而能在輕鬆愉快的氛圍中，不知不覺地累積進步與成就感。 謝謝小江老師<footer><cite>咪拎｜Google 評論</cite></footer></blockquote></article><article class="card review"><blockquote>很少遇到讓孩子這麼期待上課的音樂教室。老師們幾乎樣樣都會，還會給孩子很多表演跟發揮的舞台，累積表演經驗，也更有自信了。 課堂上氣氛很好，老師不像只是教課，更像朋友一樣陪著孩子學習，身為家長真的很感謝。<footer><cite>李小菱｜Google 評論</cite></footer></blockquote></article></div>
 </div>
 <h2 id="faq">常見問題</h2>
 <details><summary>沒學過 Bass，可以直接學嗎？</summary><p>可以。從撥弦和左手按弦開始，進度照你現在的程度排。</p></details><details><summary>幾歲可以學 Bass？</summary><p>兒童和成人都可以學。還不確定，可先與老師確認。</p></details><details><summary>大人可以學 Bass 嗎？</summary><p>可以。零基礎也歡迎。已出社會、晚上才有空的學員，請參考<a href="../adult/" style="color:var(--goldt)">成人課程</a>。</p></details><details><summary>家裡沒有 Bass 怎麼辦？</summary><p>上課時教室有樂器可以用。家裡要準備什麼才能練，可先與老師確認，或加入官方 LINE 詢問。</p></details><details><summary>Bass 和爵士鼓怎麼一起練？</summary><p>Bass 走低音，也把拍子釘住。鼓打節奏。兩個人對準同一拍，歌才站得住。</p></details><details><summary>學了 Bass 可以加入樂團嗎？</summary><p>可以。板橋校區有樂團班，Bass、吉他、爵士鼓、鍵盤和歌唱一起把一首歌合完。親子樂團也可以，參加方式請加入官方 LINE 詢問。</p></details><details><summary>Bass 課一堂多久？一期幾堂？</summary><p>一堂 50 分鐘，一期 12 堂。時段請撥打手機 <a href="tel:0939239219">0939-239-219</a>、市話 <a href="tel:+886289652288">02-8965-2288</a>，或加官方 LINE 詢問。非營業時間或老師帶學生演出時，市話可能無人接聽，請改撥手機。</p></details><details><summary>新北板橋 Bass 課在哪裡上？</summary><p>在新北市板橋區中正路 325 巷 47 號 1 樓，國光國小正對面。</p></details>

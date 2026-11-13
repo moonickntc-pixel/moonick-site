@@ -227,6 +227,8 @@ button:disabled { opacity: 0.4; cursor: default; }
 .measure { position: relative; flex: 1 1 0; min-width: min-content; }
 .measure-no {
   position: absolute;
+  pointer-events: none;
+  z-index: 4;
   top: 0;
   right: 40px;
   color: #333;
@@ -247,6 +249,8 @@ button:disabled { opacity: 0.4; cursor: default; }
   font-weight: 700;
   line-height: 1;
   padding: 0;
+  z-index: 5;
+  touch-action: manipulation;
 }
 .staff-row { display: flex; align-items: stretch; width: 100%; }
 .labels { width: 118px; flex: none; display: flex; flex-direction: column; justify-content: flex-start; padding: 0; }

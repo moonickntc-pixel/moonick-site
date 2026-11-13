@@ -1,5 +1,5 @@
-import * as M from "./model.js";
-import { createKit, createTransport, rememberedKit } from "./audio.js";
+import * as M from "./model.js?v=20261113c";
+import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261113c";
 
 const kit = createKit();
 const transport = createTransport(kit);

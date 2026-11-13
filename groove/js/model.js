@@ -1114,7 +1114,7 @@ export function hitsForGroove(g, { solo = false } = {}) {
     const push = (inst, vel, dt = 0) => hits.push({ time: time + dt, midi: MIDI[inst] ?? 38, inst, vel });
     if (!solo) {
       if (!g.mute.kick[measure]) addKick(g.kick[i], push);
-      if (!g.mute.snare[measure]) addSnare(g.snare[i], push);
+      if (!g.mute.snare[measure]) addSnare(g.snare[i], push, (4 / g.division) * secondsPerQuarter);
       if (g.showToms >= 1 && !g.mute.tom1[measure] && g.tom1[i]) push("tom1", 108);
       if (g.showToms >= 2 && !g.mute.tom2[measure] && g.tom2[i]) push("tom2", 102);
       if (g.showToms >= 3 && !g.mute.tom3[measure] && g.tom3[i]) push("tom3", 96);
@@ -1130,16 +1130,23 @@ function addKick(kind, push) {
   if (kind === "foot_open") push("hatOpen", 96);
 }
 
-function addSnare(kind, push) {
+function addSnare(kind, push, slotSec) {
   if (!kind) return;
   if (kind === "accent") push("snareAccent", 112);
   else if (kind === "ghost") push("ghost", 40);
   else if (kind === "rimshot") push("snareRim", 120);
   else if (kind === "xstick") push("xstick", 84);
   else if (kind === "buzz") {
-    push("ghost", 46);
-    push("ghost", 42, 0.018);
-    push("snare", 78, 0.04);
+    // 輪鼓（Buzz）：打下去後再彈 6 下，間隔約 35～45 毫秒，一下比一下弱，聽得出一串「嘟嚕嚕」
+    const span = Math.max(0.24, Math.min(0.42, slotSec || 0.24));
+    const weights = [1.15, 1.05, 1, 0.95, 0.92, 0.9];
+    const total = weights.reduce((x, y) => x + y, 0);
+    push("buzzBounce", 112);
+    let t = 0;
+    for (let n = 0; n < weights.length; n++) {
+      t += (span * weights[n]) / total;
+      push("buzzBounce", Math.round(118 * Math.pow(0.88, n)), t);
+    }
   } else if (kind === "flam") {
     push("ghost", 48, -0.03);
     push("snareAccent", 108);

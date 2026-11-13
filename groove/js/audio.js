@@ -145,6 +145,7 @@ export function createKit() {
       return "snare";
     }
     if (inst === "clickSoft") return "click";
+    if (inst === "buzzBounce") return "ghost";
     if (LAYER_POOLS[inst] || VOICES.includes(inst)) return inst;
     return "snare";
   }
@@ -200,7 +201,7 @@ export function createKit() {
     const gain = ctx.createGain();
     const amount = Math.max(0.05, Math.min(1, vel / 127));
     const shaped = ARTICULATION_GAIN[voiceFor(inst, vel)];
-    const peak = shaped != null ? shaped * (0.92 + 0.08 * amount) : inst === "clickSoft" ? 0.45 * amount : 0.42 + 0.58 * amount;
+    const peak = inst === "buzzBounce" ? 0.85 * amount : shaped != null ? shaped * (0.92 + 0.08 * amount) : inst === "clickSoft" ? 0.45 * amount : 0.42 + 0.58 * amount;
     gain.gain.setValueAtTime(peak, at);
     src.connect(gain);
     gain.connect(master);

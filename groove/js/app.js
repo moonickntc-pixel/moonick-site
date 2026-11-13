@@ -299,6 +299,20 @@ function fitWritingArea() {
   const narrow = window.innerWidth <= 520;
   const base = narrow ? (density >= 24 ? 36 : density >= 12 ? 42 : 46) : 24;
   grid.style.setProperty("--cell-h", `${base}px`);
+  if (!narrow) {
+    // 電腦版：小節少、下面有空位時，把格子放大到用滿畫面（最大 60px）
+    const rowsPerMeasure = [...col.children].filter((el) => el.classList.contains("cell") && !el.classList.contains("slot-hidden") && !el.classList.contains("sticking")).length;
+    const tops = new Set([...grid.querySelectorAll(".measure")].map((el) => Math.round(el.getBoundingClientRect().top)));
+    const totalRows = rowsPerMeasure * Math.max(1, tops.size);
+    const free = window.innerHeight - toolbar.getBoundingClientRect().bottom - 40;
+    if (totalRows > 0 && free > 0) {
+      // 圓點不能比一格寬，不然會擠爆、蓋到加小節的「＋」
+      const colW = col.getBoundingClientRect().width;
+      const widthCap = Math.floor((colW * 0.8) / 0.6);
+      const grown = Math.min(60, widthCap, base + Math.floor(free / totalRows));
+      if (grown > base) grid.style.setProperty("--cell-h", `${grown}px`);
+    }
+  }
   const rowCells = [...col.children].filter((el) => el.classList.contains("cell") && !el.classList.contains("slot-hidden"));
   if (!rowCells.length) return;
   grid.querySelectorAll(".columns").forEach((columns) => {

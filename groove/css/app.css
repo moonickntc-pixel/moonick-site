@@ -838,3 +838,10 @@ body.viewing #viewBtn { display: flex; }
   #stage { margin: 0; }
   #sheetWrap { padding: 0; }
 }
+
+/* 電腦版：格子大小由程式依剩下的高度決定，圓點與 Hi-hat 記號跟著放大 */
+@media (min-width: 521px) {
+  #grid .head { width: calc(var(--cell-h, 24px) * 0.6); height: calc(var(--cell-h, 24px) * 0.6); }
+  #grid .cell.hh .mark, #grid .cell.hh.on .mark { font-size: calc(var(--cell-h, 24px) * 0.5); }
+  #grid .labels button:not(.stick-label) { font-size: clamp(12px, calc(var(--cell-h, 24px) * 0.34), 16px); }
+}

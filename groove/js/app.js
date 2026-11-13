@@ -1256,6 +1256,7 @@ function handleAction(el, event) {
   } else if (action === "print") window.print();
   else if (action === "share") openShare(false);
   else if (action === "share-compact") openShare(true);
+  else if (action === "short-share") makeShortLink();
   else if (action === "copy-share") {
     const field = $("shareUrl");
     field.select();
@@ -1344,6 +1345,7 @@ function openShare(compact) {
     </div>
     <input id="shareUrl" type="text" readonly value="${compact ? url : url}"/>
     <div class="modal-actions">
+      <button type="button" data-action="short-share">產生短網址</button>
       <button type="button" class="primary" data-action="copy-share">Copy</button>
     </div>`);
   const field = $("shareUrl");
@@ -1358,6 +1360,63 @@ function openShare(compact) {
   $("embedBox").addEventListener("change", sync);
   field.focus();
   field.select();
+}
+
+function shortenUrl(longUrl) {
+  return new Promise((resolve, reject) => {
+    const cb = `__isgd${Date.now()}${Math.floor(Math.random() * 1e6)}`;
+    const script = document.createElement("script");
+    const done = () => {
+      clearTimeout(timer);
+      delete window[cb];
+      script.remove();
+    };
+    const timer = setTimeout(() => {
+      done();
+      reject(new Error("timeout"));
+    }, 8000);
+    window[cb] = (data) => {
+      done();
+      if (data && data.shorturl) resolve(data.shorturl);
+      else reject(new Error((data && data.errormessage) || "failed"));
+    };
+    script.onerror = () => {
+      done();
+      reject(new Error("network"));
+    };
+    script.src = `https://is.gd/create.php?format=json&callback=${cb}&url=${encodeURIComponent(longUrl)}`;
+    document.head.appendChild(script);
+  });
+}
+
+async function makeShortLink() {
+  const field = $("shareUrl");
+  if (!field) return;
+  const compact = `${location.origin}${location.pathname}?c=${encodeURIComponent(M.toCompact(state.groove))}`;
+  const btn = document.querySelector('[data-action="short-share"]');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "產生中…";
+  }
+  try {
+    const short = await shortenUrl(compact);
+    field.value = short;
+    if ($("compactBox")) $("compactBox").checked = true;
+    if ($("embedBox")) $("embedBox").checked = false;
+    field.focus();
+    field.select();
+    navigator.clipboard?.writeText(short).then(
+      () => toast("短網址已複製"),
+      () => toast("短網址已產生，請按 Copy")
+    );
+  } catch {
+    toast("短網址產生失敗，請改用上面的網址");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "產生短網址";
+    }
+  }
 }
 
 function onMetro(rate) {

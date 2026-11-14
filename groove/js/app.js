@@ -1,5 +1,5 @@
-import * as M from "./model.js?v=20261113c";
-import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261113c";
+import * as M from "./model.js?v=20261114a";
+import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261114a";
 
 const kit = createKit();
 const transport = createTransport(kit);
@@ -53,7 +53,7 @@ const state = {
     diddles: false,
   },
   advanced: false,
-  speed: { on: false, bpm: 5, minutes: 2, keep: true, base: null },
+  speed: { on: false, bpm: 5, minutes: 2, keep: true, base: null, anchor: 0, applied: null },
   rotate: "1",
   mixedWarned: {},
   suppressClick: false,
@@ -706,10 +706,19 @@ function revealStaffTop(svg) {
 function buildLoop({ first, elapsed }) {
   let tempo = state.groove.tempo;
   if (state.speed.on) {
-    if (state.speed.base == null) state.speed.base = tempo;
-    const windowSec = Math.max(1, state.speed.minutes) * 60;
-    const steps = state.speed.keep ? Math.floor(elapsed / windowSec) : elapsed >= windowSec ? 1 : 0;
-    tempo = Math.min(M.MAX_TEMPO, state.speed.base + steps * state.speed.bpm);
+    const speed = state.speed;
+    // A tempo set by hand while playing (slider, number box, arrow keys,
+    // undo) or new speed settings start a fresh interval from that tempo,
+    // instead of jumping at once or being snapped back.
+    if (speed.base == null || speed.applied !== state.groove.tempo) {
+      speed.base = state.groove.tempo;
+      speed.anchor = elapsed;
+    }
+    const windowSec = Math.max(1, speed.minutes) * 60;
+    const since = Math.max(0, elapsed - speed.anchor) + 1e-6;
+    const steps = speed.keep ? Math.floor(since / windowSec) : since >= windowSec ? 1 : 0;
+    tempo = Math.min(M.MAX_TEMPO, speed.base + steps * speed.bpm);
+    speed.applied = tempo;
     if (tempo !== state.groove.tempo) {
       state.groove.tempo = tempo;
       $("tempo").value = tempo;
@@ -757,22 +766,29 @@ function setSampleStatus(text) {
   el.textContent = text || "";
 }
 
+let playStarting = false;
 async function togglePlay() {
   if (transport.playing) {
     transport.stop();
     paintChrome();
     return;
   }
+  // A second press while samples load must not start a second transport.
+  if (playStarting) return;
+  playStarting = true;
   kit.ensure();
   if (!kit.has(kit.current)) setSampleStatus("載入音色中");
   try {
     await kit.load(kit.current);
-    state.speed.base = state.groove.tempo;
+    state.speed.base = null;
+    state.speed.applied = null;
     state.rotate = "1";
     await transport.toggle(buildLoop);
     setSampleStatus("");
   } catch {
     setSampleStatus("音色載入失敗");
+  } finally {
+    playStarting = false;
   }
   paintChrome();
 }
@@ -1649,9 +1665,8 @@ function boot() {
       else event.target.blur();
       return;
     }
-    if (event.code === "Space" && !typing) {
-      event.preventDefault();
-      togglePlay();
+    if (isSpace(event)) {
+      // Handled in the capture listener below.
     } else if (!typing && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
       event.preventDefault();
       if (event.shiftKey) redo();
@@ -1673,7 +1688,54 @@ function boot() {
     }
   });
 
+  // Space plays and stops from anywhere except a field you type words in.
+  // Sliders, buttons, checkboxes, selects and the BPM box keep focus after a
+  // click, which used to swallow Space until the page was clicked.
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      if (!isSpace(event) || event.isComposing || spaceTypes(event.target)) return;
+      event.preventDefault();
+      if (!event.repeat) togglePlay();
+    },
+    true,
+  );
+  window.addEventListener(
+    "keyup",
+    (event) => {
+      // Stop a focused button from also firing a click when Space comes up.
+      if (isSpace(event) && !spaceTypes(event.target)) event.preventDefault();
+    },
+    true,
+  );
+  // Sliders and buttons let go of focus after a mouse or touch, so keys go
+  // back to the page.
+  document.addEventListener("pointerup", (event) => {
+    const el = event.target && event.target.closest && event.target.closest('button, input[type="range"], input[type="checkbox"]');
+    if (!el) return;
+    setTimeout(() => {
+      if (document.activeElement === el) el.blur();
+    }, 0);
+  });
+  document.addEventListener("change", (event) => {
+    const el = event.target;
+    if (el && el.matches && el.matches('input[type="range"]') && document.activeElement === el) el.blur();
+  });
+
   window.addEventListener("resize", scheduleNotation);
+}
+
+function isSpace(event) {
+  return event.code === "Space" || event.key === " ";
+}
+
+function spaceTypes(el) {
+  if (!el || el === document.body || el === document.documentElement) return false;
+  if (el.isContentEditable) return true;
+  if (el.tagName === "TEXTAREA") return true;
+  if (el.tagName !== "INPUT") return false;
+  const type = (el.getAttribute("type") || "text").toLowerCase();
+  return ["text", "search", "email", "url", "tel", "password"].includes(type);
 }
 
 boot();

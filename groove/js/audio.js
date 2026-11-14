@@ -276,9 +276,11 @@ export function createTransport(kit) {
         if (now >= scheduledUntil - 0.04) stop(false);
         return;
       }
+      // Time from play to where this loop starts, so auto speed up steps
+      // land on loop starts.
       const plan = buildLoop({
         first,
-        elapsed: now - speedStarted,
+        elapsed: Math.max(now, scheduledUntil) - speedStarted,
       });
       first = false;
       loopStart = scheduledUntil;

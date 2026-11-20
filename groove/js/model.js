@@ -84,8 +84,8 @@ export const STICK_FILL_PATTERNS = [
 
 export function stickPatternFits(g, pattern) {
   if (!pattern || !pattern.length) return false;
-  const npm = notesPerMeasure(g.division, g.top, g.bottom);
-  return npm % pattern.length === 0;
+  const visible = visibleCellsInMeasure(g, 0);
+  return visible > 0 && visible % pattern.length === 0;
 }
 
 /** Paradiddle (and similar) items that tile the current grid. */
@@ -147,8 +147,7 @@ export function groupSize(division, top, bottom) {
 }
 
 /** Smallest usable width of one grid cell, in px. Denser grids need a slightly smaller floor so a measure can still fit, but not so small the dots become unusable. */
-export function minCellWidth(g, { narrow = false } = {}) {
-  const perBeat = notesPerBeat(g.division, g.bottom);
+export function minCellWidthForCount(perBeat, { narrow = false } = {}) {
   if (perBeat >= 24) return narrow ? 10 : 12;
   if (perBeat >= 12) return narrow ? 12 : 14;
   if (perBeat >= 8) return narrow ? 14 : 16;
@@ -156,16 +155,30 @@ export function minCellWidth(g, { narrow = false } = {}) {
   return narrow ? 22 : 28;
 }
 
+export function minCellWidth(g, { narrow = false } = {}) {
+  let densest = defaultCellsPerBeat(g);
+  if (hasBeatDivs(g)) {
+    for (let i = 0; i < g.top * g.measures; i++) densest = Math.max(densest, cellsPerBeatAt(g, i));
+  }
+  return minCellWidthForCount(densest, { narrow });
+}
+
 /** Minimum width of one measure, including the row labels and beat-group gaps. */
 export function measureMinWidth(g, { narrow = false, labelWidth, cellWidth } = {}) {
-  const npm = notesPerMeasure(g.division, g.top, g.bottom);
-  const perBeat = notesPerBeat(g.division, g.bottom);
-  const group = groupSize(g.division, g.top, g.bottom);
-  const gaps = group > 0 ? Math.max(0, Math.floor(npm / group) - 1) : 0;
   const gapW = groupGapWidth(g, { narrow });
   const labels = labelWidth ?? (narrow ? 64 : 72);
-  const cell = cellWidth ?? minCellWidth(g, { narrow });
-  return labels + npm * cell + gaps * gapW + 8;
+  const gaps = Math.max(0, g.top - 1);
+  let widest = 0;
+  for (let m = 0; m < g.measures; m++) {
+    let w = 0;
+    for (let b = 0; b < g.top; b++) {
+      const cells = cellsPerBeat(g, m, b);
+      const cell = cellWidth ?? minCellWidthForCount(cells, { narrow });
+      w += cells * cell;
+    }
+    if (w > widest) widest = w;
+  }
+  return labels + widest + gaps * gapW + 8;
 }
 
 /** Visual gap between beat groups, in px. Dense grids use a tighter gap so a measure can still fit. */
@@ -187,16 +200,22 @@ export function wrapLayout(g, availableWidth, opts = {}) {
   const plusWidth = opts.plusWidth ?? (narrow ? 36 : 40);
   const mpr = measuresPerRow(g, availableWidth, opts);
   let cell = minCellWidth(g, opts);
+  // Mixed per-beat bars should keep the default grid's comfortable cell size.
+  // An 8連音 beat gets more columns (hence more width); we do not squash the
+  // other beats down to "dot soup". If the bar is wider than the viewport, it scrolls.
+  if (hasBeatDivs(g)) {
+    cell = Math.max(cell, minCellWidthForCount(defaultCellsPerBeat(g), { narrow }));
+  }
   const usable = Math.max(0, (availableWidth || 0) - (plusWidth || 0));
-  const hardFloor = narrow ? 9 : 10;
+  const hardFloor = hasBeatDivs(g) ? (narrow ? 16 : 18) : narrow ? 9 : 10;
   const natural = measureMinWidth(g, { ...opts, cellWidth: cell });
   if (mpr === 1 && usable > 0 && natural > usable) {
-    const npm = notesPerMeasure(g.division, g.top, g.bottom);
+    const npm = Math.max(...Array.from({ length: g.measures }, (_, m) => visibleCellsInMeasure(g, m)));
     const chrome = measureMinWidth(g, { ...opts, cellWidth: 0 });
     const fit = npm > 0 ? Math.floor((usable - chrome) / npm) : cell;
     // Only shrink when a single measure can still fit at a usable cell size.
-    // If even the hard floor would not fit (a 混合 24 bar on a phone), keep
-    // the usual minimum and let the grid scroll sideways.
+    // If even the hard floor would not fit (a 混合 24 bar on a phone, or a
+    // mixed 6+8 bar), keep the usual minimum and let the grid scroll sideways.
     if (fit >= hardFloor) cell = Math.min(cell, fit);
   }
   return {
@@ -270,6 +289,7 @@ function fill(n, value) {
 export function cloneGroove(g) {
   return {
     ...g,
+    beatDivs: Array.isArray(g.beatDivs) ? g.beatDivs.slice() : null,
     hh: g.hh.slice(),
     snare: g.snare.slice(),
     kick: g.kick.slice(),
@@ -309,11 +329,279 @@ function applyDefaults(g) {
 }
 
 export function stepCount(g) {
-  return notesPerMeasure(g.division, g.top, g.bottom) * g.measures;
+  return notesPerMeasureOf(g) * g.measures;
 }
 
 export function notesPerBeat(division, bottom) {
   return division / bottom;
+}
+
+/** Cells per written beat the user can pick. 5/7 are skipped because they do not tile a 24-tick beat. */
+export const BEAT_SUBDIV_OPTIONS = [
+  [2, "8分"],
+  [4, "16分"],
+  [3, "3連音"],
+  [6, "6連音"],
+  [8, "8連音"],
+];
+
+/** Internal resolution used when any beat has a custom subdivision. 24 is the LCM of 2, 3, 4, 6 and 8. */
+export const TICKS_PER_BEAT = 24;
+
+export function hasBeatDivs(g) {
+  return Array.isArray(g.beatDivs) && g.beatDivs.some((v) => v != null);
+}
+
+export function defaultCellsPerBeat(g) {
+  return notesPerBeat(g.division, g.bottom);
+}
+
+export function isTickGrid(g) {
+  const beats = g.top * g.measures;
+  if (!beats || !g.hh || !g.hh.length) return false;
+  const tpb = g.hh.length / beats;
+  return tpb === TICKS_PER_BEAT && defaultCellsPerBeat(g) !== TICKS_PER_BEAT;
+}
+
+export function storedTicksPerBeat(g) {
+  return hasBeatDivs(g) || isTickGrid(g) ? TICKS_PER_BEAT : defaultCellsPerBeat(g);
+}
+
+export function notesPerMeasureOf(g) {
+  return storedTicksPerBeat(g) * g.top;
+}
+
+export function cellsPerBeatAt(g, globalBeat) {
+  const custom = g.beatDivs && g.beatDivs[globalBeat];
+  return custom || defaultCellsPerBeat(g);
+}
+
+export function cellsPerBeat(g, measureIndex, beatInMeasure) {
+  return cellsPerBeatAt(g, measureIndex * g.top + beatInMeasure);
+}
+
+export function isTupletCells(cells) {
+  return cells === 3 || cells === 6;
+}
+
+export function visibleCellsInMeasure(g, measureIndex) {
+  let n = 0;
+  for (let b = 0; b < g.top; b++) n += cellsPerBeat(g, measureIndex, b);
+  return n;
+}
+
+/** Stored array index of visible cell `cell` in a beat. */
+export function tickIndex(g, measureIndex, beatInMeasure, cell) {
+  const tpb = storedTicksPerBeat(g);
+  const cells = cellsPerBeat(g, measureIndex, beatInMeasure);
+  const step = tpb / cells;
+  return measureIndex * tpb * g.top + beatInMeasure * tpb + cell * step;
+}
+
+/** Snap a stored index down to the visible cell that contains it. */
+export function displayIndex(g, index) {
+  if (!hasBeatDivs(g)) return index;
+  const tpb = TICKS_PER_BEAT;
+  const npm = tpb * g.top;
+  const measure = Math.floor(index / npm);
+  const local = index - measure * npm;
+  const beat = Math.floor(local / tpb);
+  const tick = local % tpb;
+  const cells = cellsPerBeat(g, measure, beat);
+  const step = tpb / cells;
+  const cell = Math.floor(tick / step);
+  return tickIndex(g, measure, beat, cell);
+}
+
+export function isVisibleIndex(g, index) {
+  return displayIndex(g, index) === index;
+}
+
+/** Walk visible cells in a measure or the whole groove. */
+export function forEachVisible(g, fn, measureIndex = null) {
+  const tpb = storedTicksPerBeat(g);
+  const first = measureIndex == null ? 0 : measureIndex;
+  const last = measureIndex == null ? g.measures : measureIndex + 1;
+  for (let m = first; m < last; m++) {
+    for (let b = 0; b < g.top; b++) {
+      const cells = cellsPerBeat(g, m, b);
+      for (let c = 0; c < cells; c++) fn(tickIndex(g, m, b, c), m, b, c, cells);
+    }
+  }
+}
+
+function ensureBeatDivs(g) {
+  const n = g.top * g.measures;
+  if (!Array.isArray(g.beatDivs) || g.beatDivs.length !== n) g.beatDivs = fill(n, null);
+}
+
+function expandGrooveToTicks(g) {
+  if ((hasBeatDivs(g) || isTickGrid(g)) && storedTicksPerBeat(g) === TICKS_PER_BEAT) return cloneGroove(g);
+  const fromNpm = notesPerMeasure(g.division, g.top, g.bottom);
+  const toNpm = TICKS_PER_BEAT * g.top;
+  const virtualDiv = TICKS_PER_BEAT * g.bottom;
+  const next = cloneGroove(g);
+  ensureBeatDivs(next);
+  if (fromNpm === toNpm) return next;
+  // Same-family scale when possible; otherwise keep coincident positions in 24-tick space.
+  const fromDiv = g.division;
+  const sameFamily = isTripletDivision(fromDiv) === isTripletDivision(virtualDiv);
+  for (const key of INSTRUMENTS) {
+    if (sameFamily) {
+      const scaled = scaleNotes(g[key], g.measures, fromNpm, toNpm, g.top, g.bottom, fromDiv, virtualDiv);
+      next[key] = scaled || resampleByTicks(g[key], g.measures, fromNpm, toNpm, g.top);
+    } else {
+      next[key] = resampleByTicks(g[key], g.measures, fromNpm, toNpm, g.top);
+    }
+  }
+  return next;
+}
+
+function resampleByTicks(array, measures, fromNpm, toNpm, top) {
+  const empty = array.length && array.every((v) => v == null || typeof v === "string") && array.some((v) => v === "") ? "" : null;
+  const dest = fill(measures * toNpm, empty);
+  const fromTpb = fromNpm / top;
+  const toTpb = toNpm / top;
+  for (let m = 0; m < measures; m++) {
+    for (let b = 0; b < top; b++) {
+      for (let src = 0; src < fromTpb; src++) {
+        const tick = (src * toTpb) / fromTpb;
+        if (Math.abs(tick - Math.round(tick)) < 1e-6) {
+          dest[m * toNpm + b * toTpb + Math.round(tick)] = array[m * fromNpm + b * fromTpb + src];
+        }
+      }
+    }
+  }
+  return dest;
+}
+
+function collapseGrooveIfUniform(g) {
+  const def = defaultCellsPerBeat(g);
+  const custom = Array.isArray(g.beatDivs) && g.beatDivs.some((v) => v != null && v !== def);
+  if (custom) return g;
+  const fromNpm = g.hh.length / g.measures;
+  const toNpm = notesPerMeasure(g.division, g.top, g.bottom);
+  const next = cloneGroove(g);
+  next.beatDivs = null;
+  if (!Number.isInteger(fromNpm) || fromNpm === toNpm) return next;
+  const virtualDiv = TICKS_PER_BEAT * g.bottom;
+  const sameFamily = isTripletDivision(g.division) === isTripletDivision(virtualDiv);
+  for (const key of INSTRUMENTS) {
+    if (sameFamily) {
+      const scaled = scaleNotes(g[key], g.measures, fromNpm, toNpm, g.top, g.bottom, virtualDiv, g.division);
+      next[key] = scaled || resampleByTicks(g[key], g.measures, fromNpm, toNpm, g.top);
+    } else {
+      next[key] = resampleByTicks(g[key], g.measures, fromNpm, toNpm, g.top);
+    }
+  }
+  return next;
+}
+
+function resampleBeatTicks(arr, start, oldCells, newCells, empty) {
+  const tpb = TICKS_PER_BEAT;
+  const src = arr.slice(start, start + tpb);
+  const dest = fill(tpb, empty);
+  const oldStep = tpb / oldCells;
+  const newStep = tpb / newCells;
+  for (let c = 0; c < oldCells; c++) {
+    const tick = c * oldStep;
+    if (tick % newStep === 0) dest[tick] = src[tick];
+  }
+  for (let i = 0; i < tpb; i++) arr[start + i] = dest[i];
+}
+
+/**
+ * Set one written beat to a custom subdivision (2, 3, 4, 6, 8) or null to restore
+ * the global grid. Notes on coincident tick positions are kept; others are dropped.
+ * When every beat is back on the global grid, the arrays shrink to the normal size
+ * so old-style links stay short.
+ */
+export function setBeatSubdiv(g, measureIndex, beatInMeasure, cells) {
+  const m = clampInt(measureIndex, 0, g.measures - 1, 0);
+  const b = clampInt(beatInMeasure, 0, g.top - 1, 0);
+  const def = defaultCellsPerBeat(g);
+  let want = cells == null || cells === "" || cells === "default" ? null : Number(cells);
+  if (want != null && !BEAT_SUBDIV_OPTIONS.some(([n]) => n === want)) return g;
+  if (want === def) want = null;
+  const global = m * g.top + b;
+  const current = (g.beatDivs && g.beatDivs[global]) || null;
+  if (current === want && (want != null || !hasBeatDivs(g))) return g;
+  let next = want != null || hasBeatDivs(g) ? expandGrooveToTicks(g) : cloneGroove(g);
+  ensureBeatDivs(next);
+  const oldCells = cellsPerBeatAt(g, global);
+  const newCells = want || def;
+  const tpb = TICKS_PER_BEAT;
+  const start = m * tpb * g.top + b * tpb;
+  if (oldCells !== newCells) {
+    for (const key of INSTRUMENTS) {
+      const empty = key === "lyrics" ? "" : null;
+      resampleBeatTicks(next[key], start, oldCells, newCells, empty);
+    }
+  }
+  next.beatDivs[global] = want;
+  return collapseGrooveIfUniform(next);
+}
+
+export function encodeBeatDivs(g) {
+  if (!hasBeatDivs(g)) return "";
+  const parts = [];
+  g.beatDivs.forEach((v, i) => {
+    if (v != null && v !== defaultCellsPerBeat(g)) parts.push(`${i}:${v}`);
+  });
+  return parts.join(",");
+}
+
+export function parseBeatDivs(text, beatCount) {
+  const out = fill(beatCount, null);
+  if (!text) return out;
+  for (const part of String(text).split(",")) {
+    if (!part) continue;
+    const [i, v] = part.split(":").map((n) => parseInt(n, 10));
+    if (Number.isInteger(i) && i >= 0 && i < beatCount && BEAT_SUBDIV_OPTIONS.some(([n]) => n === v)) out[i] = v;
+  }
+  return out;
+}
+
+/**
+ * Absolute time of a stored slot, in quarter notes from the start of the groove.
+ * Tuplet beats (3 or 6) are not swung. Binary custom beats follow the usual
+ * 8th/16th/32nd swing; a groove with no overrides matches the old formula exactly.
+ */
+export function cellDurationQuarters(g, index) {
+  const tpb = storedTicksPerBeat(g);
+  const npm = tpb * g.top;
+  const measure = Math.floor(index / npm);
+  const beat = Math.floor((index % npm) / tpb);
+  const cells = cellsPerBeat(g, measure, beat);
+  return (4 / g.bottom) / cells;
+}
+
+export function slotTimeQuarters(g, index) {
+  const tpb = storedTicksPerBeat(g);
+  const npm = tpb * g.top;
+  const beatDur = 4 / g.bottom;
+  const measure = Math.floor(index / npm);
+  const local = index - measure * npm;
+  const beat = Math.floor(local / tpb);
+  const tick = ((local % tpb) + tpb) % tpb;
+  const base = (measure * g.top + beat) * beatDur + (tick / tpb) * beatDur;
+  return base + swingExtraAt(g, measure, beat, tick, tpb);
+}
+
+function swingExtraAt(g, measure, beat, tick, tpb) {
+  const p = (g.swing || 0) / 100;
+  if (p <= 0) return 0;
+  if (!hasBeatDivs(g)) return swingExtraQuarters(measure * notesPerMeasure(g.division, g.top, g.bottom) + beat * tpb + tick, g.division, g.swing);
+  const cells = cellsPerBeat(g, measure, beat);
+  if (isTupletCells(cells)) return 0;
+  if (cells === 8) {
+    const pos = Math.floor(tick / (tpb / 8));
+    return pos === 2 || pos === 3 || pos === 6 || pos === 7 ? 0.25 * p : 0;
+  }
+  if (cells === 2) return tick >= tpb / 2 ? 0.5 * p : 0;
+  // 4 (16ths) or any other binary default stored on 24 ticks
+  const pos = Math.floor(tick / (tpb / 4));
+  return pos === 1 || pos === 3 ? 0.25 * p : 0;
 }
 
 function fullResolution(division, top, bottom) {
@@ -340,21 +628,27 @@ export function scaleNotes(array, measures, fromNpm, toNpm, top, bottom, fromDiv
 export function setDivision(g, division) {
   const check = canUseDivision(division, g.top, g.bottom);
   if (!check.ok) return { groove: g, error: check.reason };
-  if (division === g.division) return { groove: g };
-  const fromNpm = notesPerMeasure(g.division, g.top, g.bottom);
+  const hadCustom = hasBeatDivs(g);
+  if (division === g.division && !hadCustom) return { groove: g };
+  // Changing the global grid resets per-beat overrides, keeping notes that
+  // still land on the new grid.
+  const fromNpm = notesPerMeasureOf(g);
+  const fromDiv = hasBeatDivs(g) ? TICKS_PER_BEAT * g.bottom : g.division;
   const toNpm = check.count;
   const next = cloneGroove(g);
   next.division = division;
-  if (isTripletDivision(division) === isTripletDivision(g.division)) {
+  next.beatDivs = null;
+  if (isTripletDivision(division) === isTripletDivision(fromDiv) || hasBeatDivs(g)) {
     for (const key of INSTRUMENTS) {
-      next[key] = scaleNotes(g[key], g.measures, fromNpm, toNpm, g.top, g.bottom, g.division, division);
+      const scaled = scaleNotes(g[key], g.measures, fromNpm, toNpm, g.top, g.bottom, fromDiv, division);
+      next[key] = scaled || resampleByTicks(g[key], g.measures, fromNpm, toNpm, g.top);
     }
   } else {
-    for (const key of INSTRUMENTS) next[key] = fill(toNpm * g.measures, null);
+    for (const key of INSTRUMENTS) next[key] = fill(toNpm * g.measures, key === "lyrics" ? "" : null);
     applyDefaults(next);
   }
   if (!["1", "&", "a", "e", "rotate"].includes(next.offset)) next.offset = "1";
-  return { groove: next };
+  return { groove: next, resetBeatDivs: hadCustom };
 }
 
 export function setTimeSignature(g, top, bottom) {
@@ -362,13 +656,17 @@ export function setTimeSignature(g, top, bottom) {
   if (![4, 8, 16].includes(bottom)) bottom = 4;
   const check = canUseDivision(g.division, top, bottom);
   if (!check.ok) return { groove: g, error: check.reason };
-  const fromBeat = g.division / g.bottom;
-  const toBeat = g.division / bottom;
-  const next = cloneGroove(g);
+  // Per-beat overrides are tied to the old beat count, so they are reset.
+  const source = hasBeatDivs(g) ? setDivision(g, g.division).groove : g;
+  const fromBeat = source.division / source.bottom;
+  const toBeat = source.division / bottom;
+  const next = cloneGroove(source);
   next.top = top;
   next.bottom = bottom;
+  next.beatDivs = null;
   const beats = [];
-  const oldNpm = notesPerMeasure(g.division, g.top, g.bottom);
+  const oldNpm = notesPerMeasure(source.division, source.top, source.bottom);
+  g = source;
   for (let m = 0; m < g.measures; m++) {
     for (let b = 0; b < g.top; b++) {
       const slice = {};
@@ -423,10 +721,15 @@ function resampleArray(arr, toLen) {
 export function addMeasure(g) {
   if (g.measures >= MAX_MEASURES) return g;
   const next = cloneGroove(g);
-  const npm = notesPerMeasure(g.division, g.top, g.bottom);
+  const npm = notesPerMeasureOf(g);
   const start = (g.measures - 1) * npm;
   for (const key of INSTRUMENTS) next[key].push(...g[key].slice(start, start + npm));
   for (const key of Object.keys(next.mute)) next.mute[key].push(g.mute[key][g.measures - 1]);
+  if (Array.isArray(g.beatDivs)) {
+    const bs = (g.measures - 1) * g.top;
+    next.beatDivs = g.beatDivs.slice();
+    next.beatDivs.push(...g.beatDivs.slice(bs, bs + g.top));
+  }
   next.measures += 1;
   return next;
 }
@@ -434,11 +737,12 @@ export function addMeasure(g) {
 export function removeMeasure(g, index) {
   if (g.measures <= 1) return g;
   const next = cloneGroove(g);
-  const npm = notesPerMeasure(g.division, g.top, g.bottom);
+  const npm = notesPerMeasureOf(g);
   for (const key of INSTRUMENTS) next[key].splice(index * npm, npm);
   for (const key of Object.keys(next.mute)) next.mute[key].splice(index, 1);
+  if (Array.isArray(next.beatDivs)) next.beatDivs.splice(index * g.top, g.top);
   next.measures -= 1;
-  return next;
+  return collapseGrooveIfUniform(next);
 }
 
 export function clearNotes(g) {
@@ -449,7 +753,7 @@ export function clearNotes(g) {
 }
 
 export function measureRange(g, measureIndex) {
-  const npm = notesPerMeasure(g.division, g.top, g.bottom);
+  const npm = notesPerMeasureOf(g);
   const start = measureIndex * npm;
   return [start, start + npm];
 }
@@ -457,10 +761,10 @@ export function measureRange(g, measureIndex) {
 export function fillMeasure(g, instrument, measureIndex, mode) {
   const next = cloneGroove(g);
   const [start, end] = measureRange(g, measureIndex);
-  const npm = end - start;
-  const perBeat = g.division / g.bottom;
-  for (let i = start; i < end; i++) {
-    const local = i - start;
+  const visibles = [];
+  forEachVisible(g, (i) => visibles.push(i), measureIndex);
+  const perBeat = defaultCellsPerBeat(g);
+  const apply = (i, local) => {
     if (mode === "all_off") next[instrument][i] = null;
     else if (instrument === "sticking") {
       if (mode === "all_right") next.sticking[i] = "R";
@@ -481,13 +785,17 @@ export function fillMeasure(g, instrument, measureIndex, mode) {
     else if (instrument === "snare" && mode === "all_ghost") next.snare[i] = "ghost";
     else if (instrument === "kick" && mode === "all_on") next.kick[i] = "normal";
     else if (instrument === "kick" && mode === "foot_nums") {
-      next.kick[i] = withFoot(next.kick[i], local % perBeat === 0);
+      next.kick[i] = withFoot(next.kick[i], isBeatDownbeat(g, i));
     } else if (instrument === "kick" && mode === "foot_ands") {
-      const andAt = Math.floor(perBeat / 2);
-      next.kick[i] = withFoot(next.kick[i], perBeat > 1 && local % perBeat === andAt);
+      next.kick[i] = withFoot(next.kick[i], isBeatEighthUp(g, i));
     } else if (instrument === "tom1" && mode === "all_on") next.tom1[i] = "normal";
     else if (instrument === "tom2" && mode === "all_on") next.tom2[i] = "normal";
     else if (instrument === "tom3" && mode === "all_on") next.tom3[i] = "normal";
+  };
+  if (hasBeatDivs(g)) {
+    visibles.forEach((i, local) => apply(i, local));
+  } else {
+    for (let i = start; i < end; i++) apply(i, i - start);
   }
   if (instrument === "sticking") next.showStickings = true;
   if (instrument === "tom1") next.showToms = Math.max(next.showToms, 1);
@@ -496,23 +804,40 @@ export function fillMeasure(g, instrument, measureIndex, mode) {
   return next;
 }
 
-/** Grid slots that land on 8th notes (swung 8ths on 1/8 and 1/16 triplet grids). */
+/** True when this stored index is the downbeat of its written beat. */
+export function isBeatDownbeat(g, index) {
+  const tpb = storedTicksPerBeat(g);
+  const npm = tpb * g.top;
+  return index % npm % tpb === 0;
+}
+
+/** True when this stored index is the exact 8th-note "&" of its beat (not a tuplet-only cell). */
+export function isBeatEighthUp(g, index) {
+  const tpb = storedTicksPerBeat(g);
+  const npm = tpb * g.top;
+  const tick = index % npm % tpb;
+  const eighth = tpb / 2;
+  return Number.isInteger(eighth) && eighth >= 1 && tick === eighth;
+}
+
+/** Grid slots that land on 8th notes (swung 8ths on 1/8 and 1/16 triplet grids). Custom tuplet beats only contribute a downbeat if they have no exact "&". */
 export function eighthSlots(g) {
-  const npm = notesPerMeasure(g.division, g.top, g.bottom);
   const slots = [];
-  const swung = g.division === 12 || g.division === 24;
-  const perQuarter = g.division / 4;
-  const step = g.division / 8;
-  for (let m = 0; m < g.measures; m++) {
-    for (let local = 0; local < npm; local++) {
-      let on;
-      if (swung) {
+  const swung = !hasBeatDivs(g) && (g.division === 12 || g.division === 24);
+  if (swung) {
+    const npm = notesPerMeasure(g.division, g.top, g.bottom);
+    const perQuarter = g.division / 4;
+    for (let m = 0; m < g.measures; m++) {
+      for (let local = 0; local < npm; local++) {
         const inBeat = local % perQuarter;
-        on = inBeat === 0 || inBeat === (perQuarter * 2) / 3;
-      } else on = Number.isInteger(step) && step >= 1 && local % step === 0;
-      if (on) slots.push(m * npm + local);
+        if (inBeat === 0 || inBeat === (perQuarter * 2) / 3) slots.push(m * npm + local);
+      }
     }
+    return slots;
   }
+  forEachVisible(g, (i) => {
+    if (isBeatDownbeat(g, i) || isBeatEighthUp(g, i)) slots.push(i);
+  });
   return slots;
 }
 
@@ -578,45 +903,66 @@ export function patternSlots(g, pattern, scope = "all", measureIndex = 0) {
     for (let i = start; i < end; i++) slots.push(i);
     return { slots };
   }
-  const npm = notesPerMeasure(g.division, g.top, g.bottom);
-  const perQuarter = g.division / 4;
-  const swung = g.division === 12 || g.division === 24;
+  const npm = notesPerMeasureOf(g);
+  const perQuarter = hasBeatDivs(g) ? storedTicksPerBeat(g) * (g.bottom / 4) : g.division / 4;
+  const swung = !hasBeatDivs(g) && (g.division === 12 || g.division === 24);
   if (pattern === "sixteenths") {
-    const step = g.division / 16;
-    if (!Number.isInteger(step) || step < 1) return { error: "這個格子沒有 16 分的位置" };
+    const has16 = hasBeatDivs(g) || (Number.isInteger(g.division / 16) && g.division / 16 >= 1);
+    if (!has16) return { error: "這個格子沒有 16 分的位置" };
   }
   if (pattern === "eighths" && !swung) {
-    const step = g.division / 8;
-    if (!Number.isInteger(step) || step < 1) return { error: "這個格子沒有 8 分的位置" };
+    const has8 = hasBeatDivs(g) || (Number.isInteger(g.division / 8) && g.division / 8 >= 1);
+    if (!has8) return { error: "這個格子沒有 8 分的位置" };
   }
   if (pattern === "quarters") {
     if (!Number.isInteger(perQuarter) || perQuarter < 1) return { error: "這個格子沒有 4 分的位置" };
   }
   if (pattern === "eighth_upbeats") {
-    const step = g.division / 8;
     if (swung) {
       if (!Number.isInteger(perQuarter) || perQuarter < 1) return { error: "這個格子沒有反拍的位置" };
-    } else if (!Number.isInteger(step) || step < 1) return { error: "這個格子沒有反拍的位置" };
+    } else {
+      const has8 = hasBeatDivs(g) || (Number.isInteger(g.division / 8) && g.division / 8 >= 1);
+      if (!has8) return { error: "這個格子沒有反拍的位置" };
+    }
   }
   const slots = [];
-  for (let i = start; i < end; i++) {
+  const consider = (i, visibleLocal) => {
     const local = i % npm;
     let on = false;
-    if (pattern === "quarters") on = local % perQuarter === 0;
+    if (pattern === "quarters") on = isBeatDownbeat(g, i);
     else if (pattern === "eighths") {
       if (swung) {
         const inBeat = local % perQuarter;
         on = inBeat === 0 || inBeat === (perQuarter * 2) / 3;
-      } else on = local % (g.division / 8) === 0;
+      } else on = isBeatDownbeat(g, i) || isBeatEighthUp(g, i);
     } else if (pattern === "eighth_upbeats") {
       if (swung) on = local % perQuarter === (perQuarter * 2) / 3;
-      else on = local % perQuarter === g.division / 8;
-    } else if (pattern === "sixteenths") on = local % (g.division / 16) === 0;
-    else if (pattern === "downbeats") on = local % 2 === 0;
-    else if (pattern === "upbeats") on = local % 2 === 1;
+      else on = isBeatEighthUp(g, i);
+    } else if (pattern === "sixteenths") on = isExactSixteenth(g, i);
+    else if (pattern === "downbeats") on = visibleLocal % 2 === 0;
+    else if (pattern === "upbeats") on = visibleLocal % 2 === 1;
     if (on) slots.push(i);
+  };
+  if (hasBeatDivs(g) || pattern === "downbeats" || pattern === "upbeats") {
+    let visibleLocal = 0;
+    for (let i = start; i < end; i++) {
+      if (!isVisibleIndex(g, i)) continue;
+      consider(i, visibleLocal);
+      visibleLocal += 1;
+    }
+  } else {
+    for (let i = start; i < end; i++) consider(i, i - start);
   }
   return { slots };
+}
+
+/** Exact 16th-note position (tick 0, 6, 12, 18 of a 24-tick beat, or the matching slot on a uniform grid). */
+export function isExactSixteenth(g, index) {
+  const tpb = storedTicksPerBeat(g);
+  const npm = tpb * g.top;
+  const tick = index % npm % tpb;
+  const step = tpb / 4;
+  return Number.isInteger(step) && step >= 1 && tick % step === 0;
 }
 
 /** Fill sounds: 4分／8分／16分／downbeats／upbeats only write target slots and keep the rest. 全開 fills every slot in scope. 全清 clears every slot in scope. */
@@ -823,11 +1169,13 @@ function decodeLine(text, toValue, expected) {
 }
 
 export function toQuery(g, { viewMode } = {}) {
-  const npm = notesPerMeasure(g.division, g.top, g.bottom);
+  const npm = notesPerMeasureOf(g);
   const parts = [];
   if (viewMode || g.viewMode) parts.push("Mode=view");
   parts.push(`TimeSig=${g.top}/${g.bottom}`);
   parts.push(`Div=${g.division}`);
+  const sub = encodeBeatDivs(g);
+  if (sub) parts.push(`Sub=${encodeURIComponent(sub)}`);
   if (g.title) parts.push(`Title=${encodeURIComponent(g.title)}`);
   if (g.author) parts.push(`Author=${encodeURIComponent(g.author)}`);
   if (g.comments) parts.push(`Comments=${encodeURIComponent(g.comments)}`);
@@ -916,7 +1264,10 @@ export function fromQuery(query) {
     bottom = 4;
   }
   let measures = clampInt(param(query, "measures", 1), 1, MAX_MEASURES, 1);
-  const npm = notesPerMeasure(division, top, bottom);
+  const subText = param(query, "Sub", "") || "";
+  const parsedSub = parseBeatDivs(subText, top * measures);
+  const hasSub = parsedSub.some((v) => v != null);
+  const npm = hasSub ? TICKS_PER_BEAT * top : notesPerMeasure(division, top, bottom);
   const g = emptyGroove({
     top,
     bottom,
@@ -933,6 +1284,7 @@ export function fromQuery(query) {
     metronomeSolo: param(query, "MetronomeSolo", "") === "1",
     viewMode: (param(query, "Mode", "") || "").toLowerCase() === "view",
   });
+  if (hasSub) g.beatDivs = parsedSub;
   const expected = npm * measures;
   const hh = param(query, "H", null);
   const snare = param(query, "S", null);
@@ -940,6 +1292,12 @@ export function fromQuery(query) {
   const lyricParam = param(query, "Ly", null);
   if (hh === null && snare === null && kick === null) {
     applyDefaults(g);
+    if (hasSub) {
+      const expanded = expandGrooveToTicks(g);
+      expanded.beatDivs = parsedSub;
+      if (lyricParam) expanded.lyrics = lyricsFromParam(lyricParam, expected);
+      return expanded;
+    }
     if (lyricParam) g.lyrics = lyricsFromParam(lyricParam, expected);
     return g;
   }
@@ -974,6 +1332,31 @@ export function fromQuery(query) {
     g.sticking = decodeLine(sticks, CHAR_TO_STICK, expected);
   }
   if (lyricParam) g.lyrics = lyricsFromParam(lyricParam, expected);
+  if (hasSub && g.hh.length !== expected) {
+    // Old-length strings with a new Sub param: treat as the global grid and expand.
+    const short = notesPerMeasure(division, top, bottom) * measures;
+    if (g.hh.length === short || (hh || "").replace(/\|/g, "").length === short) {
+      const flat = emptyGroove({ top, bottom, division, measures });
+      flat.hh = g.hh.slice(0, short);
+      flat.snare = g.snare.slice(0, short);
+      flat.kick = g.kick.slice(0, short);
+      flat.tom1 = g.tom1.slice(0, short);
+      flat.tom2 = g.tom2.slice(0, short);
+      flat.tom3 = g.tom3.slice(0, short);
+      flat.sticking = g.sticking.slice(0, short);
+      flat.lyrics = g.lyrics.slice(0, short);
+      const expanded = expandGrooveToTicks(flat);
+      expanded.beatDivs = parsedSub;
+      expanded.showToms = g.showToms;
+      expanded.showStickings = g.showStickings;
+      expanded.title = g.title;
+      expanded.author = g.author;
+      expanded.comments = g.comments;
+      expanded.tempo = g.tempo;
+      expanded.swing = g.swing;
+      return expanded;
+    }
+  }
   return g;
 }
 
@@ -984,7 +1367,7 @@ function clampInt(value, min, max, fallback) {
 }
 
 export function toCompact(g) {
-  const npm = notesPerMeasure(g.division, g.top, g.bottom);
+  const npm = notesPerMeasureOf(g);
   const bits = [
     `${g.top}/${g.bottom}`,
     g.division,
@@ -1010,6 +1393,8 @@ export function toCompact(g) {
   if (g.metronome) bits.push("M", g.metronome);
   if (g.countIn) bits.push("C", 1);
   if (g.offset !== "1") bits.push("O", g.offset);
+  const sub = encodeBeatDivs(g);
+  if (sub) bits.push("B", encodeURIComponent(sub));
   const lyrics = lyricsToParam(g.lyrics);
   if (lyrics) bits.push("W", utf8ToB64(decodeURIComponent(lyrics)));
   return bits.join("~");
@@ -1073,27 +1458,32 @@ export function fromCompact(compact) {
   if (fields.M) query.push(`MetronomeFreq=${fields.M}`);
   if (fields.C) query.push("CountIn=1");
   if (fields.O) query.push(`Offset=${encodeURIComponent(fields.O)}`);
+  if (fields.B) query.push(`Sub=${fields.B}`);
   if (fields.W) query.push(`Ly=${encodeURIComponent(b64ToUtf8(fields.W))}`);
   return fromQuery(query.join("&"));
 }
 
 export function countSyllable(g, index) {
-  const npm = notesPerMeasure(g.division, g.top, g.bottom);
+  const tpb = storedTicksPerBeat(g);
+  const npm = tpb * g.top;
   const local = index % npm;
-  const perBeat = g.division / g.bottom;
-  const beat = Math.floor(local / perBeat);
-  const pos = local % perBeat;
+  const beat = Math.floor(local / tpb);
+  const cells = cellsPerBeatAt(g, Math.floor(index / npm) * g.top + beat);
+  const step = tpb / cells;
+  const pos = Math.round((local % tpb) / step);
   const beatNum = String((beat % g.top) + 1);
-  if (isTripletDivision(g.division)) {
+  if (cells === 3) return pos === 0 ? beatNum : ["", "&", "a"][pos] || beatNum;
+  if (cells === 6) return pos === 0 ? beatNum : ["", "ti", "ta", "&", "ti", "ta"][pos] || String(pos);
+  if (cells === 8) return pos === 0 ? beatNum : ["", "+", "e", "+", "&", "+", "a", "+"][pos] || beatNum;
+  if (isTripletDivision(g.division) && !hasBeatDivs(g)) {
     const trip = g.division / 12;
     const names = trip === 1 ? ["", "&", "a"] : ["", "ti", "ta", "&", "ti", "ta"];
     const name = names[pos] || "";
     return name ? `${beatNum}${name}` : beatNum;
   }
-  if (perBeat === 1) return beatNum;
-  if (perBeat === 2) return pos === 0 ? beatNum : "&";
-  if (perBeat === 4) return [beatNum, "e", "&", "a"][pos];
-  if (perBeat === 8) return ["1", "e", "&", "a", "1", "e", "&", "a"][pos] === "1" && pos === 0 ? beatNum : ["", "+", "e", "+", "&", "+", "a", "+"][pos] || beatNum;
+  if (cells === 1) return beatNum;
+  if (cells === 2) return pos === 0 ? beatNum : "&";
+  if (cells === 4) return [beatNum, "e", "&", "a"][pos];
   return pos === 0 ? beatNum : String(pos);
 }
 
@@ -1141,8 +1531,8 @@ export function abcHeader() {
 }
 
 export function toAbc(g) {
-  const npm = notesPerMeasure(g.division, g.top, g.bottom);
-  const unit = abcUnit(g.division);
+  const npm = notesPerMeasureOf(g);
+  const unit = abcUnitFor(g);
   const lines = [
     "X:1",
     g.title ? `T:${g.title}` : null,
@@ -1161,9 +1551,7 @@ export function toAbc(g) {
   const group = groupSize(g.division, g.top, g.bottom);
   const measures = [];
   for (let m = 0; m < g.measures; m++) {
-    const tokens = [];
-    for (let i = 0; i < npm; i++) tokens.push(abcToken(g, m * npm + i));
-    measures.push(layoutBar(tokens, g.division, group));
+    measures.push(hasBeatDivs(g) ? layoutMixedBar(g, m, unit) : layoutUniformBar(g, m, npm, group));
   }
   let body = "";
   measures.forEach((bar, i) => {
@@ -1178,6 +1566,70 @@ export function abcUnit(division) {
   if (division === 16 || division === 24) return 16;
   if (division >= 96) return 64;
   return 32;
+}
+
+export function abcUnitFor(g) {
+  if (!hasBeatDivs(g)) return abcUnit(g.division);
+  let densest = defaultCellsPerBeat(g);
+  for (let i = 0; i < g.top * g.measures; i++) densest = Math.max(densest, cellsPerBeatAt(g, i));
+  if (densest >= 8) return 32;
+  if (densest >= 4 || densest === 6) return 16;
+  return 8;
+}
+
+function layoutUniformBar(g, m, npm, group) {
+  const tokens = [];
+  for (let i = 0; i < npm; i++) tokens.push(abcToken(g, m * npm + i));
+  return layoutBar(tokens, g.division, group);
+}
+
+/** One bar with per-beat subdivisions: tuplet brackets for 3/6, 32nds for 8, existing beaming otherwise. */
+function layoutMixedBar(g, m, unit) {
+  const beats = [];
+  for (let b = 0; b < g.top; b++) {
+    const cells = cellsPerBeat(g, m, b);
+    const tokens = [];
+    for (let c = 0; c < cells; c++) tokens.push(abcToken(g, tickIndex(g, m, b, c)));
+    beats.push(layoutCustomBeat(tokens, cells, unit));
+  }
+  return beats.join(" ");
+}
+
+function layoutCustomBeat(tokens, cells, unit) {
+  const allRest = tokens.every((token) => token === "z");
+  if (allRest) {
+    const units = Math.round(unit / 4);
+    return units <= 1 ? "z" : "z" + units;
+  }
+  if (cells === 3) return scaleTuplet(tokens, 3, 2, unit, 8);
+  if (cells === 6) return scaleTuplet(tokens, 6, 4, unit, 16);
+  // 2, 4, 8: treat as a straight beat whose cell length is beat / cells of a quarter
+  const cellUnits = ((1 / 4) / cells) / (1 / unit);
+  if (Math.abs(cellUnits - 1) < 1e-9) return collapseStraight(tokens, unit === 32 ? 32 : unit === 8 ? 8 : 16);
+  return scaleStraight(tokens, cellUnits, cells === 8);
+}
+
+function scaleTuplet(tokens, p, q, unit, baseLen) {
+  // Write each tuplet note at its nominal length (8th for 3:2, 16th for 6:4).
+  // The (p:q ratio compresses them into one beat.
+  const cellUnits = (1 / baseLen) / (1 / unit);
+  const body = tokens.map((token) => lengthenToken(token, cellUnits)).join("");
+  return `(${p}:${q}:${p}` + body;
+}
+
+function scaleStraight(tokens, cellUnits, beam) {
+  const body = tokens.map((token) => lengthenToken(token, cellUnits)).join("");
+  return body;
+}
+
+function lengthenToken(token, units) {
+  if (Math.abs(units - 1) < 1e-9) return token;
+  if (units === 2) return token + "2";
+  if (units === 0.5) return token + "/2";
+  if (units === 4) return token + "4";
+  if (Number.isInteger(units) && units > 1) return token + String(units);
+  if (units === 0.25) return token + "/4";
+  return token;
 }
 
 // Fractions of a whole note that abcjs can draw. Anything else, such as 10/64, raises
@@ -1316,7 +1768,7 @@ function soundingParts(g, idx) {
 }
 
 export function staffMarks(g) {
-  const total = Math.min(g.hh.length, notesPerMeasure(g.division, g.top, g.bottom) * g.measures);
+  const total = Math.min(g.hh.length, notesPerMeasureOf(g) * g.measures);
   const marks = [];
   for (let i = 0; i < total; i++) {
     const { parts, placeholder, floatPlus } = soundingParts(g, i);
@@ -1452,17 +1904,18 @@ const MIDI = {
 };
 
 export function hitsForGroove(g, { solo = false } = {}) {
-  const npm = notesPerMeasure(g.division, g.top, g.bottom);
+  const npm = notesPerMeasureOf(g);
   const secondsPerQuarter = 60 / g.tempo;
   const hits = [];
   for (let i = 0; i < g.hh.length; i++) {
+    if (hasBeatDivs(g) && !isVisibleIndex(g, i)) continue;
     const measure = Math.floor(i / npm);
-    const quarters = i * (4 / g.division) + swingExtraQuarters(i, g.division, g.swing);
+    const quarters = slotTimeQuarters(g, i);
     const time = quarters * secondsPerQuarter;
     const push = (inst, vel, dt = 0) => hits.push({ time: time + dt, midi: MIDI[inst] ?? 38, inst, vel });
     if (!solo) {
       if (!g.mute.kick[measure]) addKick(g.kick[i], push);
-      if (!g.mute.snare[measure]) addSnare(g.snare[i], push, (4 / g.division) * secondsPerQuarter);
+      if (!g.mute.snare[measure]) addSnare(g.snare[i], push, cellDurationQuarters(g, i) * secondsPerQuarter);
       if (g.showToms >= 1 && !g.mute.tom1[measure] && g.tom1[i]) push("tom1", 108);
       if (g.showToms >= 2 && !g.mute.tom2[measure] && g.tom2[i]) push("tom2", 102);
       if (g.showToms >= 3 && !g.mute.tom3[measure] && g.tom3[i]) push("tom3", 96);
@@ -1576,28 +2029,29 @@ function addHat(kind, push) {
 
 export function metronomeHits(g, { offset = "1", rate = 4 } = {}) {
   if (!rate) return [];
-  const total = stepCount(g);
   const spq = 60 / g.tempo;
-  const shift = offsetShiftSlots(g, offset);
-  const slotsPerQuarter = g.division / 4;
+  const beatDur = 4 / g.bottom;
+  const barQ = g.top * beatDur;
+  const totalQ = barQ * g.measures;
+  const shiftQ = slotTimeQuarters(g, offsetShiftSlots(g, offset));
+  const step = 4 / rate;
   const hits = [];
-  for (let i = 0; i < total; i++) {
-    const local = i % notesPerMeasure(g.division, g.top, g.bottom);
-    const onQuarter = slotsPerQuarter >= 1 && local % slotsPerQuarter === shift % slotsPerQuarter;
-    const onEighth = rate >= 8 && eighthSlot(g, i, shift);
-    const onSixteenth = rate >= 16 && sixteenthSlot(g, i, shift);
-    const accent = isAccentSlot(g, i, shift);
+  for (let q = shiftQ; q < totalQ - 1e-9; q += step) {
+    const local = ((q - shiftQ) % barQ + barQ) % barQ;
+    const fromBar = (q % barQ + barQ) % barQ;
+    const onQuarter = Math.abs(fromBar / beatDur - Math.round(fromBar / beatDur)) < 1e-6;
+    const onEighth = Math.abs(fromBar / (beatDur / 2) - Math.round(fromBar / (beatDur / 2))) < 1e-6;
+    const accent = Math.abs(fromBar) < 1e-6;
     let sound = null;
     if (rate === 4 && onQuarter) sound = accent ? "one" : "quarter";
-    if (rate === 8 && (onQuarter || onEighth)) sound = accent ? "one" : onQuarter ? "quarter" : "eighth";
-    if (rate === 16 && (onQuarter || onEighth || onSixteenth)) {
+    if (rate === 8 && onEighth) sound = accent ? "one" : onQuarter ? "quarter" : "eighth";
+    if (rate === 16) {
       sound = accent ? "one" : onQuarter ? "quarter" : onEighth ? "eighth" : "soft";
     }
     if (!sound) continue;
-    const quarters = i * (4 / g.division) + swingExtraQuarters(i, g.division, g.swing);
     const one = sound === "one";
     hits.push({
-      time: quarters * spq,
+      time: q * spq,
       midi: one ? 56 : sound === "soft" ? 77 : 76,
       inst: one ? "cow" : sound === "soft" ? "clickSoft" : "click",
       vel: sound === "soft" ? 58 : one ? 118 : sound === "quarter" ? 96 : 78,
@@ -1631,14 +2085,15 @@ export function offsetChoices(division) {
 
 export function offsetShiftSlots(g, offset) {
   const name = offset === "rotate" ? "1" : offset;
-  if (isTripletDivision(g.division)) {
+  const tpb = storedTicksPerBeat(g);
+  if (isTripletDivision(g.division) && !hasBeatDivs(g)) {
     const per = g.division / g.top / (g.bottom / 4);
     const map = { 1: 0, "&": Math.floor(per / 3), a: Math.floor((2 * per) / 3) };
     return map[name] || 0;
   }
-  const sixteenth = Math.max(1, g.division / 16);
+  const sixteenth = Math.max(1, tpb / 4);
   const map = { 1: 0, e: sixteenth, "&": sixteenth * 2, a: sixteenth * 3 };
-  return map[name] || 0;
+  return Number.isFinite(map[name]) ? map[name] : 0;
 }
 
 export function nextRotateOffset(division, current) {
@@ -1824,23 +2279,27 @@ export function buildPermutation(g, { kind = "kick", sections = [0, 1, 2, 3, 4],
 }
 
 function resampleMeasure(g, toDivision) {
-  const npm = notesPerMeasure(g.division, g.top, g.bottom);
-  const toNpm = notesPerMeasure(toDivision, g.top, g.bottom);
+  // 排列練習 reads the first measure at a uniform grid. Per-beat 連音
+  // are mapped onto coincident positions of that grid and otherwise dropped.
+  const source = hasBeatDivs(g) ? setDivision(g, g.division).groove : g;
+  const npm = notesPerMeasureOf(source);
+  const fromDiv = source.division;
+  const toNpm = notesPerMeasure(toDivision, source.top, source.bottom);
   const take = (arr) => {
     const out = fill(toNpm, null);
     for (let i = 0; i < toNpm; i++) {
-      const src = (i * g.division) / toDivision;
+      const src = (i * fromDiv) / toDivision;
       if (Math.abs(src - Math.round(src)) < 1e-6) out[i] = arr[Math.round(src)] ?? null;
     }
     return out;
   };
   return {
-    hh: take(g.hh.slice(0, npm)),
-    snare: take(g.snare.slice(0, npm)),
-    kick: take(g.kick.slice(0, npm)),
-    tom1: take(g.tom1.slice(0, npm)),
-    tom2: take((g.tom2 || []).slice(0, npm)),
-    tom3: take((g.tom3 || g.tom4 || []).slice(0, npm)),
+    hh: take(source.hh.slice(0, npm)),
+    snare: take(source.snare.slice(0, npm)),
+    kick: take(source.kick.slice(0, npm)),
+    tom1: take(source.tom1.slice(0, npm)),
+    tom2: take((source.tom2 || []).slice(0, npm)),
+    tom3: take((source.tom3 || source.tom4 || []).slice(0, npm)),
   };
 }
 

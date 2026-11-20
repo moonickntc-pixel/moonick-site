@@ -1,5 +1,5 @@
-import * as M from "./model.js?v=20261121d";
-import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261121d";
+import * as M from "./model.js?v=20261121e";
+import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261121e";
 
 const kit = createKit();
 const transport = createTransport(kit);
@@ -235,9 +235,10 @@ function paintBanner() {
 
 function paintGrid() {
   const g = state.groove;
-  const npm = M.notesPerMeasure(g.division, g.top, g.bottom);
-  const perBeat = M.notesPerBeat(g.division, g.bottom);
-  const group = M.groupSize(g.division, g.top, g.bottom);
+  const npm = M.notesPerMeasureOf(g);
+  const perBeat = M.storedTicksPerBeat(g);
+  const defaultCells = M.defaultCellsPerBeat(g);
+  const group = M.hasBeatDivs(g) ? perBeat : M.groupSize(g.division, g.top, g.bottom);
   const showStick = g.showStickings;
   const rows = [
     ["hh", "Hi-hat", true],
@@ -247,11 +248,17 @@ function paintGrid() {
     ["tom3", "落地通鼓", g.showToms >= 3],
     ["kick", "Kick", true],
   ].filter((row) => row[2]);
-  $("grid").dataset.density = String(perBeat);
+  let densest = defaultCells;
+  if (M.hasBeatDivs(g)) {
+    for (let i = 0; i < g.top * g.measures; i++) densest = Math.max(densest, M.cellsPerBeatAt(g, i));
+  }
+  $("grid").dataset.density = String(densest);
+  $("grid").classList.toggle("has-beat-divs", M.hasBeatDivs(g));
   const mixNote =
-    perBeat === 12
+    M.hasBeatDivs(g) ? ""
+    : defaultCells === 12
       ? "混合 12：每拍 12 點。藍線是 16 分音符（每 3 點），金線是 8 分三連音（每 4 點）。"
-      : perBeat === 24
+      : defaultCells === 24
         ? "混合 24：每拍 24 點。藍線是六連音（每 4 點），金線是八連音（每 3 點）。16 分音符每 6 點，8 分三連音每 8 點。"
         : "";
   let html = mixNote ? `<p class="mix-key">${mixNote}</p>` : "";
@@ -270,22 +277,30 @@ function paintGrid() {
       }
     }
     let cols = "";
-    for (let s = 0; s < npm; s++) {
-      const i = m * npm + s;
-      const pos = s % perBeat;
-      const beatHead = pos === 0 ? Math.floor(s / perBeat) + 1 : "";
-      const lyric = escapeAttr((g.lyrics && g.lyrics[i]) || "");
-      let cells = `<input class="lyric" data-i="${i}" value="${lyric}" maxlength="12" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Lyric ${i + 1}" />`;
-      cells += `<div class="beat-no">${beatHead}</div>`;
-      if (showStick) cells += cellHtml("sticking", i, g.sticking[i], true);
-      for (const [inst, , shown] of rows) {
-        cells += cellHtml(inst, i, g[inst][i], shown);
+    for (let b = 0; b < g.top; b++) {
+      const beatCells = M.cellsPerBeat(g, m, b);
+      const custom = M.hasBeatDivs(g) && g.beatDivs[m * g.top + b] != null;
+      for (let c = 0; c < beatCells; c++) {
+        const i = M.tickIndex(g, m, b, c);
+        const pip = custom ? (c === 0 ? "pip-beat" : "") : pipClass(defaultCells, c);
+        const lyric = escapeAttr((g.lyrics && g.lyrics[i]) || "");
+        let cells = `<input class="lyric" data-i="${i}" value="${lyric}" maxlength="12" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Lyric ${i + 1}" />`;
+        if (c === 0) {
+          const tag = custom ? `<abbr class="sub-tag" title="這一拍是 ${beatCells === 3 ? "3連音" : beatCells === 6 ? "6連音" : beatCells === 8 ? "8連音" : beatCells === 2 ? "8分" : "16分"}">${beatCells === 3 ? "3" : beatCells === 6 ? "6" : beatCells === 8 ? "8" : beatCells === 2 ? "8分" : "16分"}</abbr>` : "";
+          cells += `<button type="button" class="beat-no beat-subdiv${custom ? " custom" : ""}" data-action="beat-subdiv-menu" data-m="${m}" data-b="${b}" title="點這裡可把這一拍改成 3、6 或 8 連音" aria-label="第 ${b + 1} 拍的格子${custom ? "，目前是自訂連音" : ""}">${b + 1}${tag}</button>`;
+        } else {
+          cells += `<div class="beat-no"></div>`;
+        }
+        if (showStick) cells += cellHtml("sticking", i, g.sticking[i], true);
+        for (const [inst, , shown] of rows) {
+          cells += cellHtml(inst, i, g[inst][i], shown);
+        }
+        cols += `<div class="col ${pip}" data-col="${i}" style="flex: ${1} 1 0;">${cells}</div>`;
       }
-      cols += `<div class="col ${pipClass(perBeat, pos)}" data-col="${i}">${cells}</div>`;
-      if ((s + 1) % group === 0 && s !== npm - 1) cols += '<div class="group-gap"></div>';
+      if (b !== g.top - 1) cols += '<div class="group-gap"></div>';
     }
     const lineTop = 48 + 28 + (showStick ? 40 : 0);
-    const cellH = perBeat >= 24 ? 40 : perBeat >= 12 ? 48 : 58;
+    const cellH = densest >= 24 ? 40 : densest >= 12 ? 48 : 58;
     const tracks = rows
       .map((_, index) => `<i class="track" style="top:${lineTop + index * cellH + cellH / 2}px"></i>`)
       .join("");
@@ -305,7 +320,7 @@ function paintGrid() {
   if (g.measures < M.MAX_MEASURES) {
     html += '<button type="button" class="add-measure" data-action="add-measure" aria-label="Add measure">+</button>';
   }
-  html += `</div><p class="hint">點格子寫音符。右鍵或按「進階」可以選重音、幽靈音、Rim-shot、半開、開完後閉合、只關沒打到、腳踩打開、Buzz。在 Hi-hat 名字上按左鍵、右鍵或長按，都會打開同一個選單：可選音色並填入 4 分／8 分／16 分、downbeats、upbeats，或 Down-up 重輕重輕；也可一鍵填「Ride 正拍＋Bell 反拍」。填入只改對應位置，其他格子會留著。每一格上方的空格可以打歌詞，中文或英文都行。混合 12 是每拍 12 點，混合 24 是每拍 24 點。</p>`;
+  html += `</div><p class="hint">點格子寫音符。點每一拍上方的數字，可以把「這一拍」改成 8 分、16 分、3 連音、6 連音或 8 連音，其他拍維持原來的格子。在 Hi-hat 名字上按左鍵、右鍵或長按，都會打開同一個選單：可選音色並填入 4 分／8 分／16 分（對得到的拍才會填；3／6 連音拍只填得上的位置，填不上就略過）。每一格上方的空格可以打歌詞。混合 12、混合 24 還是整首共用的密格子。</p>`;
   $("grid").innerHTML = html;
   requestAnimationFrame(fitWritingArea);
 }
@@ -820,7 +835,7 @@ function buildLoop({ first, elapsed, retime = false, countIn: keepCountIn = fals
   const spq = 60 / tempo;
   const slotTimes = [];
   for (let i = 0; i < g.hh.length; i++) {
-    slotTimes.push((i * (4 / g.division) + M.swingExtraQuarters(i, g.division, g.swing)) * spq);
+    slotTimes.push(M.slotTimeQuarters(g, i) * spq);
   }
   let duration = g.measures * g.top * (4 / g.bottom) * spq;
   let countIn = 0;
@@ -892,7 +907,7 @@ transport.onFrame(({ playing, slot }) => {
   const heard = sourceGroove();
   const sameGrid = heard.division === state.groove.division && heard.hh.length === state.groove.hh.length;
   if (slot >= 0 && sameGrid) {
-    const col = document.querySelector(`.col[data-col="${slot}"]`);
+    const col = document.querySelector(`.col[data-col="${M.displayIndex(heard, slot)}"]`);
     if (col) {
       col.classList.add("now");
       const grid = $("grid");
@@ -1128,8 +1143,23 @@ function openLabelMenu(button, event) {
 
 function closeFloaters() {
   menu.hidden = true;
-  menu.classList.remove("cymbal-menu");
+  menu.classList.remove("cymbal-menu", "beat-menu");
   popover.hidden = true;
+}
+
+function openBeatSubdivMenu(button, event) {
+  const m = Number(button.dataset.m);
+  const b = Number(button.dataset.b);
+  const current = M.cellsPerBeat(state.groove, m, b);
+  const isCustom = M.hasBeatDivs(state.groove) && state.groove.beatDivs[m * state.groove.top + b] != null;
+  const items = M.BEAT_SUBDIV_OPTIONS.map(([cells, label]) => {
+    const on = current === cells ? " on" : "";
+    return `<button type="button" class="${on}" data-action="beat-subdiv" data-m="${m}" data-b="${b}" data-cells="${cells}">${label}</button>`;
+  }).join("");
+  const html = `<p class="beat-menu-title">第 ${b + 1} 拍的格子</p>${items}<button type="button" data-action="beat-subdiv" data-m="${m}" data-b="${b}" data-cells="default"${isCustom ? "" : " class=\"on\""}>還原</button><button type="button" data-action="close-float">cancel</button>`;
+  menu.classList.remove("cymbal-menu");
+  menu.classList.add("beat-menu");
+  openMenu(html, event.clientX, event.clientY);
 }
 
 function openModal(html) {
@@ -1149,6 +1179,7 @@ function changeDivision(division) {
     return;
   }
   commit(result.groove);
+  if (result.resetBeatDivs) toast("已還原各拍的連音設定，改回整首共用的格子。");
   if ((division === 48 || division === 96) && !state.mixedWarned[division]) {
     state.mixedWarned[division] = true;
     const help =
@@ -1296,11 +1327,12 @@ function openHelp(which) {
       <li><b>Ctrl and move</b> paints notes on. <b>Alt and move</b> turns them off.</li>
       <li>The <b>Hi-hat</b>, <b>Snare</b>, <b>Kick</b>, and <b>Stickings</b> names open a menu for that whole measure: all on, all off, ghosts, mute, hi-hat foot on the numbers or the &amp;s. Left-click still does this.</li>
       <li><b>Right-click</b> the <b>Hi-hat</b> name (long-press on a phone) for a fill menu: pick a cymbal-row sound (Hi-hat, Ride, Ride Bell, Crash, Cow Bell, Stacker, and the other voices in the cell menu) and a pattern (4ths, 8ths, 16ths, downbeats, upbeats, all on, clear), or a one-tap combo such as Ride on the beat and Bell on the &amp;s, for this bar or every bar. Pattern fills keep notes that are not in the pattern; only Clear wipes the row.</li>
-      <li><b>MIX 12</b> is 12 dots per beat, so 16ths and 8th triplets can share a bar. <b>MIX 24</b> is 24 dots per beat, so sextuplets (六連音, every 4th dot) and octuplets (八連音, every 3rd dot) can share a bar.</li>
+      <li><b>Beat numbers</b> above the grid (1, 2, 3, 4) open a small menu to set just that beat to 8ths, 16ths, 8th triplets (3連音), sextuplets (6連音), or 32nds (8連音). Other beats keep the global grid. 還原 puts that beat back. Changing the left-hand global grid (1/8, 1/16, triplets, MIX) clears all per-beat settings. Undo restores them.</li>
+      <li><b>MIX 12</b> is 12 dots per beat, so 16ths and 8th triplets can share a bar. <b>MIX 24</b> is 24 dots per beat, so sextuplets (六連音, every 4th dot) and octuplets (八連音, every 3rd dot) can share a bar. Prefer a normal 8th or 16th grid plus per-beat 連音 when only a fill needs them.</li>
       <li><b>Words</b> sit on each timing point. Click the box and type English or Traditional Chinese. The syllable prints above that note and travels with the share link.</li>
       <li><b>Stickings</b> can be Off, Right, Left, R/L, or Count. Count prints the syllable (1 e &amp; a). The measure menu also offers paradiddle, double paradiddle, and paradiddle-diddle when those patterns fit the grid.</li>
       <li><b>Metronome</b> options: solo, count-in, auto speed up, and an offset click that moves the strong beat to the e, &amp;, or a, or rotates each loop.</li>
-      <li><b>Swing</b> delays the upbeats in playback only. 33% is a triplet shuffle. 50% is a dotted-eighth and sixteenth. The printed chart stays straight.</li>
+      <li><b>Swing</b> delays the upbeats in playback only. 33% is a triplet shuffle. 50% is a dotted-eighth and sixteenth. The printed chart stays straight. Tuplet beats (3連音 / 6連音) are not swung.</li>
       <li><b>Share</b> copies a link. Bookmark it, or paste the query string from another groove tool that uses TimeSig, Div, H, S, and K.</li>
       <li>譜會自動留在這台電腦／手機的瀏覽器裡。</li>
       <li><b>Print</b> sends the chart to the printer. Download saves SVG, PNG, or a MIDI file.</li>
@@ -1374,6 +1406,12 @@ function handleAction(el, event) {
     closeModal();
     if (result.error) toast(result.error);
     else commit(result.groove);
+  } else if (action === "beat-subdiv-menu") {
+    openBeatSubdivMenu(el, event);
+  } else if (action === "beat-subdiv") {
+    const next = M.setBeatSubdiv(state.groove, Number(el.dataset.m), Number(el.dataset.b), el.dataset.cells === "default" ? null : Number(el.dataset.cells));
+    closeFloaters();
+    commit(next);
   } else if (action === "advanced") {
     state.advanced = !state.advanced;
     paintChrome();

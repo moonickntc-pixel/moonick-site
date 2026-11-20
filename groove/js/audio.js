@@ -206,14 +206,30 @@ export function createKit() {
     src.connect(gain);
     gain.connect(master);
     src.start(at);
+    src.startAt = at;
     active.add(src);
     src.onended = () => active.delete(src);
+  }
+
+  // Drop hits scheduled at or after a time, so a tempo change can
+  // re-plan the rest of the loop without cutting notes already sounding.
+  function cancelFrom(time) {
+    for (const src of active) {
+      if (src.startAt == null || src.startAt < time) continue;
+      try {
+        src.stop();
+      } catch {
+        /* already ended */
+      }
+      active.delete(src);
+    }
   }
 
   return {
     ensure,
     play,
     silence,
+    cancelFrom,
     load,
     select,
     onStatus(fn) {
@@ -250,9 +266,11 @@ export function createTransport(kit) {
   let loopDur = 0;
   let countIn = 0;
   let slotTimes = [];
+  let retimeNow = null;
 
   function stop(cut = true) {
     playing = false;
+    retimeNow = null;
     if (timer) clearInterval(timer);
     timer = null;
     if (cut && kit.silence) kit.silence();
@@ -291,6 +309,35 @@ export function createTransport(kit) {
       scheduledUntil += Math.max(0.05, plan.duration);
     };
 
+    retimeNow = () => {
+      if (!playing || !loopDur) return;
+      const now = ctx.currentTime;
+      const cut = now + 0.03;
+      const pos = now - loopStart;
+      // Where we are in the loop, as a share of it. Everything in a plan scales
+      // with the tempo, so the same share is the same spot in the music.
+      const share = pos > 0 ? Math.min(0.999999, pos / loopDur) : 0;
+      const plan = buildLoop({
+        first: false,
+        retime: true,
+        countIn: countIn > 0,
+        elapsed: Math.max(0, now - speedStarted),
+      });
+      // If the next loop is already queued, the old loop's last few notes
+      // stay as they are and the new tempo starts with the queued loop.
+      const start = pos > 0 ? now - share * plan.duration : loopStart;
+      kit.cancelFrom(Math.max(cut, pos > 0 ? cut : loopStart));
+      loopStart = start;
+      loopDur = plan.duration;
+      countIn = plan.countIn || 0;
+      slotTimes = plan.slotTimes || [];
+      for (const hit of plan.hits) {
+        const at = start + hit.time;
+        if (at >= cut && at >= start) kit.play(hit.inst, hit.vel, at);
+      }
+      scheduledUntil = start + Math.max(0.05, plan.duration);
+    };
+
     pump();
     timer = setInterval(() => {
       if (!playing) return;
@@ -313,6 +360,10 @@ export function createTransport(kit) {
   return {
     start,
     stop,
+    // Apply a new tempo (or swing) right away instead of at the next loop.
+    retime() {
+      if (playing && retimeNow) retimeNow();
+    },
     toggle(buildLoop) {
       if (playing) {
         stop();

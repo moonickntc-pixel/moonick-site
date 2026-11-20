@@ -20,8 +20,8 @@
     <meta name="twitter:title" id="twitter-title" content="鼓譜編寫工具｜慕尼克" />
     <meta name="twitter:description" id="twitter-description" content="在格子上寫鼓的節奏、填上歌詞、聽一遍，再把連結傳給學生。這是鼓譜編寫工具，不是教室首頁。" />
     <meta name="twitter:image" id="twitter-image" content="https://moonickmusic.com/groove/og-moonick.png" />
-    <link rel="stylesheet" href="css/app.css?v=20261114a" />
-    <link rel="stylesheet" href="css/theme.css?v=20261114a" />
+    <link rel="stylesheet" href="css/app.css?v=20261120a" />
+    <link rel="stylesheet" href="css/theme.css?v=20261120a" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Playfair+Display:wght@600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet" />
@@ -162,6 +162,8 @@
         <div id="grid" class="paper edit-only"></div>
 
         <div id="toolbar" class="noprint">
+          <button type="button" class="tool edit-only quick-eighths" data-action="eighths" data-eighths="normal" title="一鍵把 Hi-hat 排填滿 8 分音符（全部小節）；再按一次清除"><b>8分 Hi-hat</b><small>一鍵填滿</small></button>
+          <button type="button" class="tool edit-only quick-eighths" data-action="eighths" data-eighths="ride" title="一鍵把 Hi-hat 排換成 8 分 Ride（全部小節）；再按一次清除"><b>8分 Ride</b><small>一鍵填滿</small></button>
           <button type="button" class="tool edit-only" data-action="clear"><b>全部清除</b><small>Clear</small></button>
           <button type="button" class="tool edit-only" data-action="toms" id="tomsBtn"><b>通鼓</b><small>Toms</small><i id="tomDots"></i></button>
           <button type="button" class="tool" data-action="stickings-menu"><b>手法</b><small>Stickings</small></button>
@@ -199,6 +201,6 @@
     <div id="toast" hidden></div>
 
     <script src="js/vendor/abcjs-basic-min.js"></script>
-    <script type="module" src="js/app.js?v=20261114a"></script>
+    <script type="module" src="js/app.js?v=20261120a"></script>
   </body>
 </html>

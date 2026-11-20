@@ -845,3 +845,28 @@ body.viewing #viewBtn { display: flex; }
   #grid .cell.hh .mark, #grid .cell.hh.on .mark { font-size: calc(var(--cell-h, 24px) * 0.5); }
   #grid .labels button:not(.stick-label) { font-size: clamp(12px, calc(var(--cell-h, 24px) * 0.34), 16px); }
 }
+
+/* 播放鍵的圖示不接收點擊，換圖示時點擊不會掉 */
+#playBtn svg, #loopBtn svg { pointer-events: none; }
+.tool b, .tool small, .tool i { pointer-events: none; }
+
+/* 快速 8 分 Hi-hat／Ride：已填滿時亮起，再按一次清除 */
+.tool.quick-eighths small { white-space: nowrap; }
+.tool.quick-eighths.on,
+html[data-school] .tool.quick-eighths.on {
+  background: var(--accent, #e8b04a);
+  color: var(--accent-text, #1d1d1d);
+}
+
+@media (max-width: 520px) {
+  /* 手機：工具列緊接在格子下方，快速填入不用往下捲 */
+  #toolbar { order: 4; }
+  #meta { order: 5; }
+  #toolbar .tool { flex: 1 1 30%; }
+}
+
+@media (min-width: 521px) {
+  /* 小節多、格子窄時，圓點跟著縮，不會擠出小節、蓋到「＋」 */
+  #grid .col > * { min-width: 0; }
+  #grid .head { width: min(calc(var(--cell-h, 24px) * 0.6), 92%); height: auto; aspect-ratio: 1; }
+}

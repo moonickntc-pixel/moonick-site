@@ -1,5 +1,5 @@
-import * as M from "./model.js?v=20261114a";
-import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261114a";
+import * as M from "./model.js?v=20261120a";
+import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261120a";
 
 const kit = createKit();
 const transport = createTransport(kit);
@@ -94,6 +94,7 @@ function undo() {
   state.abcDirty = false;
   paint();
   writeUrl();
+  retimeSoon();
 }
 
 function redo() {
@@ -103,6 +104,7 @@ function redo() {
   state.abcDirty = false;
   paint();
   writeUrl();
+  retimeSoon();
 }
 
 function writeUrl() {
@@ -172,8 +174,21 @@ function paintChrome() {
   $("playMeta").textContent = `${g.measures} bar${g.measures > 1 ? "s" : ""} · ${seconds.toFixed(1)}s`;
   document.querySelectorAll("[data-kit]").forEach((btn) => btn.classList.toggle("on", btn.dataset.kit === kit.current));
   $("loopBtn").classList.toggle("on", transport.looping);
-  $("playBtn").classList.toggle("playing", transport.playing);
-  $("playIcon").innerHTML = transport.playing
+  paintPlayButton(transport.playing);
+  document.querySelectorAll("[data-eighths]").forEach((btn) => {
+    btn.classList.toggle("on", M.hasEighths(g, btn.dataset.eighths));
+  });
+}
+
+// Only swap the play/stop icon when it really changes. Rewriting it on every
+// frame (or on the blur that a click causes) replaced the element under the
+// pointer between press and release, so the browser dropped the click.
+let shownPlaying = null;
+function paintPlayButton(playing) {
+  if (shownPlaying === playing) return;
+  shownPlaying = playing;
+  $("playBtn").classList.toggle("playing", playing);
+  $("playIcon").innerHTML = playing
     ? '<rect x="6" y="5" width="4" height="14" fill="currentColor"/><rect x="14" y="5" width="4" height="14" fill="currentColor"/>'
     : '<path d="M8 5v14l11-7z" fill="currentColor"/>';
 }
@@ -703,7 +718,7 @@ function revealStaffTop(svg) {
   sheet.style.minHeight = `${Math.ceil(displayHeight)}px`;
 }
 
-function buildLoop({ first, elapsed }) {
+function buildLoop({ first, elapsed, retime = false, countIn: keepCountIn = false }) {
   let tempo = state.groove.tempo;
   if (state.speed.on) {
     const speed = state.speed;
@@ -730,7 +745,7 @@ function buildLoop({ first, elapsed }) {
   g.tempo = tempo;
   let offset = g.offset;
   if (g.offset === "rotate") {
-    if (!first) state.rotate = M.nextRotateOffset(g.division, state.rotate);
+    if (!first && !retime) state.rotate = M.nextRotateOffset(g.division, state.rotate);
     offset = state.rotate;
   } else state.rotate = "1";
   const solo = g.metronomeSolo;
@@ -745,7 +760,7 @@ function buildLoop({ first, elapsed }) {
   }
   let duration = g.measures * g.top * (4 / g.bottom) * spq;
   let countIn = 0;
-  if (first && g.countIn) {
+  if (retime ? keepCountIn : first && g.countIn) {
     const intro = M.emptyGroove({ top: g.top, bottom: g.bottom, division: g.division, measures: 1, tempo, swing: 0 });
     const introHits = M.metronomeHits(intro, { offset, rate: rate || 4 });
     const introDur = g.top * (4 / g.bottom) * spq;
@@ -768,6 +783,7 @@ function setSampleStatus(text) {
 
 let playStarting = false;
 async function togglePlay() {
+  applyTempoBox();
   if (transport.playing) {
     transport.stop();
     paintChrome();
@@ -807,10 +823,7 @@ async function chooseKit(id) {
 }
 
 transport.onFrame(({ playing, slot }) => {
-  $("playBtn").classList.toggle("playing", playing);
-  $("playIcon").innerHTML = playing
-    ? '<rect x="6" y="5" width="4" height="14" fill="currentColor"/><rect x="14" y="5" width="4" height="14" fill="currentColor"/>'
-    : '<path d="M8 5v14l11-7z" fill="currentColor"/>';
+  paintPlayButton(playing);
   document.querySelectorAll(".col.now").forEach((el) => el.classList.remove("now"));
   const heard = sourceGroove();
   const sameGrid = heard.division === state.groove.division && heard.hh.length === state.groove.hh.length;
@@ -1199,6 +1212,13 @@ function handleAction(el, event) {
   } else if (action === "undo") undo();
   else if (action === "redo") redo();
   else if (action === "play") togglePlay();
+  else if (action === "eighths") {
+    const value = el.dataset.eighths;
+    const result = M.toggleEighths(state.groove, value);
+    commit(result.groove);
+    const name = value === "ride" ? "Ride" : "Hi-hat";
+    toast(result.cleared ? `已清除 8 分 ${name}` : `已填入 8 分 ${name}（全部小節）`);
+  }
   else if (action === "loop") {
     transport.looping = !transport.looping;
     paintChrome();
@@ -1622,33 +1642,42 @@ function boot() {
   });
 
   $("tempo").addEventListener("input", () => {
-    state.groove.tempo = Number($("tempo").value);
+    setTempo(Number($("tempo").value));
     $("tempoNum").value = state.groove.tempo;
-    state.speed.base = null;
-    state.abcDirty = false;
-    paintChrome();
-    scheduleNotation();
-    writeUrl();
   });
-  $("tempoNum").addEventListener("change", () => {
-    state.groove.tempo = Math.min(M.MAX_TEMPO, Math.max(M.MIN_TEMPO, Number($("tempoNum").value) || M.DEFAULT_TEMPO));
-    state.speed.base = null;
-    state.abcDirty = false;
-    paintChrome();
-    scheduleNotation();
-    writeUrl();
+  // The BPM box used to change the tempo only on Enter or leaving the box, so
+  // a number typed and then played with Space (or left in the box) never
+  // reached the music. Now it applies shortly after typing stops, at once on
+  // Enter / leaving the box, and right before play.
+  $("tempoNum").addEventListener("input", () => {
+    clearTimeout(tempoBoxTimer);
+    tempoBoxTimer = setTimeout(() => applyTempoBox({ partial: true }), 350);
+  });
+  $("tempoNum").addEventListener("change", () => applyTempoBox());
+  $("tempoNum").addEventListener("blur", () => applyTempoBox());
+  $("tempoNum").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      applyTempoBox();
+      $("tempoNum").blur();
+    }
   });
   $("swing").addEventListener("input", () => {
     state.groove.swing = Number($("swing").value);
     state.abcDirty = false;
     paintChrome();
     writeUrl();
+    retimeSoon();
   });
   for (const id of ["title", "author", "comments"]) {
     $(id).addEventListener("change", () => {
       const next = M.cloneGroove(state.groove);
       next[id] = $(id).value;
-      commit(next, { history: false });
+      // Only the sheet shows these. Redrawing the grid here replaced the box
+      // you were tapping next (a lyric, a note), so that tap was lost.
+      state.groove = next;
+      state.abcDirty = false;
+      scheduleNotation();
+      writeUrl();
     });
   }
   $("abc").addEventListener("input", () => {
@@ -1677,11 +1706,15 @@ function boot() {
     } else if (!typing && event.key === "ArrowLeft") {
       const next = M.cloneGroove(state.groove);
       next.tempo = Math.max(M.MIN_TEMPO, next.tempo - 1);
+      state.speed.base = null;
       commit(next, { history: false });
+      retimeSoon();
     } else if (!typing && event.key === "ArrowRight") {
       const next = M.cloneGroove(state.groove);
       next.tempo = Math.min(M.MAX_TEMPO, next.tempo + 1);
+      state.speed.base = null;
       commit(next, { history: false });
+      retimeSoon();
     } else if (event.key === "Escape") {
       closeFloaters();
       closeModal();
@@ -1723,6 +1756,50 @@ function boot() {
   });
 
   window.addEventListener("resize", scheduleNotation);
+}
+
+let tempoBoxTimer = null;
+let retimeFrame = 0;
+
+// Play the new tempo from the current spot instead of waiting for the loop to
+// come round again (a long groove could take half a minute).
+function retimeSoon() {
+  if (!transport.playing || retimeFrame) return;
+  retimeFrame = requestAnimationFrame(() => {
+    retimeFrame = 0;
+    transport.retime();
+  });
+}
+
+function setTempo(value) {
+  const tempo = Math.round(Math.min(M.MAX_TEMPO, Math.max(M.MIN_TEMPO, value)));
+  if (tempo === state.groove.tempo) return;
+  state.groove.tempo = tempo;
+  state.speed.base = null;
+  state.abcDirty = false;
+  paintChrome();
+  scheduleNotation();
+  writeUrl();
+  retimeSoon();
+}
+
+// Read the BPM box. While typing (partial) only a finished, in-range number is
+// used, so "1" on the way to "120" is ignored; otherwise it is clamped.
+function applyTempoBox({ partial = false } = {}) {
+  clearTimeout(tempoBoxTimer);
+  const box = $("tempoNum");
+  if (!box) return;
+  const raw = String(box.value).trim();
+  const value = Number(raw);
+  if (partial) {
+    if (!raw || !Number.isFinite(value) || value < M.MIN_TEMPO || value > M.MAX_TEMPO) return;
+    setTempo(value);
+    $("tempo").value = state.groove.tempo;
+    return;
+  }
+  setTempo(raw && Number.isFinite(value) ? value : state.groove.tempo);
+  box.value = state.groove.tempo;
+  $("tempo").value = state.groove.tempo;
 }
 
 function isSpace(event) {

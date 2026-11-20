@@ -394,6 +394,45 @@ export function fillMeasure(g, instrument, measureIndex, mode) {
   return next;
 }
 
+/** Grid slots that land on 8th notes (swung 8ths on 1/8 and 1/16 triplet grids). */
+export function eighthSlots(g) {
+  const npm = notesPerMeasure(g.division, g.top, g.bottom);
+  const slots = [];
+  const swung = g.division === 12 || g.division === 24;
+  const perQuarter = g.division / 4;
+  const step = g.division / 8;
+  for (let m = 0; m < g.measures; m++) {
+    for (let local = 0; local < npm; local++) {
+      let on;
+      if (swung) {
+        const inBeat = local % perQuarter;
+        on = inBeat === 0 || inBeat === (perQuarter * 2) / 3;
+      } else on = Number.isInteger(step) && step >= 1 && local % step === 0;
+      if (on) slots.push(m * npm + local);
+    }
+  }
+  return slots;
+}
+
+/** True when the cymbal row is exactly 8th notes of one sound (e.g. "normal" or "ride"). */
+export function hasEighths(g, value) {
+  const want = new Set(eighthSlots(g));
+  if (!want.size) return false;
+  for (let i = 0; i < g.hh.length; i++) {
+    if (want.has(i) ? g.hh[i] !== value : g.hh[i] != null) return false;
+  }
+  return true;
+}
+
+/** Fill the cymbal row with 8th notes of one sound across every measure, or clear it if it already is. */
+export function toggleEighths(g, value) {
+  const next = cloneGroove(g);
+  const clear = hasEighths(g, value);
+  const want = new Set(eighthSlots(g));
+  for (let i = 0; i < next.hh.length; i++) next.hh[i] = !clear && want.has(i) ? value : null;
+  return { groove: next, cleared: clear };
+}
+
 function withFoot(current, on) {
   const hasKick = current === "normal" || current === "both";
   const hasFoot = current === "splash" || current === "both";

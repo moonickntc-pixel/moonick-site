@@ -490,6 +490,12 @@ export function patternSlots(g, pattern, scope = "all", measureIndex = 0) {
   if (pattern === "quarters") {
     if (!Number.isInteger(perQuarter) || perQuarter < 1) return { error: "這個格子沒有 4 分的位置" };
   }
+  if (pattern === "eighth_upbeats") {
+    const step = g.division / 8;
+    if (swung) {
+      if (!Number.isInteger(perQuarter) || perQuarter < 1) return { error: "這個格子沒有反拍的位置" };
+    } else if (!Number.isInteger(step) || step < 1) return { error: "這個格子沒有反拍的位置" };
+  }
   const slots = [];
   for (let i = start; i < end; i++) {
     const local = i % npm;
@@ -500,6 +506,9 @@ export function patternSlots(g, pattern, scope = "all", measureIndex = 0) {
         const inBeat = local % perQuarter;
         on = inBeat === 0 || inBeat === (perQuarter * 2) / 3;
       } else on = local % (g.division / 8) === 0;
+    } else if (pattern === "eighth_upbeats") {
+      if (swung) on = local % perQuarter === (perQuarter * 2) / 3;
+      else on = local % perQuarter === g.division / 8;
     } else if (pattern === "sixteenths") on = local % (g.division / 16) === 0;
     else if (pattern === "downbeats") on = local % 2 === 0;
     else if (pattern === "upbeats") on = local % 2 === 1;
@@ -508,7 +517,7 @@ export function patternSlots(g, pattern, scope = "all", measureIndex = 0) {
   return { slots };
 }
 
-/** Fill (or clear) the cymbal row in one measure or every measure with one sound and pattern. */
+/** Fill sounds: 4分／8分／16分／downbeats／upbeats only write target slots and keep the rest. 全開 fills every slot in scope. 全清 clears every slot in scope. */
 export function fillCymbal(g, { sound, pattern, scope, measureIndex }) {
   const found = CYMBAL_FILL_SOUNDS.find(([id]) => id === sound);
   if (!found) return { error: "沒有這個音色" };
@@ -516,9 +525,42 @@ export function fillCymbal(g, { sound, pattern, scope, measureIndex }) {
   if (result.error) return result;
   const next = cloneGroove(g);
   const [start, end] = rangeForScope(g, scope, measureIndex);
-  const want = new Set(result.slots);
-  for (let i = start; i < end; i++) next.hh[i] = want.has(i) ? sound : null;
-  return { groove: next };
+  if (pattern === "all_off") {
+    for (let i = start; i < end; i++) next.hh[i] = null;
+    return { groove: next, mode: "clear" };
+  }
+  if (pattern === "all_on") {
+    for (let i = start; i < end; i++) next.hh[i] = sound;
+    return { groove: next, mode: "overwrite" };
+  }
+  for (const i of result.slots) next.hh[i] = sound;
+  return { groove: next, mode: "merge" };
+}
+
+export const CYMBAL_FILL_COMBOS = [
+  ["ride_down_bell_up", "Ride 正拍＋Bell 反拍"],
+  ["bell_down_ride_up", "Bell 正拍＋Ride 反拍"],
+  ["hat_down_open_up", "Hi-hat 閉合正拍＋開反拍"],
+];
+
+const CYMBAL_COMBO_SOUNDS = {
+  ride_down_bell_up: { down: "ride", up: "ride_bell" },
+  bell_down_ride_up: { down: "ride_bell", up: "ride" },
+  hat_down_open_up: { down: "normal", up: "open" },
+};
+
+/** One-tap 正拍／反拍 combos. 正拍 is the quarter-note beat; 反拍 is the 8th-note & (swung on triplet grids). Other slots are kept. */
+export function fillCymbalCombo(g, { combo, scope, measureIndex }) {
+  const pair = CYMBAL_COMBO_SOUNDS[combo];
+  if (!pair) return { error: "沒有這個組合" };
+  const down = patternSlots(g, "quarters", scope, measureIndex);
+  if (down.error) return down;
+  const up = patternSlots(g, "eighth_upbeats", scope, measureIndex);
+  if (up.error) return up;
+  const next = cloneGroove(g);
+  for (const i of down.slots) next.hh[i] = pair.down;
+  for (const i of up.slots) next.hh[i] = pair.up;
+  return { groove: next, mode: "merge" };
 }
 
 

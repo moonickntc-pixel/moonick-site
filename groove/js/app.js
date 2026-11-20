@@ -1,5 +1,5 @@
-import * as M from "./model.js?v=20261121a";
-import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261121a";
+import * as M from "./model.js?v=20261121b";
+import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261121b";
 
 const kit = createKit();
 const transport = createTransport(kit);
@@ -305,7 +305,7 @@ function paintGrid() {
   if (g.measures < M.MAX_MEASURES) {
     html += '<button type="button" class="add-measure" data-action="add-measure" aria-label="Add measure">+</button>';
   }
-  html += `</div><p class="hint">點格子寫音符。右鍵或按「進階」可以選重音、幽靈音、Rim-shot、半開、開完後閉合、只關沒打到、腳踩打開、Buzz。在 Hi-hat 名字上按右鍵（手機長按）可選 Ride、Cow Bell、Stacker 等音色，並填入 4 分／8 分／16 分或 downbeats、upbeats。每一格上方的空格可以打歌詞，中文或英文都行。混合 12 是每拍 12 點，混合 24 是每拍 24 點。</p>`;
+  html += `</div><p class="hint">點格子寫音符。右鍵或按「進階」可以選重音、幽靈音、Rim-shot、半開、開完後閉合、只關沒打到、腳踩打開、Buzz。在 Hi-hat 名字上按右鍵（手機長按）可選音色並填入 4 分／8 分／16 分或 downbeats、upbeats；也可一鍵填「Ride 正拍＋Bell 反拍」。填入只改對應位置，其他格子會留著。每一格上方的空格可以打歌詞，中文或英文都行。混合 12 是每拍 12 點，混合 24 是每拍 24 點。</p>`;
   $("grid").innerHTML = html;
   requestAnimationFrame(fitWritingArea);
 }
@@ -891,13 +891,19 @@ function cymbalMenuHtml(measure) {
         return `<button type="button" data-action="cymbal-fill" data-pattern="${id}" data-scope="${extra}" data-m="${measure}">${label}</button>`;
       })
       .join("");
+  const comboChips = (scope) =>
+    M.CYMBAL_FILL_COMBOS.map(
+      ([id, label]) => `<button type="button" data-action="cymbal-combo" data-combo="${id}" data-scope="${scope}" data-m="${measure}">${label}</button>`,
+    ).join("");
   return `
     <div class="group-label">音色</div>
     <div class="chip-row">${chips(M.CYMBAL_FILL_SOUNDS, "sound")}</div>
     <div class="group-label">這個小節</div>
     <div class="chip-row">${chips(M.CYMBAL_FILL_PATTERNS, "measure")}<button type="button" data-action="cymbal-mute" data-scope="measure" data-m="${measure}">靜音</button></div>
+    <div class="chip-row">${comboChips("measure")}</div>
     <div class="group-label">全部小節</div>
     <div class="chip-row">${chips(M.CYMBAL_FILL_PATTERNS, "all")}</div>
+    <div class="chip-row">${comboChips("all")}</div>
     <button type="button" data-action="close-float">cancel</button>`;
 }
 
@@ -928,7 +934,26 @@ function applyCymbalFill(el) {
   commit(result.groove);
   closeFloaters();
   const where = scope === "measure" ? "這個小節" : "全部小節";
-  toast(pattern === "all_off" ? `已清除鈸排（${where}）` : `已填入 ${cymbalPatternName(pattern)} ${cymbalSoundName(sound)}（${where}）`);
+  if (pattern === "all_off") toast(`已清除鈸排（${where}）`);
+  else if (pattern === "all_on") toast(`已全開 ${cymbalSoundName(sound)}（${where}）`);
+  else toast(`已填入 ${cymbalPatternName(pattern)} ${cymbalSoundName(sound)}（${where}，其他位置保留）`);
+}
+
+function applyCymbalCombo(el) {
+  const result = M.fillCymbalCombo(state.groove, {
+    combo: el.dataset.combo,
+    scope: el.dataset.scope,
+    measureIndex: Number(el.dataset.m),
+  });
+  if (result.error) {
+    toast(result.error);
+    return;
+  }
+  commit(result.groove);
+  closeFloaters();
+  const where = el.dataset.scope === "measure" ? "這個小節" : "全部小節";
+  const name = (M.CYMBAL_FILL_COMBOS.find(([id]) => id === el.dataset.combo) || [0, "組合"])[1];
+  toast(`已填入 ${name}（${where}，其他位置保留）`);
 }
 
 function openMenu(html, x, y) {
@@ -1182,7 +1207,7 @@ function openHelp(which) {
       <li><b>Right-click</b> a note (or Advanced edit, then tap) for open hats, ghosts, cross-stick, buzz, flam, drag, ride, crash, cowbell, and hi-hat foot.</li>
       <li><b>Ctrl and move</b> paints notes on. <b>Alt and move</b> turns them off.</li>
       <li>The <b>Hi-hat</b>, <b>Snare</b>, <b>Kick</b>, and <b>Stickings</b> names open a menu for that whole measure: all on, all off, ghosts, mute, hi-hat foot on the numbers or the &amp;s. Left-click still does this.</li>
-      <li><b>Right-click</b> the <b>Hi-hat</b> name (long-press on a phone) for a fill menu: pick a cymbal-row sound (Hi-hat, Ride, Ride Bell, Crash, Cow Bell, Stacker, and the other voices in the cell menu) and a pattern (4ths, 8ths, 16ths, downbeats, upbeats, all on, clear), for this bar or every bar.</li>
+      <li><b>Right-click</b> the <b>Hi-hat</b> name (long-press on a phone) for a fill menu: pick a cymbal-row sound (Hi-hat, Ride, Ride Bell, Crash, Cow Bell, Stacker, and the other voices in the cell menu) and a pattern (4ths, 8ths, 16ths, downbeats, upbeats, all on, clear), or a one-tap combo such as Ride on the beat and Bell on the &amp;s, for this bar or every bar. Pattern fills keep notes that are not in the pattern; only Clear wipes the row.</li>
       <li><b>MIX 12</b> is 12 dots per beat, so 16ths and 8th triplets can share a bar. <b>MIX 24</b> is 24 dots per beat, so sextuplets (六連音, every 4th dot) and octuplets (八連音, every 3rd dot) can share a bar.</li>
       <li><b>Words</b> sit on each timing point. Click the box and type English or Traditional Chinese. The syllable prints above that note and travels with the share link.</li>
       <li><b>Stickings</b> can be Off, Right, Left, R/L, or Count. Count prints the syllable (1 e &amp; a).</li>
@@ -1276,6 +1301,7 @@ function handleAction(el, event) {
     state.cymbalSound = el.dataset.sound;
     menu.innerHTML = cymbalMenuHtml(el.dataset.m);
   } else if (action === "cymbal-fill") applyCymbalFill(el);
+  else if (action === "cymbal-combo") applyCymbalCombo(el);
   else if (action === "cymbal-mute") {
     const scope = el.dataset.scope;
     const measure = Number(el.dataset.m);

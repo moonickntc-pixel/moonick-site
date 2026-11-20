@@ -1811,9 +1811,11 @@ function abcToken(g, idx) {
           ? "R/L"
           : g.sticking[idx]
       : "";
+  // Stickings always sit under the staff. Putting them above when there was no
+  // lyric made 16th-note R/L collide with neighbouring lyrics once the type grew.
   if (lyric && stick) token = `"^${lyric}""_${stick}"${token}`;
   else if (lyric) token = `"^${lyric}"${token}`;
-  else if (stick) token = `"^${stick}"${token}`;
+  else if (stick) token = `"_${stick}"${token}`;
   return token;
 }
 

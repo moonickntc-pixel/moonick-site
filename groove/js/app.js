@@ -1,5 +1,5 @@
-import * as M from "./model.js?v=20261121e";
-import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261121e";
+import * as M from "./model.js?v=20261121f";
+import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261121f";
 
 const kit = createKit();
 const transport = createTransport(kit);
@@ -500,6 +500,15 @@ function renderNotation() {
   const hostWidth = Math.max(280, $("sheetWrap").clientWidth - 16);
   const roomy = g.division <= 16;
   const narrow = window.innerWidth <= 520;
+  const compactType = window.innerWidth <= 600;
+  const hasAnnot =
+    (g.lyrics && g.lyrics.some((word) => String(word || "").trim())) ||
+    (g.showStickings && g.sticking && g.sticking.some(Boolean));
+  // abcjs default is 12pt, drawn as 16 units (then ~29px after the desktop fit).
+  // 18pt is 1.5×. 20pt already lifted a four-letter word into a second lane at 1280.
+  // Phones keep the default so the tighter systems do not get more crowded.
+  const annotSize = compactType ? 12 : 18;
+  const staffSep = !compactType && hasAnnot ? 16 : 8;
   const scale = narrow
     ? roomy ? 1.18 : g.division >= 48 ? 0.92 : 1.02
     : 1;
@@ -508,14 +517,21 @@ function renderNotation() {
   // Engraving narrower, then fitting, brings the lines and noteheads up to
   // about 75px — the size a teacher can read from a laptop.
   const width = narrow ? hostWidth : Math.round(Math.min(hostWidth, hostWidth * 0.56));
+  const sheetText = text
+    .replace(/%%staffsep \d+/, `%%staffsep ${staffSep}`)
+    .replace(/%%sysstaffsep \d+/, `%%sysstaffsep ${staffSep}`)
+    .replace(/\nK:C perc/, `\n%%annotationfont * ${annotSize}\nK:C perc`);
   try {
-    const tunes = window.ABCJS.renderAbc("sheet", text, {
+    const tunes = window.ABCJS.renderAbc("sheet", sheetText, {
       add_classes: true,
       accentAbove: true,
       staffwidth: width,
       paddingleft: 0,
       paddingright: 0,
       scale,
+      format: {
+        annotationfont: `* ${annotSize}`,
+      },
       wrap: {
         minSpacing: narrow ? (roomy ? 1.5 : 1.1) : g.division >= 24 ? 0.3 : roomy ? 0.8 : 0.5,
         maxSpacing: narrow ? (roomy ? 6 : 2.8) : g.division >= 24 ? 4 : roomy ? 8 : 6,
@@ -777,8 +793,8 @@ function revealStaffTop(svg) {
     maxY = Math.max(maxY, box.y + box.height);
   });
   if (!(minY < maxY) || !view.width) return;
-  const padTop = 3;
-  const padBottom = 5;
+  const padTop = window.innerWidth <= 600 ? 3 : 4;
+  const padBottom = window.innerWidth <= 600 ? 5 : 6;
   const nextY = minY - padTop;
   const nextH = maxY - minY + padTop + padBottom;
   const nextW = view.width;

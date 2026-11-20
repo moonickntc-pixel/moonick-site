@@ -798,6 +798,8 @@ export function countSyllable(g, index) {
 }
 
 const PITCH = {
+  // Treble-equivalent staff: Ride on the top (5th) line, Hi-hat in the space
+  // above the staff, Crash on the first ledger line above (the 6th line).
   kick: "F",
   foot: "D",
   tom3: "A",
@@ -808,9 +810,9 @@ const PITCH = {
   tom1: "e",
   hat: "g",
   hatOpen: "^g",
-  ride: "a",
-  rideBell: "^a",
-  crash: "b",
+  ride: "f",
+  rideBell: "^f",
+  crash: "a",
   cow: "^b",
   stack: "c'",
   click: "d'",
@@ -828,9 +830,9 @@ export function abcHeader() {
     "%%percmap e high-tom",
     "%%percmap g closed-hi-hat x",
     "%%percmap ^g open-hi-hat x",
-    "%%percmap a ride-cymbal-1 x",
-    "%%percmap ^a ride-bell harmonic",
-    "%%percmap b crash-cymbal-1 x",
+    "%%percmap f ride-cymbal-1 x",
+    "%%percmap ^f ride-bell harmonic",
+    "%%percmap a crash-cymbal-1 x",
     "%%percmap ^b cowbell triangle",
     "%%percmap c' chinese-cymbal x",
     "%%percmap d' hi-wood-block triangle",
@@ -1030,8 +1032,8 @@ export function staffMarks(g) {
     if (hh === "half") heads.g = { half: true };
     if (hh === "open") heads.g = { open: true };
     if (hh === "closed_plus") heads.g = { plus: true };
-    if (hh === "crash_tie") heads.b = { tie: true };
-    if (hh === "crash_roll") heads.b = { roll: true };
+    if (hh === "crash_tie") heads.a = { tie: true };
+    if (hh === "crash_roll") heads.a = { roll: true };
     if (placeholder) heads.g = { hide: true, plus: true };
     marks.push({ heads, floatPlus });
   }

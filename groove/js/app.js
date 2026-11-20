@@ -1,5 +1,5 @@
-import * as M from "./model.js?v=20261120a";
-import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261120a";
+import * as M from "./model.js?v=20261120b";
+import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261120b";
 
 const kit = createKit();
 const transport = createTransport(kit);
@@ -262,7 +262,18 @@ function paintGrid() {
     for (const [inst, name, shown] of rows) {
       const muted = g.mute[inst][m] ? " muted" : "";
       const hidden = shown ? "" : " slot-hidden";
-      labels.push(`<button type="button" class="${hidden}${muted}" data-label="${inst}" data-m="${m}">${name}</button>`);
+      if (inst === "hh") {
+        const hhOn = M.hasEighths(g, "normal") ? " on" : "";
+        const rideOn = M.hasEighths(g, "ride") ? " on" : "";
+        const hhTitle = "左鍵：這個小節的選單。右鍵或長按：8分 Hi-hat 填滿全部小節，再一次清除。";
+        const rideTitle = "左鍵：這個小節的選單。右鍵或長按：8分 Ride 填滿全部小節，再一次清除。";
+        labels.push(`<div class="cymbal-labels${hidden}">
+          <button type="button" class="${muted}${hhOn}" data-label="hh" data-m="${m}" data-eighths="normal" title="${hhTitle}">Hi-hat<span class="eighth-hint" aria-hidden="true">8</span></button>
+          <button type="button" class="${muted}${rideOn}" data-label="hh" data-m="${m}" data-eighths="ride" title="${rideTitle}">Ride<span class="eighth-hint" aria-hidden="true">8</span></button>
+        </div>`);
+      } else {
+        labels.push(`<button type="button" class="${hidden}${muted}" data-label="${inst}" data-m="${m}">${name}</button>`);
+      }
     }
     let cols = "";
     for (let s = 0; s < npm; s++) {
@@ -300,7 +311,7 @@ function paintGrid() {
   if (g.measures < M.MAX_MEASURES) {
     html += '<button type="button" class="add-measure" data-action="add-measure" aria-label="Add measure">+</button>';
   }
-  html += `</div><p class="hint">點格子寫音符。右鍵或按「進階」可以選重音、幽靈音、Rim-shot、半開、開完後閉合、只關沒打到、腳踩打開、Buzz。每一格上方的空格可以打歌詞，中文或英文都行。混合 12 是每拍 12 點，混合 24 是每拍 24 點。</p>`;
+  html += `</div><p class="hint">點格子寫音符。右鍵或按「進階」可以選重音、幽靈音、Rim-shot、半開、開完後閉合、只關沒打到、腳踩打開、Buzz。在 Hi-hat 或 Ride 名字上按右鍵（手機長按）可把全部小節填成 8 分音符，再一次清除。每一格上方的空格可以打歌詞，中文或英文都行。混合 12 是每拍 12 點，混合 24 是每拍 24 點。</p>`;
   $("grid").innerHTML = html;
   requestAnimationFrame(fitWritingArea);
 }
@@ -873,6 +884,14 @@ function defaultOn(inst) {
   return "normal";
 }
 
+function applyEighths(value) {
+  closeFloaters();
+  const result = M.toggleEighths(state.groove, value);
+  commit(result.groove);
+  const name = value === "ride" ? "Ride" : "Hi-hat";
+  toast(result.cleared ? `已清除 8 分 ${name}` : `已填入 8 分 ${name}（全部小節）`);
+}
+
 function openMenu(html, x, y) {
   popover.hidden = true;
   menu.innerHTML = html;
@@ -1122,7 +1141,8 @@ function openHelp(which) {
       <li><b>Click</b> a grid note to turn the usual voice on or off. Snare clicks land as accents, the way a backbeat is written.</li>
       <li><b>Right-click</b> a note (or Advanced edit, then tap) for open hats, ghosts, cross-stick, buzz, flam, drag, ride, crash, cowbell, and hi-hat foot.</li>
       <li><b>Ctrl and move</b> paints notes on. <b>Alt and move</b> turns them off.</li>
-      <li>The <b>Hi-hat</b>, <b>Snare</b>, <b>Kick</b>, and <b>Stickings</b> names open a menu for that whole measure: all on, all off, ghosts, mute, hi-hat foot on the numbers or the &amp;s.</li>
+      <li>The <b>Hi-hat</b>, <b>Snare</b>, <b>Kick</b>, and <b>Stickings</b> names open a menu for that whole measure: all on, all off, ghosts, mute, hi-hat foot on the numbers or the &amp;s. Left-click still does this.</li>
+      <li><b>Right-click</b> the <b>Hi-hat</b> or <b>Ride</b> name (long-press on a phone) to fill every bar with 8th notes of that sound; do it again to clear. The two sounds replace each other. A small 8 on the name shows this, and lights up when the row is filled.</li>
       <li><b>MIX 12</b> is 12 dots per beat, so 16ths and 8th triplets can share a bar. <b>MIX 24</b> is 24 dots per beat, so sextuplets (六連音, every 4th dot) and octuplets (八連音, every 3rd dot) can share a bar.</li>
       <li><b>Words</b> sit on each timing point. Click the box and type English or Traditional Chinese. The syllable prints above that note and travels with the share link.</li>
       <li><b>Stickings</b> can be Off, Right, Left, R/L, or Count. Count prints the syllable (1 e &amp; a).</li>
@@ -1212,13 +1232,7 @@ function handleAction(el, event) {
   } else if (action === "undo") undo();
   else if (action === "redo") redo();
   else if (action === "play") togglePlay();
-  else if (action === "eighths") {
-    const value = el.dataset.eighths;
-    const result = M.toggleEighths(state.groove, value);
-    commit(result.groove);
-    const name = value === "ride" ? "Ride" : "Hi-hat";
-    toast(result.cleared ? `已清除 8 分 ${name}` : `已填入 8 分 ${name}（全部小節）`);
-  }
+  else if (action === "eighths") applyEighths(el.dataset.eighths);
   else if (action === "loop") {
     transport.looping = !transport.looping;
     paintChrome();
@@ -1476,6 +1490,7 @@ function onMetro(rate) {
 }
 
 let pressTimer = 0;
+let eighthsHeld = false;
 const SCHOOLS = {
   rhythm: {
     name: "節奏感",
@@ -1595,6 +1610,10 @@ function boot() {
     }
     const label = event.target.closest("[data-label]");
     if (label) {
+      if (state.suppressClick) {
+        state.suppressClick = false;
+        return;
+      }
       openLabelMenu(label, event);
       return;
     }
@@ -1612,6 +1631,18 @@ function boot() {
   });
 
   $("grid").addEventListener("contextmenu", (event) => {
+    const eighthsLabel = event.target.closest("[data-eighths]");
+    if (eighthsLabel) {
+      event.preventDefault();
+      clearTimeout(pressTimer);
+      if (eighthsHeld) {
+        eighthsHeld = false;
+        return;
+      }
+      state.suppressClick = true;
+      applyEighths(eighthsLabel.dataset.eighths);
+      return;
+    }
     const cell = event.target.closest(".cell");
     if (!cell) return;
     event.preventDefault();
@@ -1619,6 +1650,18 @@ function boot() {
   });
 
   $("grid").addEventListener("pointerdown", (event) => {
+    const eighthsLabel = event.target.closest("[data-eighths]");
+    if (eighthsLabel && event.pointerType !== "mouse") {
+      state.suppressClick = false;
+      eighthsHeld = false;
+      clearTimeout(pressTimer);
+      pressTimer = setTimeout(() => {
+        state.suppressClick = true;
+        eighthsHeld = true;
+        applyEighths(eighthsLabel.dataset.eighths);
+      }, 500);
+      return;
+    }
     const cell = event.target.closest(".cell");
     if (!cell || event.pointerType === "mouse") return;
     state.suppressClick = false;
@@ -1632,6 +1675,9 @@ function boot() {
     $("grid").addEventListener(type, (event) => {
       if (type === "pointermove" && event.pointerType === "mouse") return;
       clearTimeout(pressTimer);
+      if ((type === "pointerup" || type === "pointercancel") && eighthsHeld) {
+        setTimeout(() => { eighthsHeld = false; }, 400);
+      }
     });
   });
   $("grid").addEventListener("pointerover", (event) => {

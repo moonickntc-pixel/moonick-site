@@ -850,16 +850,50 @@ body.viewing #viewBtn { display: flex; }
 #playBtn svg, #loopBtn svg { pointer-events: none; }
 .tool b, .tool small, .tool i { pointer-events: none; }
 
-/* 快速 8 分 Hi-hat／Ride：已填滿時亮起，再按一次清除 */
-.tool.quick-eighths small { white-space: nowrap; }
-.tool.quick-eighths.on,
-html[data-school] .tool.quick-eighths.on {
+/* Hi-hat／Ride 列名：右鍵或長按填滿 8 分；小 8 記號在已填滿時亮起 */
+.labels .cymbal-labels {
+  height: var(--cell-h, 58px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: none;
+}
+.labels .cymbal-labels button {
+  height: auto;
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.labels .eighth-hint {
+  flex: none;
+  font-size: 0.68em;
+  font-weight: 700;
+  opacity: 0.45;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  padding: 0 3px;
+  line-height: 1.25;
+}
+.labels button[data-eighths].on,
+html[data-school] .labels button[data-eighths].on {
+  color: var(--accent, #c48a12);
+}
+.labels button[data-eighths].on .eighth-hint,
+html[data-school] .labels button[data-eighths].on .eighth-hint {
+  opacity: 1;
   background: var(--accent, #e8b04a);
   color: var(--accent-text, #1d1d1d);
+  border-color: transparent;
 }
 
 @media (max-width: 520px) {
-  /* 手機：工具列緊接在格子下方，快速填入不用往下捲 */
+  /* 手機：工具列緊接在格子下方，不用往下捲才找得到 */
   #toolbar { order: 4; }
   #meta { order: 5; }
   #toolbar .tool { flex: 1 1 30%; }

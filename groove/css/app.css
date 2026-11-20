@@ -850,18 +850,8 @@ body.viewing #viewBtn { display: flex; }
 #playBtn svg, #loopBtn svg { pointer-events: none; }
 .tool b, .tool small, .tool i { pointer-events: none; }
 
-/* Hi-hat／Ride 列名：右鍵或長按填滿 8 分；小 8 記號在已填滿時亮起 */
-.labels .cymbal-labels {
-  height: var(--cell-h, 58px);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  flex: none;
-}
-.labels .cymbal-labels button {
-  height: auto;
-  flex: 1 1 0;
-  min-height: 0;
+/* Hi-hat 列名：右鍵或長按打開填法選單 */
+.labels button.cymbal-label {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -870,23 +860,36 @@ body.viewing #viewBtn { display: flex; }
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
-.labels .eighth-hint {
+.labels .cymbal-hint {
   flex: none;
-  font-size: 0.68em;
+  font-size: 0.85em;
   font-weight: 700;
-  opacity: 0.45;
-  border: 1px solid currentColor;
-  border-radius: 3px;
-  padding: 0 3px;
-  line-height: 1.25;
+  opacity: 0.4;
+  line-height: 1;
+  letter-spacing: -0.08em;
 }
-.labels button[data-eighths].on,
-html[data-school] .labels button[data-eighths].on {
-  color: var(--accent, #c48a12);
+.menu.cymbal-menu {
+  min-width: min(300px, calc(100vw - 16px));
+  max-width: min(360px, calc(100vw - 16px));
+  max-height: min(80vh, 640px);
+  overflow: auto;
 }
-.labels button[data-eighths].on .eighth-hint,
-html[data-school] .labels button[data-eighths].on .eighth-hint {
-  opacity: 1;
+.menu .chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 2px 6px 8px;
+}
+.menu .chip-row button {
+  display: inline-block;
+  width: auto;
+  padding: 5px 8px;
+  font-size: 13px;
+  border: 1px solid #ddd;
+  border-radius: 999px;
+}
+.menu .chip-row button.on,
+html[data-school] .menu .chip-row button.on {
   background: var(--accent, #e8b04a);
   color: var(--accent-text, #1d1d1d);
   border-color: transparent;

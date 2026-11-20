@@ -1,5 +1,5 @@
-import * as M from "./model.js?v=20261120b";
-import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261120b";
+import * as M from "./model.js?v=20261121a";
+import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261121a";
 
 const kit = createKit();
 const transport = createTransport(kit);
@@ -263,14 +263,8 @@ function paintGrid() {
       const muted = g.mute[inst][m] ? " muted" : "";
       const hidden = shown ? "" : " slot-hidden";
       if (inst === "hh") {
-        const hhOn = M.hasEighths(g, "normal") ? " on" : "";
-        const rideOn = M.hasEighths(g, "ride") ? " on" : "";
-        const hhTitle = "左鍵：這個小節的選單。右鍵或長按：8分 Hi-hat 填滿全部小節，再一次清除。";
-        const rideTitle = "左鍵：這個小節的選單。右鍵或長按：8分 Ride 填滿全部小節，再一次清除。";
-        labels.push(`<div class="cymbal-labels${hidden}">
-          <button type="button" class="${muted}${hhOn}" data-label="hh" data-m="${m}" data-eighths="normal" title="${hhTitle}">Hi-hat<span class="eighth-hint" aria-hidden="true">8</span></button>
-          <button type="button" class="${muted}${rideOn}" data-label="hh" data-m="${m}" data-eighths="ride" title="${rideTitle}">Ride<span class="eighth-hint" aria-hidden="true">8</span></button>
-        </div>`);
+        const title = "左鍵：這個小節的選單。右鍵或長按：選音色（Ride、Cow Bell、Stacker…）並填入常見節奏。";
+        labels.push(`<button type="button" class="cymbal-label${hidden}${muted}" data-label="hh" data-m="${m}" data-cymbal-menu="1" title="${title}">Hi-hat<span class="cymbal-hint" aria-hidden="true">⋯</span></button>`);
       } else {
         labels.push(`<button type="button" class="${hidden}${muted}" data-label="${inst}" data-m="${m}">${name}</button>`);
       }
@@ -311,7 +305,7 @@ function paintGrid() {
   if (g.measures < M.MAX_MEASURES) {
     html += '<button type="button" class="add-measure" data-action="add-measure" aria-label="Add measure">+</button>';
   }
-  html += `</div><p class="hint">點格子寫音符。右鍵或按「進階」可以選重音、幽靈音、Rim-shot、半開、開完後閉合、只關沒打到、腳踩打開、Buzz。在 Hi-hat 或 Ride 名字上按右鍵（手機長按）可把全部小節填成 8 分音符，再一次清除。每一格上方的空格可以打歌詞，中文或英文都行。混合 12 是每拍 12 點，混合 24 是每拍 24 點。</p>`;
+  html += `</div><p class="hint">點格子寫音符。右鍵或按「進階」可以選重音、幽靈音、Rim-shot、半開、開完後閉合、只關沒打到、腳踩打開、Buzz。在 Hi-hat 名字上按右鍵（手機長按）可選 Ride、Cow Bell、Stacker 等音色，並填入 4 分／8 分／16 分或 downbeats、upbeats。每一格上方的空格可以打歌詞，中文或英文都行。混合 12 是每拍 12 點，混合 24 是每拍 24 點。</p>`;
   $("grid").innerHTML = html;
   requestAnimationFrame(fitWritingArea);
 }
@@ -884,12 +878,57 @@ function defaultOn(inst) {
   return "normal";
 }
 
-function applyEighths(value) {
-  closeFloaters();
-  const result = M.toggleEighths(state.groove, value);
+function cymbalMenuHtml(measure) {
+  if (!state.cymbalSound) state.cymbalSound = "normal";
+  const sound = state.cymbalSound;
+  const chips = (items, extra) =>
+    items
+      .map(([id, label]) => {
+        const on = extra === "sound" && id === sound ? " on" : "";
+        if (extra === "sound") {
+          return `<button type="button" class="${on}" data-action="cymbal-sound" data-sound="${id}" data-m="${measure}">${label}</button>`;
+        }
+        return `<button type="button" data-action="cymbal-fill" data-pattern="${id}" data-scope="${extra}" data-m="${measure}">${label}</button>`;
+      })
+      .join("");
+  return `
+    <div class="group-label">音色</div>
+    <div class="chip-row">${chips(M.CYMBAL_FILL_SOUNDS, "sound")}</div>
+    <div class="group-label">這個小節</div>
+    <div class="chip-row">${chips(M.CYMBAL_FILL_PATTERNS, "measure")}<button type="button" data-action="cymbal-mute" data-scope="measure" data-m="${measure}">靜音</button></div>
+    <div class="group-label">全部小節</div>
+    <div class="chip-row">${chips(M.CYMBAL_FILL_PATTERNS, "all")}</div>
+    <button type="button" data-action="close-float">cancel</button>`;
+}
+
+function openCymbalMenu(button, event) {
+  const x = event.clientX || (button.getBoundingClientRect().right);
+  const y = event.clientY || (button.getBoundingClientRect().bottom);
+  menu.classList.add("cymbal-menu");
+  openMenu(cymbalMenuHtml(button.dataset.m), x, y);
+}
+
+function cymbalSoundName(id) {
+  return (M.CYMBAL_FILL_SOUNDS.find(([value]) => value === id) || [id, id])[1];
+}
+
+function cymbalPatternName(id) {
+  return (M.CYMBAL_FILL_PATTERNS.find(([value]) => value === id) || [id, id])[1];
+}
+
+function applyCymbalFill(el) {
+  const sound = state.cymbalSound || "normal";
+  const pattern = el.dataset.pattern;
+  const scope = el.dataset.scope;
+  const result = M.fillCymbal(state.groove, { sound, pattern, scope, measureIndex: Number(el.dataset.m) });
+  if (result.error) {
+    toast(result.error);
+    return;
+  }
   commit(result.groove);
-  const name = value === "ride" ? "Ride" : "Hi-hat";
-  toast(result.cleared ? `已清除 8 分 ${name}` : `已填入 8 分 ${name}（全部小節）`);
+  closeFloaters();
+  const where = scope === "measure" ? "這個小節" : "全部小節";
+  toast(pattern === "all_off" ? `已清除鈸排（${where}）` : `已填入 ${cymbalPatternName(pattern)} ${cymbalSoundName(sound)}（${where}）`);
 }
 
 function openMenu(html, x, y) {
@@ -976,6 +1015,7 @@ function openLabelMenu(button, event) {
 
 function closeFloaters() {
   menu.hidden = true;
+  menu.classList.remove("cymbal-menu");
   popover.hidden = true;
 }
 
@@ -1142,7 +1182,7 @@ function openHelp(which) {
       <li><b>Right-click</b> a note (or Advanced edit, then tap) for open hats, ghosts, cross-stick, buzz, flam, drag, ride, crash, cowbell, and hi-hat foot.</li>
       <li><b>Ctrl and move</b> paints notes on. <b>Alt and move</b> turns them off.</li>
       <li>The <b>Hi-hat</b>, <b>Snare</b>, <b>Kick</b>, and <b>Stickings</b> names open a menu for that whole measure: all on, all off, ghosts, mute, hi-hat foot on the numbers or the &amp;s. Left-click still does this.</li>
-      <li><b>Right-click</b> the <b>Hi-hat</b> or <b>Ride</b> name (long-press on a phone) to fill every bar with 8th notes of that sound; do it again to clear. The two sounds replace each other. A small 8 on the name shows this, and lights up when the row is filled.</li>
+      <li><b>Right-click</b> the <b>Hi-hat</b> name (long-press on a phone) for a fill menu: pick a cymbal-row sound (Hi-hat, Ride, Ride Bell, Crash, Cow Bell, Stacker, and the other voices in the cell menu) and a pattern (4ths, 8ths, 16ths, downbeats, upbeats, all on, clear), for this bar or every bar.</li>
       <li><b>MIX 12</b> is 12 dots per beat, so 16ths and 8th triplets can share a bar. <b>MIX 24</b> is 24 dots per beat, so sextuplets (六連音, every 4th dot) and octuplets (八連音, every 3rd dot) can share a bar.</li>
       <li><b>Words</b> sit on each timing point. Click the box and type English or Traditional Chinese. The syllable prints above that note and travels with the share link.</li>
       <li><b>Stickings</b> can be Off, Right, Left, R/L, or Count. Count prints the syllable (1 e &amp; a).</li>
@@ -1232,7 +1272,21 @@ function handleAction(el, event) {
   } else if (action === "undo") undo();
   else if (action === "redo") redo();
   else if (action === "play") togglePlay();
-  else if (action === "eighths") applyEighths(el.dataset.eighths);
+  else if (action === "cymbal-sound") {
+    state.cymbalSound = el.dataset.sound;
+    menu.innerHTML = cymbalMenuHtml(el.dataset.m);
+  } else if (action === "cymbal-fill") applyCymbalFill(el);
+  else if (action === "cymbal-mute") {
+    const scope = el.dataset.scope;
+    const measure = Number(el.dataset.m);
+    let next = M.cloneGroove(state.groove);
+    if (scope === "all") {
+      for (let m = 0; m < next.measures; m++) next = M.toggleMute(next, "hh", m);
+    } else next = M.toggleMute(state.groove, "hh", measure);
+    commit(next);
+    closeFloaters();
+    toast("已切換 Hi-hat 靜音");
+  }
   else if (action === "loop") {
     transport.looping = !transport.looping;
     paintChrome();
@@ -1631,8 +1685,8 @@ function boot() {
   });
 
   $("grid").addEventListener("contextmenu", (event) => {
-    const eighthsLabel = event.target.closest("[data-eighths]");
-    if (eighthsLabel) {
+    const cymbalLabel = event.target.closest("[data-cymbal-menu]");
+    if (cymbalLabel) {
       event.preventDefault();
       clearTimeout(pressTimer);
       if (eighthsHeld) {
@@ -1640,7 +1694,7 @@ function boot() {
         return;
       }
       state.suppressClick = true;
-      applyEighths(eighthsLabel.dataset.eighths);
+      openCymbalMenu(cymbalLabel, event);
       return;
     }
     const cell = event.target.closest(".cell");
@@ -1650,15 +1704,15 @@ function boot() {
   });
 
   $("grid").addEventListener("pointerdown", (event) => {
-    const eighthsLabel = event.target.closest("[data-eighths]");
-    if (eighthsLabel && event.pointerType !== "mouse") {
+    const cymbalLabel = event.target.closest("[data-cymbal-menu]");
+    if (cymbalLabel && event.pointerType !== "mouse") {
       state.suppressClick = false;
       eighthsHeld = false;
       clearTimeout(pressTimer);
       pressTimer = setTimeout(() => {
         state.suppressClick = true;
         eighthsHeld = true;
-        applyEighths(eighthsLabel.dataset.eighths);
+        openCymbalMenu(cymbalLabel, event);
       }, 500);
       return;
     }

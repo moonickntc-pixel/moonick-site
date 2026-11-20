@@ -433,6 +433,95 @@ export function toggleEighths(g, value) {
   return { groove: next, cleared: clear };
 }
 
+/** Cymbal-row sounds offered in the label fill menu (same names as the cell menu, minus Off). */
+export const CYMBAL_FILL_SOUNDS = [
+  ["normal", "Hi-hat normal"],
+  ["half", "半開"],
+  ["open", "開"],
+  ["closed_plus", "開完後閉合"],
+  ["foot_only", "只關沒打到"],
+  ["accent", "Hi-hat accent"],
+  ["crash", "Crash"],
+  ["crash_tie", "Crash 延音"],
+  ["crash_roll", "Crash 滾奏"],
+  ["ride", "Ride"],
+  ["ride_bell", "Ride Bell"],
+  ["cow_bell", "Cow Bell"],
+  ["stacker", "Stacker"],
+  ["click", "Click"],
+  ["click_accent", "Click - accent"],
+];
+
+export const CYMBAL_FILL_PATTERNS = [
+  ["quarters", "4分"],
+  ["eighths", "8分"],
+  ["sixteenths", "16分"],
+  ["downbeats", "downbeats"],
+  ["upbeats", "upbeats"],
+  ["all_on", "全開"],
+  ["all_off", "全清"],
+];
+
+function rangeForScope(g, scope, measureIndex) {
+  if (scope === "measure") return measureRange(g, Number(measureIndex));
+  return [0, g.hh.length];
+}
+
+/** Slots to turn on for a fill pattern, or {error} when the grid has no such positions. */
+export function patternSlots(g, pattern, scope = "all", measureIndex = 0) {
+  const [start, end] = rangeForScope(g, scope, measureIndex);
+  if (pattern === "all_off") return { slots: [] };
+  if (pattern === "all_on") {
+    const slots = [];
+    for (let i = start; i < end; i++) slots.push(i);
+    return { slots };
+  }
+  const npm = notesPerMeasure(g.division, g.top, g.bottom);
+  const perQuarter = g.division / 4;
+  const swung = g.division === 12 || g.division === 24;
+  if (pattern === "sixteenths") {
+    const step = g.division / 16;
+    if (!Number.isInteger(step) || step < 1) return { error: "這個格子沒有 16 分的位置" };
+  }
+  if (pattern === "eighths" && !swung) {
+    const step = g.division / 8;
+    if (!Number.isInteger(step) || step < 1) return { error: "這個格子沒有 8 分的位置" };
+  }
+  if (pattern === "quarters") {
+    if (!Number.isInteger(perQuarter) || perQuarter < 1) return { error: "這個格子沒有 4 分的位置" };
+  }
+  const slots = [];
+  for (let i = start; i < end; i++) {
+    const local = i % npm;
+    let on = false;
+    if (pattern === "quarters") on = local % perQuarter === 0;
+    else if (pattern === "eighths") {
+      if (swung) {
+        const inBeat = local % perQuarter;
+        on = inBeat === 0 || inBeat === (perQuarter * 2) / 3;
+      } else on = local % (g.division / 8) === 0;
+    } else if (pattern === "sixteenths") on = local % (g.division / 16) === 0;
+    else if (pattern === "downbeats") on = local % 2 === 0;
+    else if (pattern === "upbeats") on = local % 2 === 1;
+    if (on) slots.push(i);
+  }
+  return { slots };
+}
+
+/** Fill (or clear) the cymbal row in one measure or every measure with one sound and pattern. */
+export function fillCymbal(g, { sound, pattern, scope, measureIndex }) {
+  const found = CYMBAL_FILL_SOUNDS.find(([id]) => id === sound);
+  if (!found) return { error: "沒有這個音色" };
+  const result = patternSlots(g, pattern, scope, measureIndex);
+  if (result.error) return result;
+  const next = cloneGroove(g);
+  const [start, end] = rangeForScope(g, scope, measureIndex);
+  const want = new Set(result.slots);
+  for (let i = start; i < end; i++) next.hh[i] = want.has(i) ? sound : null;
+  return { groove: next };
+}
+
+
 function withFoot(current, on) {
   const hasKick = current === "normal" || current === "both";
   const hasFoot = current === "splash" || current === "both";

@@ -871,7 +871,7 @@ body.viewing #viewBtn { display: flex; }
 .menu.cymbal-menu {
   min-width: min(300px, calc(100vw - 16px));
   max-width: min(360px, calc(100vw - 16px));
-  max-height: min(80vh, 640px);
+  max-height: min(88vh, 720px);
   overflow: auto;
 }
 .menu .chip-row {

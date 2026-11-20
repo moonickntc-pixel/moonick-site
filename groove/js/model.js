@@ -25,12 +25,19 @@ export const HH_ARTICULATIONS = [
   ["foot_only", "只關沒打到"],
   ["accent", "Hi-hat accent"],
   ["crash", "Crash"],
+  ["crash_accent", "Crash accent"],
   ["crash_tie", "Crash 延音"],
+  ["crash_tie_accent", "Crash 延音 accent"],
   ["crash_roll", "Crash 滾奏"],
+  ["crash_roll_accent", "Crash 滾奏 accent"],
   ["ride", "Ride"],
+  ["ride_accent", "Ride accent"],
   ["ride_bell", "Ride Bell"],
+  ["ride_bell_accent", "Ride Bell accent"],
   ["cow_bell", "Cow Bell"],
+  ["cow_bell_accent", "Cow Bell accent"],
   ["stacker", "Stacker"],
+  ["stacker_accent", "Stacker accent"],
   ["click", "Click"],
   ["click_accent", "Click - accent"],
 ];
@@ -563,6 +570,66 @@ export function fillCymbalCombo(g, { combo, scope, measureIndex }) {
   return { groove: next, mode: "merge" };
 }
 
+/** Down-up 重輕重輕 presets. 8分: quarter-note beats heavy, 8th &s light (swung on 12/24). 16分: 8th positions heavy, 16th e/a light. 16分 is refused when the grid has no 16th slots (including triplet 12/24). Other slots are kept. */
+export const CYMBAL_FILL_DYNAMICS = [
+  ["eighths", "Down-up 重輕重輕 8分"],
+  ["sixteenths", "Down-up 重輕重輕 16分"],
+];
+
+const HH_DOWNUP_FAMILY = new Set(["normal", "half", "open", "closed_plus", "foot_only", "accent"]);
+const CYMBAL_ACCENT_OF = {
+  ride: "ride_accent",
+  ride_bell: "ride_bell_accent",
+  cow_bell: "cow_bell_accent",
+  stacker: "stacker_accent",
+  crash: "crash_accent",
+  crash_tie: "crash_tie_accent",
+  crash_roll: "crash_roll_accent",
+};
+const CYMBAL_WEAK_OF = Object.fromEntries(Object.entries(CYMBAL_ACCENT_OF).map(([weak, strong]) => [strong, weak]));
+
+export const CYMBAL_ACCENT_KINDS = new Set([
+  "accent",
+  "click_accent",
+  ...Object.values(CYMBAL_ACCENT_OF),
+]);
+
+/** Strong/weak articulations for a Down-up fill from the selected fill-menu sound. */
+export function downUpPair(sound) {
+  if (HH_DOWNUP_FAMILY.has(sound)) return { strong: "accent", weak: "normal" };
+  if (sound === "click" || sound === "click_accent") return { strong: "click_accent", weak: "click" };
+  if (CYMBAL_ACCENT_OF[sound]) return { strong: CYMBAL_ACCENT_OF[sound], weak: sound };
+  if (CYMBAL_WEAK_OF[sound]) return { strong: sound, weak: CYMBAL_WEAK_OF[sound] };
+  return null;
+}
+
+export function fillCymbalDownUp(g, { sound, pattern, scope, measureIndex }) {
+  const pair = downUpPair(sound);
+  if (!pair) return { error: "沒有這個音色" };
+  if (pattern !== "eighths" && pattern !== "sixteenths") return { error: "沒有這個節奏" };
+  if (pattern === "eighths") {
+    const strong = patternSlots(g, "quarters", scope, measureIndex);
+    if (strong.error) return strong;
+    const weak = patternSlots(g, "eighth_upbeats", scope, measureIndex);
+    if (weak.error) return weak;
+    const next = cloneGroove(g);
+    for (const i of strong.slots) next.hh[i] = pair.strong;
+    for (const i of weak.slots) next.hh[i] = pair.weak;
+    return { groove: next, mode: "merge", pair };
+  }
+  const sixteenths = patternSlots(g, "sixteenths", scope, measureIndex);
+  if (sixteenths.error) return sixteenths;
+  const eighths = patternSlots(g, "eighths", scope, measureIndex);
+  if (eighths.error) return eighths;
+  const heavy = new Set(eighths.slots);
+  const next = cloneGroove(g);
+  for (const i of eighths.slots) next.hh[i] = pair.strong;
+  for (const i of sixteenths.slots) {
+    if (!heavy.has(i)) next.hh[i] = pair.weak;
+  }
+  return { groove: next, mode: "merge", pair };
+}
+
 
 function withFoot(current, on) {
   const hasKick = current === "normal" || current === "both";
@@ -603,9 +670,16 @@ const HH_TO_CHAR = {
   crash_tie: "t",
   crash_roll: "w",
   ride: "r",
+  ride_accent: "R",
   ride_bell: "B",
+  ride_bell_accent: "E",
   cow_bell: "m",
+  cow_bell_accent: "M",
   stacker: "s",
+  stacker_accent: "S",
+  crash_accent: "C",
+  crash_tie_accent: "T",
+  crash_roll_accent: "W",
   click: "n",
   click_accent: "N",
 };
@@ -1177,7 +1251,7 @@ function abcToken(g, idx) {
   const hh = g.hh[idx];
   let token = parts.length === 0 ? "z" : parts.length === 1 ? parts[0] : `[${parts.join("")}]`;
   const decos = [];
-  if (snare === "accent" || hh === "accent" || hh === "click_accent") decos.push("!accent!");
+  if (snare === "accent" || CYMBAL_ACCENT_KINDS.has(hh)) decos.push("!accent!");
   token = decos.join("") + token;
   if (snare === "flam") token = "{/c}" + token;
   if (snare === "drag") token = "{/cc}" + token;
@@ -1216,16 +1290,23 @@ function hhPitch(kind) {
     case "accent":
       return PITCH.hat;
     case "crash":
+    case "crash_accent":
     case "crash_tie":
+    case "crash_tie_accent":
     case "crash_roll":
+    case "crash_roll_accent":
       return PITCH.crash;
     case "ride":
+    case "ride_accent":
       return PITCH.ride;
     case "ride_bell":
+    case "ride_bell_accent":
       return PITCH.rideBell;
     case "cow_bell":
+    case "cow_bell_accent":
       return PITCH.cow;
     case "stacker":
+    case "stacker_accent":
       return PITCH.stack;
     case "click":
       return PITCH.click;
@@ -1351,21 +1432,41 @@ function addHat(kind, push) {
     case "crash_tie":
       push("crash", 110);
       break;
+    case "crash_accent":
+    case "crash_tie_accent":
+      push("crash", 124);
+      break;
     case "crash_roll":
       push("crash", 104);
       push("crash", 88, 0.06);
       break;
+    case "crash_roll_accent":
+      push("crash", 122);
+      push("crash", 100, 0.06);
+      break;
     case "ride":
       push("ride", 96);
+      break;
+    case "ride_accent":
+      push("ride", 122);
       break;
     case "ride_bell":
       push("rideBell", 108);
       break;
+    case "ride_bell_accent":
+      push("rideBell", 124);
+      break;
     case "cow_bell":
       push("cow", 110);
       break;
+    case "cow_bell_accent":
+      push("cow", 124);
+      break;
     case "stacker":
       push("stack", 100);
+      break;
+    case "stacker_accent":
+      push("stack", 122);
       break;
     case "click":
       push("clickSoft", 100);

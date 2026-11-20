@@ -1,5 +1,5 @@
-import * as M from "./model.js?v=20261121b";
-import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261121b";
+import * as M from "./model.js?v=20261121c";
+import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261121c";
 
 const kit = createKit();
 const transport = createTransport(kit);
@@ -263,7 +263,7 @@ function paintGrid() {
       const muted = g.mute[inst][m] ? " muted" : "";
       const hidden = shown ? "" : " slot-hidden";
       if (inst === "hh") {
-        const title = "左鍵：這個小節的選單。右鍵或長按：選音色（Ride、Cow Bell、Stacker…）並填入常見節奏。";
+        const title = "左鍵、右鍵或長按：打開同一個選單，可選音色並填入常見節奏（含 Down-up 重輕重輕）。";
         labels.push(`<button type="button" class="cymbal-label${hidden}${muted}" data-label="hh" data-m="${m}" data-cymbal-menu="1" title="${title}">Hi-hat<span class="cymbal-hint" aria-hidden="true">⋯</span></button>`);
       } else {
         labels.push(`<button type="button" class="${hidden}${muted}" data-label="${inst}" data-m="${m}">${name}</button>`);
@@ -305,7 +305,7 @@ function paintGrid() {
   if (g.measures < M.MAX_MEASURES) {
     html += '<button type="button" class="add-measure" data-action="add-measure" aria-label="Add measure">+</button>';
   }
-  html += `</div><p class="hint">點格子寫音符。右鍵或按「進階」可以選重音、幽靈音、Rim-shot、半開、開完後閉合、只關沒打到、腳踩打開、Buzz。在 Hi-hat 名字上按右鍵（手機長按）可選音色並填入 4 分／8 分／16 分或 downbeats、upbeats；也可一鍵填「Ride 正拍＋Bell 反拍」。填入只改對應位置，其他格子會留著。每一格上方的空格可以打歌詞，中文或英文都行。混合 12 是每拍 12 點，混合 24 是每拍 24 點。</p>`;
+  html += `</div><p class="hint">點格子寫音符。右鍵或按「進階」可以選重音、幽靈音、Rim-shot、半開、開完後閉合、只關沒打到、腳踩打開、Buzz。在 Hi-hat 名字上按左鍵、右鍵或長按，都會打開同一個選單：可選音色並填入 4 分／8 分／16 分、downbeats、upbeats，或 Down-up 重輕重輕；也可一鍵填「Ride 正拍＋Bell 反拍」。填入只改對應位置，其他格子會留著。每一格上方的空格可以打歌詞，中文或英文都行。混合 12 是每拍 12 點，混合 24 是每拍 24 點。</p>`;
   $("grid").innerHTML = html;
   requestAnimationFrame(fitWritingArea);
 }
@@ -393,13 +393,20 @@ function markHtml(inst, value, index) {
       crash_tie: "✱",
       crash_roll: "✱",
       ride: "◉",
+      ride_accent: "◉",
       ride_bell: "◆",
+      ride_bell_accent: "◆",
       cow_bell: "⌂",
+      cow_bell_accent: "⌂",
       stacker: "≡",
+      stacker_accent: "≡",
+      crash_accent: "✱",
+      crash_tie_accent: "✱",
+      crash_roll_accent: "✱",
       click: "○",
       click_accent: "●",
     }[value || null];
-    const mod = { half: "ø", open: "o", closed_plus: "+", crash_tie: "—", crash_roll: "∿" }[value] || "";
+    const mod = { half: "ø", open: "o", closed_plus: "+", crash_tie: "—", crash_tie_accent: "—", crash_roll: "∿", crash_roll_accent: "∿", ride_accent: "›", ride_bell_accent: "›", cow_bell_accent: "›", stacker_accent: "›", crash_accent: "›" }[value] || "";
     return `<span class="mark">${glyph || "×"}</span>${mod ? `<i class="hat-mod">${mod}</i>` : ""}`;
   }
   if (inst === "snare") {
@@ -895,14 +902,22 @@ function cymbalMenuHtml(measure) {
     M.CYMBAL_FILL_COMBOS.map(
       ([id, label]) => `<button type="button" data-action="cymbal-combo" data-combo="${id}" data-scope="${scope}" data-m="${measure}">${label}</button>`,
     ).join("");
+  const downupChips = (scope) =>
+    M.CYMBAL_FILL_DYNAMICS.map(
+      ([id, label]) => `<button type="button" data-action="cymbal-downup" data-pattern="${id}" data-scope="${scope}" data-m="${measure}">${label}</button>`,
+    ).join("");
+  const muteBtn = (scope) =>
+    `<button type="button" data-action="cymbal-mute" data-scope="${scope}" data-m="${measure}">靜音</button>`;
   return `
     <div class="group-label">音色</div>
     <div class="chip-row">${chips(M.CYMBAL_FILL_SOUNDS, "sound")}</div>
     <div class="group-label">這個小節</div>
-    <div class="chip-row">${chips(M.CYMBAL_FILL_PATTERNS, "measure")}<button type="button" data-action="cymbal-mute" data-scope="measure" data-m="${measure}">靜音</button></div>
+    <div class="chip-row">${chips(M.CYMBAL_FILL_PATTERNS, "measure")}${muteBtn("measure")}</div>
+    <div class="chip-row">${downupChips("measure")}</div>
     <div class="chip-row">${comboChips("measure")}</div>
     <div class="group-label">全部小節</div>
-    <div class="chip-row">${chips(M.CYMBAL_FILL_PATTERNS, "all")}</div>
+    <div class="chip-row">${chips(M.CYMBAL_FILL_PATTERNS, "all")}${muteBtn("all")}</div>
+    <div class="chip-row">${downupChips("all")}</div>
     <div class="chip-row">${comboChips("all")}</div>
     <button type="button" data-action="close-float">cancel</button>`;
 }
@@ -956,6 +971,22 @@ function applyCymbalCombo(el) {
   toast(`已填入 ${name}（${where}，其他位置保留）`);
 }
 
+function applyCymbalDownUp(el) {
+  const sound = state.cymbalSound || "normal";
+  const pattern = el.dataset.pattern;
+  const scope = el.dataset.scope;
+  const result = M.fillCymbalDownUp(state.groove, { sound, pattern, scope, measureIndex: Number(el.dataset.m) });
+  if (result.error) {
+    toast(result.error);
+    return;
+  }
+  commit(result.groove);
+  closeFloaters();
+  const where = scope === "measure" ? "這個小節" : "全部小節";
+  const name = (M.CYMBAL_FILL_DYNAMICS.find(([id]) => id === pattern) || [0, "Down-up 重輕重輕"])[1];
+  toast(`已填入 ${name}（${where}，其他位置保留）`);
+}
+
 function openMenu(html, x, y) {
   popover.hidden = true;
   menu.innerHTML = html;
@@ -993,13 +1024,6 @@ function openLabelMenu(button, event) {
       ["all_right", "all Rs"],
       ["all_left", "all Ls"],
       ["all_count", "Counts"],
-    ],
-    hh: [
-      ["all_off", "all Hi-hats Off"],
-      ["all_on", "all Hi-hats On"],
-      ["downbeats", "downbeats"],
-      ["upbeats", "upbeats"],
-      ["mute", "mute HH sound"],
     ],
     snare: [
       ["all_off", "all Snares Off"],
@@ -1302,6 +1326,7 @@ function handleAction(el, event) {
     menu.innerHTML = cymbalMenuHtml(el.dataset.m);
   } else if (action === "cymbal-fill") applyCymbalFill(el);
   else if (action === "cymbal-combo") applyCymbalCombo(el);
+  else if (action === "cymbal-downup") applyCymbalDownUp(el);
   else if (action === "cymbal-mute") {
     const scope = el.dataset.scope;
     const measure = Number(el.dataset.m);
@@ -1694,7 +1719,8 @@ function boot() {
         state.suppressClick = false;
         return;
       }
-      openLabelMenu(label, event);
+      if (label.hasAttribute("data-cymbal-menu")) openCymbalMenu(label, event);
+      else openLabelMenu(label, event);
       return;
     }
     const cell = event.target.closest(".cell");

@@ -75,6 +75,24 @@ export const STICK_ARTICULATIONS = [
   ["C", "Count"],
 ];
 
+/** Sticking fill patterns for the Stickings measure menu. Applied when the pattern tiles the measure evenly. */
+export const STICK_FILL_PATTERNS = [
+  ["paradiddle", "paradiddle RLRR LRLL", ["R", "L", "R", "R", "L", "R", "L", "L"]],
+  ["double_paradiddle", "double paradiddle RLRLRR LRLRLL", ["R", "L", "R", "L", "R", "R", "L", "R", "L", "R", "L", "L"]],
+  ["paradiddle_diddle", "paradiddle-diddle RLRRLL", ["R", "L", "R", "R", "L", "L"]],
+];
+
+export function stickPatternFits(g, pattern) {
+  if (!pattern || !pattern.length) return false;
+  const npm = notesPerMeasure(g.division, g.top, g.bottom);
+  return npm % pattern.length === 0;
+}
+
+/** Paradiddle (and similar) items that tile the current grid. */
+export function stickingFillOptions(g) {
+  return STICK_FILL_PATTERNS.filter(([, , pattern]) => stickPatternFits(g, pattern)).map(([id, label]) => [id, label]);
+}
+
 export const PERM_SECTIONS = [
   { id: 0, group: "Ostinato", label: "Ostinato" },
   { id: 1, group: "Singles", label: 'Single on "1"' },
@@ -126,6 +144,79 @@ export function groupSize(division, top, bottom) {
   if (isTripletDivision(division)) return division / bottom;
   if (bottom === 8 && top % 3 === 0) return 3 * (division / 8);
   return division / bottom;
+}
+
+/** Smallest usable width of one grid cell, in px. Denser grids need a slightly smaller floor so a measure can still fit, but not so small the dots become unusable. */
+export function minCellWidth(g, { narrow = false } = {}) {
+  const perBeat = notesPerBeat(g.division, g.bottom);
+  if (perBeat >= 24) return narrow ? 10 : 12;
+  if (perBeat >= 12) return narrow ? 12 : 14;
+  if (perBeat >= 8) return narrow ? 14 : 16;
+  if (perBeat >= 4) return narrow ? 16 : 18;
+  return narrow ? 22 : 28;
+}
+
+/** Minimum width of one measure, including the row labels and beat-group gaps. */
+export function measureMinWidth(g, { narrow = false, labelWidth, cellWidth } = {}) {
+  const npm = notesPerMeasure(g.division, g.top, g.bottom);
+  const perBeat = notesPerBeat(g.division, g.bottom);
+  const group = groupSize(g.division, g.top, g.bottom);
+  const gaps = group > 0 ? Math.max(0, Math.floor(npm / group) - 1) : 0;
+  const gapW = groupGapWidth(g, { narrow });
+  const labels = labelWidth ?? (narrow ? 64 : 72);
+  const cell = cellWidth ?? minCellWidth(g, { narrow });
+  return labels + npm * cell + gaps * gapW + 8;
+}
+
+/** Visual gap between beat groups, in px. Dense grids use a tighter gap so a measure can still fit. */
+export function groupGapWidth(g, { narrow = false } = {}) {
+  const perBeat = notesPerBeat(g.division, g.bottom);
+  if (perBeat >= 24) return 4;
+  if (perBeat >= 12) return 6;
+  return narrow ? 4 : 8;
+}
+
+/**
+ * Cell / measure minimums for the current width. If even one measure cannot
+ * fit at the usual floor, shrink toward a hard floor so the 「＋」 still has a seat.
+ * On a narrow phone a dense measure may still be wider than the screen; the
+ * grid then scrolls sideways instead of crushing the dots.
+ */
+export function wrapLayout(g, availableWidth, opts = {}) {
+  const narrow = !!opts.narrow;
+  const plusWidth = opts.plusWidth ?? (narrow ? 36 : 40);
+  const mpr = measuresPerRow(g, availableWidth, opts);
+  let cell = minCellWidth(g, opts);
+  const usable = Math.max(0, (availableWidth || 0) - (plusWidth || 0));
+  const hardFloor = narrow ? 9 : 10;
+  const natural = measureMinWidth(g, { ...opts, cellWidth: cell });
+  if (mpr === 1 && usable > 0 && natural > usable) {
+    const npm = notesPerMeasure(g.division, g.top, g.bottom);
+    const chrome = measureMinWidth(g, { ...opts, cellWidth: 0 });
+    const fit = npm > 0 ? Math.floor((usable - chrome) / npm) : cell;
+    // Only shrink when a single measure can still fit at a usable cell size.
+    // If even the hard floor would not fit (a 混合 24 bar on a phone), keep
+    // the usual minimum and let the grid scroll sideways.
+    if (fit >= hardFloor) cell = Math.min(cell, fit);
+  }
+  return {
+    mpr,
+    cell,
+    measure: measureMinWidth(g, { ...opts, cellWidth: cell }),
+    gap: groupGapWidth(g, opts),
+  };
+}
+
+/**
+ * How many measures share one grid row. Uses available width and a minimum cell size
+ * so dense grids (24/32 dots per beat) wrap earlier. Always at least 1, at most g.measures.
+ */
+export function measuresPerRow(g, availableWidth, { narrow = false, plusWidth = 40, labelWidth, gap } = {}) {
+  const minW = measureMinWidth(g, { narrow, labelWidth });
+  const rowGap = gap ?? (narrow ? 8 : 6);
+  const usable = Math.max(minW, (availableWidth || 0) - (plusWidth || 0));
+  const n = Math.floor((usable + rowGap) / (minW + rowGap));
+  return Math.max(1, Math.min(g.measures, n));
 }
 
 export function emptyGroove(partial = {}) {
@@ -376,6 +467,10 @@ export function fillMeasure(g, instrument, measureIndex, mode) {
       else if (mode === "all_left") next.sticking[i] = "L";
       else if (mode === "alternate") next.sticking[i] = local % 2 === 0 ? "R" : "L";
       else if (mode === "all_count") next.sticking[i] = "C";
+      else {
+        const found = STICK_FILL_PATTERNS.find(([id]) => id === mode);
+        if (found) next.sticking[i] = found[2][local % found[2].length];
+      }
     } else if (instrument === "hh" && mode === "downbeats") {
       next.hh[i] = local % 2 === 0 ? "normal" : null;
     } else if (instrument === "hh" && mode === "upbeats") {

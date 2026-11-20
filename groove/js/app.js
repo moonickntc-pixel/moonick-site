@@ -1,5 +1,5 @@
-import * as M from "./model.js?v=20261121c";
-import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261121c";
+import * as M from "./model.js?v=20261121d";
+import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261121d";
 
 const kit = createKit();
 const transport = createTransport(kit);
@@ -310,6 +310,36 @@ function paintGrid() {
   requestAnimationFrame(fitWritingArea);
 }
 
+function wrapOptions() {
+  const narrow = window.innerWidth <= 520;
+  return {
+    narrow,
+    plusWidth: narrow ? 36 : 40,
+    labelWidth: narrow ? 64 : 72,
+    gap: narrow ? 8 : 6,
+  };
+}
+
+/** Decide how many measures share a row, and set CSS so they wrap instead of shrinking to unusable dots. */
+function applyGridWrap() {
+  const grid = $("grid");
+  const g = state.groove;
+  if (!grid || !g) return 1;
+  const opts = wrapOptions();
+  const plus = grid.querySelector(".add-measure");
+  const plusW = plus ? Math.ceil(plus.getBoundingClientRect().width) + 8 : opts.plusWidth;
+  const available = grid.clientWidth || Math.max(0, window.innerWidth - (opts.narrow ? 0 : 74));
+  const layout = M.wrapLayout(g, available, { ...opts, plusWidth: plusW });
+  state.mpr = layout.mpr;
+  grid.dataset.mpr = String(layout.mpr);
+  grid.style.setProperty("--mpr", String(layout.mpr));
+  grid.style.setProperty("--grid-plus", `${plusW}px`);
+  grid.style.setProperty("--measure-min", `${layout.measure}px`);
+  grid.style.setProperty("--cell-min", `${layout.cell}px`);
+  grid.style.setProperty("--group-gap", `${layout.gap}px`);
+  return layout.mpr;
+}
+
 function fitWritingArea() {
   const grid = $("grid");
   const toolbar = $("toolbar");
@@ -319,19 +349,36 @@ function fitWritingArea() {
   const narrow = window.innerWidth <= 520;
   const base = narrow ? (density >= 24 ? 36 : density >= 12 ? 42 : 46) : 24;
   grid.style.setProperty("--cell-h", `${base}px`);
+  const mpr = applyGridWrap();
+  // On desktop, #meta sits above the grid, so only the toolbar needs room below.
+  const bottomNeed = narrow ? 8 : toolbar.offsetHeight + 8;
+  const gridTop = grid.getBoundingClientRect().top;
+  const maxH = Math.floor(window.innerHeight - gridTop - bottomNeed);
+  const capGrid = (height) => {
+    if (!narrow && height >= 40 && grid.scrollHeight > height + 1) {
+      grid.style.maxHeight = `${height}px`;
+      grid.style.overflowY = "auto";
+    } else {
+      grid.style.maxHeight = "";
+      grid.style.overflowY = "";
+    }
+  };
+  capGrid(maxH);
   if (!narrow) {
     // 電腦版：小節少、下面有空位時，把格子放大到用滿畫面（最大 60px）
     const rowsPerMeasure = [...col.children].filter((el) => el.classList.contains("cell") && !el.classList.contains("slot-hidden") && !el.classList.contains("sticking")).length;
-    const tops = new Set([...grid.querySelectorAll(".measure")].map((el) => Math.round(el.getBoundingClientRect().top)));
-    const totalRows = rowsPerMeasure * Math.max(1, tops.size);
-    const free = window.innerHeight - toolbar.getBoundingClientRect().bottom - 40;
-    if (totalRows > 0 && free > 0) {
+    const visualRows = Math.ceil(Math.max(1, state.groove.measures) / Math.max(1, mpr));
+    const totalRows = rowsPerMeasure * Math.max(1, visualRows);
+    const cap = maxH > 140 ? maxH : window.innerHeight - gridTop - bottomNeed;
+    const free = cap - grid.scrollHeight;
+    if (totalRows > 0 && free > 8) {
       // 圓點不能比一格寬，不然會擠爆、蓋到加小節的「＋」
       const colW = col.getBoundingClientRect().width;
       const widthCap = Math.floor((colW * 0.8) / 0.6);
       const grown = Math.min(60, widthCap, base + Math.floor(free / totalRows));
       if (grown > base) grid.style.setProperty("--cell-h", `${grown}px`);
     }
+    capGrid(maxH);
   }
   const rowCells = [...col.children].filter((el) => el.classList.contains("cell") && !el.classList.contains("slot-hidden"));
   if (!rowCells.length) return;
@@ -429,6 +476,7 @@ function scheduleNotation() {
 }
 
 function renderNotation() {
+  if ($("grid") && state.groove) applyGridWrap();
   const g = sourceGroove();
   const text = state.abcDirty ? $("abc").value : M.toAbc(g);
   if (!state.abcDirty) $("abc").value = text;
@@ -456,7 +504,11 @@ function renderNotation() {
       wrap: {
         minSpacing: narrow ? (roomy ? 1.5 : 1.1) : g.division >= 24 ? 0.3 : roomy ? 0.8 : 0.5,
         maxSpacing: narrow ? (roomy ? 6 : 2.8) : g.division >= 24 ? 4 : roomy ? 8 : 6,
-        preferredMeasuresPerLine: narrow || g.division >= 24 ? 1 : g.measures,
+        // Phone: one bar per system. Desktop 16th: pack as many as fit (existing).
+        // Dense 12/24 grids used to force one bar per system, which for 6 bars
+        // of 混合 24 ate the viewport and left the wrapping grid with no room.
+        // Prefer at most about two systems so the grid can sit underneath.
+        preferredMeasuresPerLine: narrow ? 1 : (g.division >= 24 ? Math.max(2, Math.ceil(g.measures / 2)) : g.measures),
       },
       selectionColor: "#bdebdd",
     });
@@ -841,7 +893,18 @@ transport.onFrame(({ playing, slot }) => {
   const sameGrid = heard.division === state.groove.division && heard.hh.length === state.groove.hh.length;
   if (slot >= 0 && sameGrid) {
     const col = document.querySelector(`.col[data-col="${slot}"]`);
-    if (col) col.classList.add("now");
+    if (col) {
+      col.classList.add("now");
+      const grid = $("grid");
+      if (grid && grid.scrollHeight > grid.clientHeight + 4) {
+        const target = col.closest(".measure") || col;
+        const tr = target.getBoundingClientRect();
+        const gr = grid.getBoundingClientRect();
+        if (tr.bottom > gr.bottom - 4 || tr.top < gr.top + 4) {
+          target.scrollIntoView({ block: "nearest", inline: "nearest" });
+        }
+      }
+    }
   }
 });
 
@@ -1024,6 +1087,7 @@ function openLabelMenu(button, event) {
       ["all_right", "all Rs"],
       ["all_left", "all Ls"],
       ["all_count", "Counts"],
+      ...M.stickingFillOptions(state.groove),
     ],
     snare: [
       ["all_off", "all Snares Off"],
@@ -1234,7 +1298,7 @@ function openHelp(which) {
       <li><b>Right-click</b> the <b>Hi-hat</b> name (long-press on a phone) for a fill menu: pick a cymbal-row sound (Hi-hat, Ride, Ride Bell, Crash, Cow Bell, Stacker, and the other voices in the cell menu) and a pattern (4ths, 8ths, 16ths, downbeats, upbeats, all on, clear), or a one-tap combo such as Ride on the beat and Bell on the &amp;s, for this bar or every bar. Pattern fills keep notes that are not in the pattern; only Clear wipes the row.</li>
       <li><b>MIX 12</b> is 12 dots per beat, so 16ths and 8th triplets can share a bar. <b>MIX 24</b> is 24 dots per beat, so sextuplets (六連音, every 4th dot) and octuplets (八連音, every 3rd dot) can share a bar.</li>
       <li><b>Words</b> sit on each timing point. Click the box and type English or Traditional Chinese. The syllable prints above that note and travels with the share link.</li>
-      <li><b>Stickings</b> can be Off, Right, Left, R/L, or Count. Count prints the syllable (1 e &amp; a).</li>
+      <li><b>Stickings</b> can be Off, Right, Left, R/L, or Count. Count prints the syllable (1 e &amp; a). The measure menu also offers paradiddle, double paradiddle, and paradiddle-diddle when those patterns fit the grid.</li>
       <li><b>Metronome</b> options: solo, count-in, auto speed up, and an offset click that moves the strong beat to the e, &amp;, or a, or rotates each loop.</li>
       <li><b>Swing</b> delays the upbeats in playback only. 33% is a triplet shuffle. 50% is a dotted-eighth and sixteenth. The printed chart stays straight.</li>
       <li><b>Share</b> copies a link. Bookmark it, or paste the query string from another groove tool that uses TimeSig, Div, H, S, and K.</li>

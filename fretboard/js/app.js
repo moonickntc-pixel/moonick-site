@@ -74,19 +74,8 @@
     var qTonic = state.question ? state.question.tonic : tonicName();
     var qScale = state.question ? state.question.scale : state.scale;
     var spelled = T.spellScale(qTonic, qScale);
-    var names = [], seen = {};
-    function add(n) { if (n && !seen[n]) { seen[n] = 1; names.push(n); } }
-    spelled.notes.forEach(function (n) { add(n.name); });
-    var major = T.spellScale(spelled.parent.name, "major");
-    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].forEach(function (pc) {
-      if (major.byPc[pc]) add(major.byPc[pc].name);
-    });
-    ["C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B"].forEach(add);
-    if (pcPreferred != null && spelled.byPc[pcPreferred]) {
-      var pref = spelled.byPc[pcPreferred].name;
-      names = [pref].concat(names.filter(function (n) { return n !== pref; }));
-    }
-    return names;
+    var preferred = pcPreferred != null && spelled.byPc[pcPreferred] ? spelled.byPc[pcPreferred].degree : null;
+    return T.quizDegreeChoices(qTonic, qScale, preferred);
   }
 
   function openNamePop(cell, string, fret) {
@@ -96,7 +85,7 @@
     var pop = document.createElement("div");
     pop.id = "namePop";
     pop.setAttribute("role", "dialog");
-    pop.setAttribute("aria-label", "選音名");
+    pop.setAttribute("aria-label", "選數字音名");
     nameChoices(midi % 12).forEach(function (nm) {
       var b = document.createElement("button");
       b.type = "button";
@@ -105,7 +94,7 @@
       b.addEventListener("click", function (e) {
         e.stopPropagation();
         var key = string + "-" + fret;
-        state.clicks[key] = { string: string, fret: fret, name: nm };
+        state.clicks[key] = { string: string, fret: fret, name: nm, degree: nm };
         state.grade = null;
         closePop();
         A.playMidi(midi, state.inst);
@@ -398,7 +387,7 @@
     });
     document.getElementById("instHint").textContent = (A.INSTRUMENTS[state.inst].hint || "");
     var an = T.anchorFrets(tonicName(), state.scale, state.pattern, T.TUNINGS[state.board].frets);
-    var solfaLab = T.solfaDisplay(an.solfa);
+    var solfaLab = an.lowSolfaLabel || T.solfaDisplay(an.solfa);
     var tonicSolfa = T.isMinorSystem(state.scale) ? "La" : "Do";
     document.querySelectorAll("#patBtns button[data-pattern]").forEach(function (b) {
       var id = b.getAttribute("data-pattern");

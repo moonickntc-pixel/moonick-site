@@ -20,7 +20,7 @@
 <meta name="twitter:title" id="twitter-title" content="吉他／Bass 音階工具｜慕尼克">
 <meta name="twitter:description" id="twitter-description" content="在指板上練習吉他與 Bass 的各種調性、音階與五個指型，點音就能聽到聲音，也可以做小測驗自己批改。">
 <meta name="twitter:image" id="twitter-image" content="https://moonickmusic.com/fretboard/og-moonick.png">
-<link rel="stylesheet" href="css/app.css?v=20261121e">
+<link rel="stylesheet" href="css/app.css?v=20261122a">
 <script>
   (function () {
     var h = location.hostname.toLowerCase().replace(/\.$/, "");
@@ -124,6 +124,7 @@
         <button type="button" data-label="name" class="on">音名</button>
         <button type="button" data-label="deg">級數</button>
       </div>
+      <p class="hint" id="labelHint">級數是首調唱名的數字：小調系主音是 6（La），大調系主音是 1（Do）。變化音照實際音高，例如和聲小調是 6 7 1 2 3 4 #5。</p>
     </div>
 
     <div class="group" id="playGroup">
@@ -142,7 +143,7 @@
         <div class="scope" id="scopePats" style="margin-top:8px"></div>
       </div>
       <p id="quizPrompt" role="status"></p>
-      <p class="hint">點指板上的格子，再選音名。再點一次可以改或取消。</p>
+      <p class="hint">點指板上的格子，再選數字音名（小調系主音是 6，大調系主音是 1）。再點一次可以改或取消。</p>
       <div class="quiz-actions">
         <button type="button" id="submitQ">送出批改</button>
         <button type="button" id="nextQ" style="margin-top:8px;background:transparent;color:inherit">下一題</button>
@@ -158,8 +159,8 @@
   <p>音色取樣：FluidR3 GM SoundFont（Frank Wen），依 <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a> 授權使用，轉檔版本來自 <a href="https://github.com/gleitz/midi-js-soundfonts" target="_blank" rel="noopener">gleitz/midi-js-soundfonts</a>。與十二音圓形音階工具同一套音色與音量。</p>
 </footer>
 
-<script src="js/theory.js?v=20261121e"></script>
-<script src="js/audio.js?v=20261121e"></script>
-<script src="js/app.js?v=20261121e"></script>
+<script src="js/theory.js?v=20261122a"></script>
+<script src="js/audio.js?v=20261122a"></script>
+<script src="js/app.js?v=20261122a"></script>
 </body>
 </html>

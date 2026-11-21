@@ -79,7 +79,35 @@
   }
 
   function solfaDisplay(solfa) {
-    return solfa ? solfa.charAt(0).toUpperCase() + solfa.slice(1) : "";
+    if (!solfa) return "";
+    if (solfa.charAt(0) === "#" || solfa.charAt(0) === "b") {
+      return solfa.charAt(0) + solfa.charAt(1).toUpperCase() + solfa.slice(2);
+    }
+    return solfa.charAt(0).toUpperCase() + solfa.slice(1);
+  }
+
+  var DEGREE_SOLFA = {
+    "1": "do", "b2": "bre", "2": "re", "b3": "bmi", "3": "mi",
+    "4": "fa", "#4": "#fa", "b5": "bsol", "5": "sol", "#5": "#sol",
+    "b6": "bla", "6": "la", "b7": "bti", "7": "ti"
+  };
+  function solfaOfDegree(deg) { return DEGREE_SOLFA[deg] || ""; }
+  function solfaFamily(solfaOrDeg) {
+    var s = DEGREE_SOLFA[solfaOrDeg] || solfaOrDeg || "";
+    return s.replace(/^[#b]+/, "");
+  }
+  function isDegreeToken(s) { return /^(#|b)?[1-7]$/.test(String(s || "")); }
+  function baseDegreeNum(deg) { return String(deg || "").replace(/^[#b]+/, ""); }
+
+  var QUIZ_DEGREES = ["1", "b2", "2", "b3", "3", "4", "#4", "b5", "5", "#5", "b6", "6", "b7", "7"];
+  function quizDegreeChoices(tonicName, scaleId, preferred) {
+    var spelled = spellScale(tonicName, scaleId);
+    var names = [], seen = {};
+    function add(n) { if (n && !seen[n]) { seen[n] = 1; names.push(n); } }
+    if (preferred) add(preferred);
+    spelled.notes.forEach(function (n) { add(n.degree); });
+    QUIZ_DEGREES.forEach(add);
+    return names;
   }
 
   // 小調系主音當 la（唱名框架的 do 在主音上方小三度）；大調系主音當 do。
@@ -116,50 +144,84 @@
     return { name: spellLetter(L, pc), pc: pc };
   }
 
-  function degreeLabel(iv, name, tonicLetter) {
-    var table = { 0: "1", 1: "b2", 2: "2", 3: "b3", 4: "3", 5: "4", 7: "5", 8: "b6", 9: "6", 10: "b7", 11: "7" };
-    if (iv === 6) {
-      // #4（利底亞，第 4 音字母）或 b5（藍調、Locrian，第 5 音字母）
-      var li = LETTERS.indexOf(tonicLetter || (name && name[0]));
-      var dist = name && name[0] && li >= 0 ? (LETTERS.indexOf(name[0]) - li + 7) % 7 : 4;
+  // 級數是首調唱名的數字，基準是唱名框架的 do：小調系主音當 6（La），大調系主音當 1（Do）。
+  // ivFromDo 是該音相對 do 的半音數。變化音照實際音高與拼寫：第 4 音字母且增四度為 #4，第 5 音字母且減五度為 b5；
+  // 第 5 音字母且增五度為 #5，第 6 音字母且小六度為 b6（例如和聲／旋律小調的導音是 #5）。
+  function degreeLabel(ivFromDo, name, doLetter) {
+    var table = { 0: "1", 1: "b2", 2: "2", 3: "b3", 4: "3", 5: "4", 7: "5", 9: "6", 10: "b7", 11: "7" };
+    var li = LETTERS.indexOf(doLetter || (name && name[0]));
+    var dist = name && name[0] && li >= 0 ? (LETTERS.indexOf(name[0]) - li + 7) % 7 : -1;
+    if (ivFromDo === 6) {
       return dist === 3 ? "#4" : "b5";
     }
-    return table[iv] || String(iv);
+    if (ivFromDo === 8) {
+      return dist === 4 ? "#5" : "b6";
+    }
+    return table[ivFromDo] || String(ivFromDo);
   }
 
   function spellScale(tonicName, scaleId) {
     var sc = scaleById(scaleId);
     var t = parseTonic(tonicName);
     var li = LETTERS.indexOf(t.letter);
+    var par = parentDo(tonicName, scaleId);
     var byPc = {};
     var notes = [];
     for (var i = 0; i < sc.iv.length; i++) {
       var L = LETTERS[(li + sc.st[i] + 7) % 7];
       var pc = (t.pc + sc.iv[i]) % 12;
       var name = spellLetter(L, pc);
-      var deg = degreeLabel(sc.iv[i], name, t.letter);
+      var ivFromDo = (sc.iv[i] - sc.parentIv % 12 + 12) % 12;
+      var deg = degreeLabel(ivFromDo, name, par.name[0]);
       var rec = { pc: pc, name: name, degree: deg, iv: sc.iv[i], step: i };
       notes.push(rec);
       byPc[pc] = rec;
     }
-    return { tonic: t, scale: sc, notes: notes, byPc: byPc, parent: parentDo(tonicName, scaleId) };
+    return { tonic: t, scale: sc, notes: notes, byPc: byPc, parent: par };
+  }
+
+  // 指型位置看這個音階裡，該唱名（Mi／Sol／La／Do／Re）的實際音高。
+  // 若該音被升降（例如和聲小調 Sol 變成 #Sol），把位跟著實際音走，不留在未變化的位置。
+  // 若未變化的音仍在音階裡（例如藍調同時有 b3 與 3），仍用未變化的那一個當這個指型的名字音。
+  function namesakeInScale(tonicName, scaleId, patternId) {
+    var spelled = spellScale(tonicName, scaleId);
+    var pat = patternById(patternId);
+    var idealPc = (spelled.parent.pc + MAJOR[pat.parentDeg]) % 12;
+    if (spelled.byPc[idealPc]) return spelled.byPc[idealPc];
+    var p = parseTonic(spelled.parent.name);
+    var letter = LETTERS[(LETTERS.indexOf(p.letter) + pat.parentDeg) % 7];
+    var cands = spelled.notes.filter(function (n) { return n.name[0] === letter; });
+    if (!cands.length) return { pc: idealPc, name: spellLetter(letter, idealPc), degree: pat.solfa === "do" ? "1" : "", iv: -1 };
+    cands.sort(function (a, b) {
+      var da = Math.min((a.pc - idealPc + 12) % 12, (idealPc - a.pc + 12) % 12);
+      var db = Math.min((b.pc - idealPc + 12) % 12, (idealPc - b.pc + 12) % 12);
+      return da - db;
+    });
+    return cands[0];
   }
 
   function anchorFrets(tonicName, scaleId, patternId, maxFret) {
     if (maxFret == null) maxFret = 16;
     var spelled = spellScale(tonicName, scaleId);
     var pat = patternById(patternId);
-    var namesakePc = (spelled.parent.pc + MAJOR[pat.parentDeg]) % 12;
+    var rec = namesakeInScale(tonicName, scaleId, patternId);
+    var namesakePc = rec.pc;
     var openPc = 4; // 最低弦都是 E
     var a = (namesakePc - openPc + 12) % 12;
     var out = [];
     if (a + BOX_SPAN <= maxFret) out.push(a);
     if (a + 12 + BOX_SPAN <= maxFret) out.push(a + 12);
+    var lowSolfa = solfaOfDegree(rec.degree) || pat.solfa;
     return {
       namesakePc: namesakePc,
+      namesakeDegree: rec.degree,
+      namesakeName: rec.name,
       anchors: out,
       solfa: pat.solfa,
       solfaLabel: solfaDisplay(pat.solfa),
+      lowSolfa: lowSolfa,
+      lowSolfaLabel: solfaDisplay(lowSolfa),
+      altered: solfaFamily(lowSolfa) === pat.solfa && lowSolfa !== pat.solfa,
       pattern: pat.id,
       parent: spelled.parent
     };
@@ -212,16 +274,21 @@
     var sc = scaleById(q.scale);
     var head = keyTitle(q.tonic, q.scale) + " " + patternLabel(q.pattern);
     if (!(sc.quality === "major" && sc.id === "major")) head += " " + sc.name;
-    return TUNINGS[q.board].name + "｜" + head + "｜請在" + posText + "把這個指型的音階音點出來，並選音名";
+    return TUNINGS[q.board].name + "｜" + head + "｜請在" + posText + "把這個指型的音階音點出來，並選數字音名";
   }
 
   function answerSet(q, anchor) {
     return patternNotes(q.board, q.tonic, q.scale, q.pattern, anchor).map(function (n) {
-      return { string: n.string, fret: n.fret, name: n.name, key: n.string + "-" + n.fret };
+      return { string: n.string, fret: n.fret, name: n.name, degree: n.degree, letter: n.name, key: n.string + "-" + n.fret };
     });
   }
 
-  // clicks: [{string, fret, name}]
+  function clickLabel(c) {
+    if (c && c.degree != null && c.degree !== "") return c.degree;
+    return c && c.name != null ? c.name : "";
+  }
+
+  // clicks: [{string, fret, degree}] 或以 name 當數字音名
   function gradeClicksAgainst(clicks, expected) {
     var expMap = {};
     expected.forEach(function (e) { expMap[e.key] = e; });
@@ -232,11 +299,14 @@
       if (seen[key]) return;
       seen[key] = true;
       var exp = expMap[key];
-      if (!exp) extra.push({ string: c.string, fret: c.fret, name: c.name });
-      else if (c.name === exp.name) correct.push({ string: c.string, fret: c.fret, name: c.name });
-      else wrongName.push({ string: c.string, fret: c.fret, name: c.name, expected: exp.name });
+      var got = clickLabel(c);
+      if (!exp) extra.push({ string: c.string, fret: c.fret, name: got, degree: got });
+      else if (got === exp.degree) correct.push({ string: c.string, fret: c.fret, name: exp.degree, degree: exp.degree, letter: exp.letter || exp.name });
+      else wrongName.push({ string: c.string, fret: c.fret, name: got, degree: got, expected: exp.degree, letter: exp.letter || exp.name });
     });
-    var missing = expected.filter(function (e) { return !seen[e.key]; });
+    var missing = expected.map(function (e) {
+      return { string: e.string, fret: e.fret, name: e.degree, degree: e.degree, letter: e.letter || e.name, key: e.key };
+    }).filter(function (e) { return !seen[e.key]; });
     var score = Math.max(0, correct.length - extra.length);
     var pct = expected.length ? Math.round(100 * score / expected.length) : 0;
     return {
@@ -313,7 +383,7 @@
         fromDegree: a.degree, toDegree: b.degree,
         fromIv: a.iv, toIv: b.iv,
         semitones: semi, intervalName: iname, frets: semi,
-        text: a.name + "→" + b.name + " " + iname + "（" + semi + " 格）"
+        text: a.degree + "→" + b.degree + " " + iname + "（" + semi + " 格，" + a.name + "→" + b.name + "）"
       });
     }
     return walk;
@@ -354,104 +424,130 @@
     return "往左 " + (-delta) + " 格";
   }
 
+  function spellPcNear(spelled, pc) {
+    if (spelled.byPc[pc]) return spelled.byPc[pc].name;
+    var major = spellScale(spelled.parent.name, "major");
+    if (major.byPc[pc]) return major.byPc[pc].name;
+    for (var i = 0; i < KEYS.length; i++) if (KEYS[i].pc === pc) return KEYS[i].name;
+    return "";
+  }
+
   function intendedForExtra(spelled, board, string, fret, name) {
     var tun = TUNINGS[board];
     var pc = (tun.openMidi[string] + fret) % 12;
     if (spelled.byPc[pc]) {
-      return { rec: spelled.byPc[pc], inScale: true, dist: 0, sameLetter: true };
+      return { rec: spelled.byPc[pc], inScale: true, dist: 0, sameFamily: true, pitchName: spelled.byPc[pc].name };
     }
-    var clickedLetter = name && name[0] && LETTERS.indexOf(name[0]) >= 0 ? name[0] : null;
+    var clickedDeg = isDegreeToken(name) ? name : null;
+    var clickedLetter = !clickedDeg && name && name[0] && LETTERS.indexOf(name[0]) >= 0 ? name[0] : null;
     var best = null;
     spelled.notes.forEach(function (rec) {
       var d = Math.min((rec.pc - pc + 12) % 12, (pc - rec.pc + 12) % 12);
-      var sameLetter = clickedLetter && rec.name[0] === clickedLetter;
-      var score = d * 10 - (sameLetter ? 3 : 0);
-      if (!best || score < best.score) best = { rec: rec, dist: d, sameLetter: !!sameLetter, score: score };
+      var sameFamily = clickedDeg ? baseDegreeNum(clickedDeg) === baseDegreeNum(rec.degree) : (clickedLetter && rec.name[0] === clickedLetter);
+      var score = d * 10 - (sameFamily ? 3 : 0);
+      if (!best || score < best.score) best = { rec: rec, dist: d, sameFamily: !!sameFamily, score: score };
     });
-    return best ? { rec: best.rec, inScale: false, dist: best.dist, sameLetter: best.sameLetter } : null;
+    return best ? { rec: best.rec, inScale: false, dist: best.dist, sameFamily: best.sameFamily, pitchName: spellPcNear(spelled, pc) } : null;
+  }
+
+  function formatDeg(rec) {
+    if (!rec) return "";
+    return rec.degree + "（" + rec.name + "）";
   }
 
   function explainExtra(item, question, spelled, sc) {
     var board = question.board;
     var tun = TUNINGS[board];
     var pc = (tun.openMidi[item.string] + item.fret) % 12;
-    var shown = item.name || (spelled.byPc[pc] ? spelled.byPc[pc].name : "");
+    var shown = clickLabel(item);
+    var pitchName = spellPcNear(spelled, pc);
     var where = cellPhrase(board, item.string, item.fret);
     var intend = intendedForExtra(spelled, board, item.string, item.fret, shown);
+    var shownText = shown ? shown + (pitchName && !isDegreeToken(shown) ? "" : (pitchName ? "（" + pitchName + "）" : "")) : (pitchName || "這個音");
     var text;
     if (intend && intend.inScale) {
-      text = "你點了 " + (shown || intend.rec.name) + "（" + where + "）。" +
-        (shown && shown !== intend.rec.name ? "這個格子的音是 " + intend.rec.name + "，" : "") +
-        intend.rec.name + " 是" + sc.name + degreePhrase(intend.rec.degree) + "，但它不在這個指型的把位裡。這個指型在第 " +
+      text = "你點了 " + shownText + "（" + where + "）。" +
+        formatDeg(intend.rec) + " 是" + sc.name + degreePhrase(intend.rec.degree) + "，但它不在這個指型的把位裡。這個指型在第 " +
         question.anchors[0] + " 到 " + (Math.max.apply(null, question.anchors.length ? question.anchors.map(function (a) { return a; }) : [0]) ) + " 格附近。";
-      // refine box range using used anchor if present later
     } else if (intend) {
       var delta = signedSemi(pc, intend.rec.pc);
-      var raise = delta > 0 && intend.sameLetter;
-      var lower = delta < 0 && intend.sameLetter;
-      text = "你點了 " + (shown || "這個音") + "（" + where + "），這個音不在" + sc.name + "音階裡。";
-      if (intend.sameLetter && Math.abs(delta) === 1) {
-        text += sc.name + degreePhrase(intend.rec.degree) + "要" + (raise ? "升高" : "降低") + "半音變成 " + intend.rec.name + "，" + directionPhrase(delta) + "就是。";
+      var raise = delta > 0 && intend.sameFamily;
+      text = "你點了 " + shownText + "（" + where + "），這個音不在" + sc.name + "音階裡。";
+      if (intend.sameFamily && Math.abs(delta) === 1) {
+        text += sc.name + degreePhrase(intend.rec.degree) + "是 " + formatDeg(intend.rec) + "，" + directionPhrase(delta) + "就是。";
       } else {
-        text += "離它最近的音階音是 " + intend.rec.name + "（" + degreePhrase(intend.rec.degree) + "），差 " + intend.dist + " 格，" + directionPhrase(delta) + "就是。";
+        text += "離它最近的音階音是 " + formatDeg(intend.rec) + "，差 " + intend.dist + " 格，" + directionPhrase(delta) + "就是。";
       }
     } else {
-      text = "你點了 " + (shown || "這個音") + "（" + where + "），這個音不在" + sc.name + "音階裡。";
+      text = "你點了 " + shownText + "（" + where + "），這個音不在" + sc.name + "音階裡。";
     }
     return {
       kind: "extra", string: item.string, fret: item.fret, name: shown,
       key: item.string + "-" + item.fret,
-      title: "多點了：" + (shown || "") + "（" + where + "）",
+      title: "多點了：" + (shown || pitchName || "") + "（" + where + "）",
       text: text,
       relatedName: intend && intend.rec ? intend.rec.name : null,
+      relatedDegree: intend && intend.rec ? intend.rec.degree : null,
       relatedIv: intend && intend.rec ? intend.rec.iv : null
     };
   }
 
+  function resolveScaleRec(item, spelled) {
+    if (item.degree && spelled.notes.some(function (n) { return n.degree === item.degree; })) {
+      return spelled.notes.filter(function (n) { return n.degree === item.degree; })[0];
+    }
+    if (item.letter && spelled.notes.some(function (n) { return n.name === item.letter; })) {
+      return spelled.notes.filter(function (n) { return n.name === item.letter; })[0];
+    }
+    if (item.name && spelled.notes.some(function (n) { return n.name === item.name || n.degree === item.name; })) {
+      return spelled.notes.filter(function (n) { return n.name === item.name || n.degree === item.name; })[0];
+    }
+    return null;
+  }
+
   function explainMissing(item, question, spelled, sc) {
-    var rec = spelled.byPc[parseTonic(item.name).pc] || spelled.notes.filter(function (n) { return n.name === item.name; })[0];
+    var rec = resolveScaleRec(item, spelled);
     var prev = rec ? previousScaleNote(spelled, rec) : null;
     var where = cellPhrase(question.board, item.string, item.fret);
-    var text = "漏了" + (rec ? degreePhrase(rec.degree) + " " : "") + item.name + "（" + where + "）。";
+    var label = rec ? formatDeg(rec) : (item.degree || item.name || "");
+    var text = "漏了" + (rec ? degreePhrase(rec.degree) + " " : "") + label + "（" + where + "）。";
     if (prev) {
-      text += "從前面的 " + prev.rec.name + "（" + degreePhrase(prev.rec.degree) + "）往上算" + prev.intervalName + "，要走 " + prev.frets + " 格。";
+      text += "從前面的 " + formatDeg(prev.rec) + "往上算" + prev.intervalName + "，要走 " + prev.frets + " 格。";
     }
     return {
-      kind: "missing", string: item.string, fret: item.fret, name: item.name,
+      kind: "missing", string: item.string, fret: item.fret, name: rec ? rec.degree : (item.degree || item.name),
       key: item.string + "-" + item.fret,
-      title: "漏點了：" + item.name + "（" + where + "）",
+      title: "漏點了：" + label + "（" + where + "）",
       text: text,
-      relatedName: item.name,
+      relatedName: rec ? rec.name : item.name,
+      relatedDegree: rec ? rec.degree : item.degree,
       relatedIv: rec ? rec.iv : null
     };
   }
 
   function explainWrongName(item, question, spelled, sc) {
-    var rec = spelled.notes.filter(function (n) { return n.name === item.expected; })[0] || spelled.byPc[parseTonic(item.expected).pc];
+    var rec = spelled.notes.filter(function (n) { return n.degree === item.expected; })[0] ||
+      spelled.notes.filter(function (n) { return n.name === item.expected; })[0] ||
+      resolveScaleRec({ name: item.letter, degree: item.expected, letter: item.letter }, spelled);
     var prev = rec ? previousScaleNote(spelled, rec) : null;
     var where = cellPhrase(question.board, item.string, item.fret);
-    var gotPc = parseTonic(item.name).pc;
-    var expPc = parseTonic(item.expected).pc;
+    var got = clickLabel(item);
+    var exp = rec ? rec.degree : item.expected;
     var text;
-    if (gotPc === expPc) {
-      text = "這個位置是 " + item.expected + "，不是 " + item.name + "。";
-      if (sc.iv.length >= 7 && prev) {
-        text += sc.name + "每個音用一個英文字母、一個字母只用一次；前一個音是 " + prev.rec.name + "，所以這裡要接 " + item.expected[0] + "，寫成 " + item.expected + "。";
-      } else if (prev) {
-        text += "前一個音是 " + prev.rec.name + "，這裡要寫成 " + item.expected + "。";
-      }
-    } else {
-      text = "這個格子的音是 " + item.expected + "（" + (rec ? degreePhrase(rec.degree) : "") + "），不是 " + item.name + "。";
-      if (prev) {
-        text += sc.name + degreePhrase(rec.degree) + "要從前面的 " + prev.rec.name + " 走" + prev.intervalName + "（" + prev.frets + " 格）到 " + item.expected + "。";
-      }
+    var sameFamily = rec && isDegreeToken(got) && baseDegreeNum(got) === baseDegreeNum(rec.degree);
+    text = "這個格子的音是 " + (rec ? formatDeg(rec) : exp) + "，不是 " + got + "。";
+    if (sameFamily && rec) {
+      text += sc.name + "這裡要寫成 " + rec.degree + "，不是 " + got + "。";
+    } else if (prev && rec) {
+      text += sc.name + degreePhrase(rec.degree) + "要從前面的 " + formatDeg(prev.rec) + " 走" + prev.intervalName + "（" + prev.frets + " 格）到 " + formatDeg(rec) + "。";
     }
     return {
-      kind: "wrongName", string: item.string, fret: item.fret, name: item.name, expected: item.expected,
+      kind: "wrongName", string: item.string, fret: item.fret, name: got, expected: exp,
       key: item.string + "-" + item.fret,
-      title: "音名錯了：" + item.name + "→" + item.expected + "（" + where + "）",
+      title: "音名錯了：" + got + "→" + exp + "（" + where + "）",
       text: text,
-      relatedName: item.expected,
+      relatedName: rec ? rec.name : item.expected,
+      relatedDegree: rec ? rec.degree : exp,
       relatedIv: rec ? rec.iv : null
     };
   }
@@ -470,6 +566,7 @@
     (grade.extra || []).forEach(function (x) {
       var e = explainExtra(x, question, spelled, sc);
       if (e.relatedName) related[e.relatedName] = true;
+      if (e.relatedDegree) related[e.relatedDegree] = true;
       // fix box range wording for in-scale extras
       if (e.text.indexOf("這個指型在第 ") >= 0) {
         e.text = e.text.replace(/這個指型在第 .*$/, "這個指型在" + boxRangeText(question, grade.usedAnchor) + "。");
@@ -479,17 +576,19 @@
     (grade.missing || []).forEach(function (x) {
       var e = explainMissing(x, question, spelled, sc);
       if (e.relatedName) related[e.relatedName] = true;
+      if (e.relatedDegree) related[e.relatedDegree] = true;
       errors.push(e);
     });
     (grade.wrongName || []).forEach(function (x) {
       var e = explainWrongName(x, question, spelled, sc);
       if (e.relatedName) related[e.relatedName] = true;
+      if (e.relatedDegree) related[e.relatedDegree] = true;
       errors.push(e);
     });
     var walk = scaleWalk(question.tonic, question.scale).map(function (step) {
       var copy = {};
       Object.keys(step).forEach(function (k) { copy[k] = step[k]; });
-      copy.highlight = !!related[step.to];
+      copy.highlight = !!(related[step.to] || related[step.toDegree]);
       return copy;
     });
     return {
@@ -560,7 +659,9 @@
     parseTonic: parseTonic, spellLetter: spellLetter, tonicNameOf: tonicNameOf,
     scaleById: scaleById, patternById: patternById, keyByName: keyByName,
     parentDo: parentDo, spellScale: spellScale, degreeLabel: degreeLabel,
-    solfaDisplay: solfaDisplay, isMinorSystem: isMinorSystem, allPatternAnchors: allPatternAnchors,
+    solfaDisplay: solfaDisplay, solfaOfDegree: solfaOfDegree, solfaFamily: solfaFamily,
+    isMinorSystem: isMinorSystem, allPatternAnchors: allPatternAnchors,
+    namesakeInScale: namesakeInScale, quizDegreeChoices: quizDegreeChoices,
     anchorFrets: anchorFrets, patternNotes: patternNotes,
     keyTitle: keyTitle, patternLabel: patternLabel, questionPrompt: questionPrompt,
     makeQuestion: makeQuestion, gradeQuiz: gradeQuiz, randomQuestion: randomQuestion,

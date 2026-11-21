@@ -98,8 +98,11 @@
     { id: "sus4", btn: "sus4", suf: "sus4", iv: [0, 5, 7], st: [0, 3, 4], degIn: "", degSup: "sus4" },
     { id: "6", btn: "6", suf: "6", iv: [0, 4, 7, 9], st: [0, 2, 4, 5], degIn: "", degSup: "6" },
     { id: "m6", btn: "m6", suf: "m6", iv: [0, 3, 7, 9], st: [0, 2, 4, 5], degIn: "m", degSup: "6", minor: true },
+    { id: "69", btn: "69", suf: "69", iv: [0, 4, 7, 9, 14], st: [0, 2, 4, 5, 1], degIn: "", degSup: "69" },
     { id: "add9", btn: "add9", suf: "add9", iv: [0, 4, 7, 14], st: [0, 2, 4, 1], degIn: "", degSup: "add9" },
-    { id: "9", btn: "9", suf: "9", iv: [0, 4, 7, 10, 14], st: [0, 2, 4, 6, 1], degIn: "", degSup: "9" }
+    { id: "9", btn: "9", suf: "9", iv: [0, 4, 7, 10, 14], st: [0, 2, 4, 6, 1], degIn: "", degSup: "9" },
+    { id: "m9", btn: "m9", suf: "m9", iv: [0, 3, 7, 10, 14], st: [0, 2, 4, 6, 1], degIn: "m", degSup: "9", minor: true },
+    { id: "maj9", btn: "maj9", suf: "maj9", iv: [0, 4, 7, 11, 14], st: [0, 2, 4, 6, 1], degIn: "", degSup: "maj9" }
   ];
   var CHORD_BY_ID = {};
   CHORDS.forEach(function (c) { CHORD_BY_ID[c.id] = c; });

@@ -141,7 +141,11 @@
       setTimeout(function () { cell.classList.remove("lit"); }, 200);
       return;
     }
-    if (state.grade) state.grade = null;
+    if (state.grade) {
+      showCellExplain(string, fret);
+      A.playMidi(midi, state.inst);
+      return;
+    }
     openNamePop(cell, string, fret);
   }
 
@@ -192,8 +196,8 @@
       state.grade.missing.forEach(function (x) { gradeMap[x.string + "-" + x.fret] = { kind: "miss", label: x.name }; });
     }
 
-    // 上面是最粗的弦：string 0 at top
-    for (var sIdx = 0; sIdx < tun.stringCount; sIdx++) {
+    // 上面是最細的 1 弦（跟 TAB 譜一樣），最粗的弦在下面
+    for (var sIdx = tun.stringCount - 1; sIdx >= 0; sIdx--) {
       var row = document.createElement("div");
       row.className = "string-row";
       var lab = document.createElement("div");
@@ -316,11 +320,59 @@
       if (g.extra.length) bits.push("多點 " + g.extra.length + " 處");
       if (g.perfect) bits.push("全部正確！");
       if (state.question.anchors.length > 1) bits.push("（這題按第 " + g.usedAnchor + " 格的指型來批）");
-      res.innerHTML = bits[0] + bits.slice(1).join("，");
+      res.innerHTML = bits[0] + bits.slice(1).join("，") + renderExplainHtml(g);
     } else {
       res.hidden = true;
       res.innerHTML = "";
       res.className = "";
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c];
+    });
+  }
+
+  function renderExplainHtml(g) {
+    var ex = g.explain;
+    if (!ex) return "";
+    var html = '<div id="explain">';
+    html += "<h2>解說</h2>";
+    html += '<p class="formula"><strong>' + escapeHtml(T.scaleById(state.question.scale).name) + "的全半音公式</strong>：" + escapeHtml(ex.formula.text) + "</p>";
+    html += '<p class="walk" aria-label="從主音一步一步走">';
+    ex.walk.forEach(function (step, i) {
+      html += (i ? "、" : "") + '<span class="walk-step' + (step.highlight ? " bad" : "") + '">' + escapeHtml(step.text) + "</span>";
+    });
+    html += "</p>";
+    if (ex.hasErrors) {
+      html += '<ol class="explain-list">';
+      ex.errors.forEach(function (e) {
+        html += '<li class="explain-item ' + e.kind + '" id="explain-' + e.key + '" data-key="' + e.key + '">';
+        html += "<strong>" + escapeHtml(e.title) + "</strong>";
+        html += "<p>" + escapeHtml(e.text) + "</p></li>";
+      });
+      html += "</ol>";
+    } else {
+      html += "<p>這題全對。上面是這次音階的全半音走法，可以再對一次。</p>";
+    }
+    html += '<p class="hint tip">' + escapeHtml(ex.tip) + "</p>";
+    html += "</div>";
+    return html;
+  }
+
+  function showCellExplain(string, fret) {
+    var key = string + "-" + fret;
+    document.querySelectorAll(".explain-item.on, .cell.explain-on").forEach(function (el) {
+      el.classList.remove("on");
+      el.classList.remove("explain-on");
+    });
+    var item = document.getElementById("explain-" + key);
+    var cell = document.querySelector('.cell[data-string="' + string + '"][data-fret="' + fret + '"]');
+    if (cell) cell.classList.add("explain-on");
+    if (item) {
+      item.classList.add("on");
+      item.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
   }
 
@@ -347,10 +399,10 @@
     var solfa = T.patternById(state.pattern).solfa;
     if (state.showAll && state.mode === "browse") {
       document.getElementById("boardHint").textContent =
-        "上面是最粗的弦（" + T.TUNINGS[state.board].stringCount + " 弦）。指板可左右滑動。正在顯示這個音階的全部把位。";
+        "上面是最細的弦（1 弦），跟 TAB 譜一樣。指板可左右滑動。正在顯示這個音階的全部把位。";
     } else {
       document.getElementById("boardHint").textContent =
-        "上面是最粗的弦（" + T.TUNINGS[state.board].stringCount + " 弦）。指板可左右滑動。這個指型在第 " +
+        "上面是最細的弦（1 弦），跟 TAB 譜一樣。指板可左右滑動。這個指型在第 " +
         an.anchors.join("、") + " 格（關係大調 " + parent.name + " 大調的 " + solfa + "）。";
     }
     renderQuiz();
@@ -514,7 +566,7 @@
     tonicName: tonicName,
     currentNotes: currentNotes,
     scrollToFret: scrollToFret,
-    collectScope: collectScope,
+    collectScope: collectScope, showCellExplain: showCellExplain,
     setState: function (p) {
       Object.keys(p).forEach(function (k) { state[k] = p[k]; });
       render();

@@ -70,3 +70,24 @@ footer a{color:inherit}
   .pat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .seg button,.pat-grid button{font-size:15px}
 }
+
+#explain{margin-top:14px;padding-top:12px;border-top:1px solid rgba(0,0,0,.08)}
+#explain h2{margin:0 0 10px;font-size:20px}
+#explain .formula,#explain .walk{margin:0 0 10px;font-size:17px;line-height:1.65}
+#explain .walk-step{display:inline-block;padding:1px 4px;border-radius:6px;white-space:nowrap;margin:0 2px 4px 0}
+#explain .walk-step.bad{background:var(--warn);color:#fff;font-weight:800}
+#explain .explain-list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+#explain .explain-item{background:var(--paper);border-radius:12px;padding:12px 14px;border-left:5px solid var(--muted)}
+#explain .explain-item.extra{border-left-color:var(--bad)}
+#explain .explain-item.missing{border-left-color:var(--miss)}
+#explain .explain-item.wrongName{border-left-color:var(--warn)}
+#explain .explain-item strong{display:block;margin-bottom:4px;font-size:17px}
+#explain .explain-item p{margin:0;font-size:16px;line-height:1.65}
+#explain .explain-item.on{outline:3px solid var(--accent);outline-offset:0}
+#explain .tip{margin:12px 0 0;font-size:15px;line-height:1.6}
+.cell.explain-on{outline:3px solid var(--accent);outline-offset:-3px;z-index:2}
+@media(max-width:899px){
+  #explain h2{font-size:19px}
+  #explain .formula,#explain .walk,#explain .explain-item p,#explain .explain-item strong{font-size:16px;line-height:1.7}
+  #explain .explain-item{padding:12px}
+}

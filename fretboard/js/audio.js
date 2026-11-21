@@ -12,19 +12,17 @@
     return list;
   }
   var INSTRUMENTS = {
-    piano: { label: "鋼琴", dir: "piano", notes: grid(48, 84) },
     acoustic: { label: "木吉他", dir: "acoustic", notes: grid(48, 84) },
     electric: { label: "電吉他", dir: "electric", notes: grid(48, 84) },
     bass: { label: "Bass", dir: "bass", notes: grid(24, 60), hint: "Bass 音色依指板上的實際音高發聲。" },
-    voice: { label: "人聲", dir: "voice", notes: grid(48, 84) },
     teacher: { label: "小江老師", dir: "teacher", notes: [54], files: { 54: "Fs3" }, single: true,
       hint: "小江老師的聲音是單一取樣移調，會依指板的實際音高發聲。" }
   };
-  var INST_ORDER = ["piano", "acoustic", "electric", "bass", "voice", "teacher"];
+  var INST_ORDER = ["acoustic", "electric", "bass", "teacher"];
   function dbToLin(db) { return Math.pow(10, db / 20); }
   var MASTER_GAIN = 1;
   INST_ORDER.forEach(function (id) {
-    var boost = { piano: 16.7, acoustic: 14.7, electric: 13.7, bass: 11.2, voice: 12.1, teacher: 11.1 }[id];
+    var boost = { acoustic: 14.7, electric: 13.7, bass: 11.2, teacher: 11.1 }[id];
     INSTRUMENTS[id].gain = 0.9 * dbToLin(boost);
   });
   var LIMITER = { threshold: -3, knee: 2, ratio: 20, attack: 0.001, release: 0.15, clipDb: -1.2 };

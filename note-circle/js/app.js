@@ -32,6 +32,19 @@
       hint: "小江老師的聲音比顯示低一個八度。" }
   };
   var INST_ORDER = ["piano", "acoustic", "electric", "bass", "voice", "teacher"];
+  // 音量：2026-11-21 離線實測（舊版 master 0.9、和弦還有 1.1/√n）。C 大調音階綜合響度約 -31.7～-26.1 LUFS，
+  // 比 YouTube 常見的約 -14 LUFS 小約 12～18 dB，和弦更小聲。各音色 gain 讓 C 大調音階靠近 -14 LUFS，彼此對齊。
+  // 總增益相對舊輸出（已含 0.9）：鋼琴 +16.7 dB、木吉他 +14.7、電吉他 +13.7、Bass +11.2、人聲 +12.1、小江老師 +11.1
+  // （先依音階對到約 -14 LUFS；再留 1 dB 給和弦峰值）。Limiter 後面加 -1.2 dBFS 安全限幅，避免 True Peak 超過約 -1 dBTP。
+  function dbToLin(db) { return Math.pow(10, db / 20); }
+  var MASTER_GAIN = 1;
+  INST_ORDER.forEach(function (id) {
+    var boost = { piano: 16.7, acoustic: 14.7, electric: 13.7, bass: 11.2, voice: 12.1, teacher: 11.1 }[id];
+    INSTRUMENTS[id].gain = 0.9 * dbToLin(boost);
+  });
+  var LIMITER = { threshold: -3, knee: 2, ratio: 20, attack: 0.001, release: 0.15, clipDb: -1.2 };
+  // 和弦不要再大幅壓低；靠後面的 limiter 避免爆音。5 音約 0.85（舊的 5 音是 0.49）。
+  function chordLevel(n) { return Math.min(1, 1 / Math.pow(Math.max(1, n), 0.1)); }
 
   // 12 個大調。enh：可切換的同音異名寫法。
   var KEYS = [
@@ -158,20 +171,68 @@
   var OCT_MIN = 3, OCT_MAX = 5;
 
   // ---------- 音訊 ----------
-  var ctx = null, master = null;
+  var ctx = null, master = null, limiter = null, instGain = null, clip = null;
   var buffers = {}; // inst -> {midi: AudioBuffer}
   var loading = {};
   var voices = [];
   window.__noteLog = [];
   window.__sampleStatus = {};
 
+  // 輸出鏈：音色增益 → master → DynamicsCompressor（當 limiter）→ 目的地。直播與離線同一套。
+  function makeSafetyClip(audioCtx) {
+    var ceil = dbToLin(LIMITER.clipDb);
+    var start = dbToLin(Math.min(-3, LIMITER.clipDb - 1.5));
+    var sh = audioCtx.createWaveShaper();
+    var n = 65536;
+    var curve = new Float32Array(n);
+    for (var i = 0; i < n; i++) {
+      var x = (i / (n - 1)) * 2 - 1;
+      var a = Math.abs(x), s = x < 0 ? -1 : 1, y;
+      if (a <= start) y = a;
+      else {
+        var u = (a - start) / Math.max(1e-6, 1 - start);
+        y = start + (ceil - start) * (1 - Math.exp(-3 * u));
+        if (y > ceil) y = ceil;
+      }
+      curve[i] = s * y;
+    }
+    sh.curve = curve;
+    sh.oversample = "4x";
+    return sh;
+  }
+
+  function buildOutputChain(audioCtx) {
+    var gains = {};
+    var mast = audioCtx.createGain();
+    mast.gain.value = MASTER_GAIN;
+    var lim = audioCtx.createDynamicsCompressor();
+    lim.threshold.value = LIMITER.threshold;
+    lim.knee.value = LIMITER.knee;
+    lim.ratio.value = LIMITER.ratio;
+    lim.attack.value = LIMITER.attack;
+    lim.release.value = LIMITER.release;
+    var clip = makeSafetyClip(audioCtx);
+    INST_ORDER.forEach(function (id) {
+      var g = audioCtx.createGain();
+      g.gain.value = INSTRUMENTS[id].gain;
+      g.connect(mast);
+      gains[id] = g;
+    });
+    mast.connect(lim);
+    lim.connect(clip);
+    clip.connect(audioCtx.destination);
+    return { instGain: gains, master: mast, limiter: lim, clip: clip };
+  }
+
   function ensureCtx() {
     if (!ctx) {
       var AC = window.AudioContext || window.webkitAudioContext;
       ctx = new AC({ latencyHint: "interactive" });
-      master = ctx.createGain();
-      master.gain.value = 0.9;
-      master.connect(ctx.destination);
+      var chain = buildOutputChain(ctx);
+      master = chain.master;
+      limiter = chain.limiter;
+      instGain = chain.instGain;
+      clip = chain.clip;
     }
     return ctx;
   }
@@ -287,7 +348,7 @@
     return loadInst(id).then(function () {
       var t = Math.max(ctx.currentTime, when || 0);
       chokeVoices(function (v) { return v.midi === midi; }, t);
-      var v = startNote(ctx, master, buffers[id], midi, t);
+      var v = startNote(ctx, instGain[id], buffers[id], midi, t);
       if (!v) return;
       voices.push(v);
       var freq = 440 * Math.pow(2, (midi - 69) / 12);
@@ -301,12 +362,12 @@
     ensureCtx();
     if (ctx.state === "suspended") ctx.resume();
     var strum = (id === "acoustic" || id === "electric") ? 0.025 : 0;
-    var level = Math.min(1, 1.1 / Math.sqrt(midis.length));
+    var level = chordLevel(midis.length);
     return loadInst(id).then(function () {
       var t = Math.max(ctx.currentTime, when || 0);
       chokeVoices(function () { return true; }, t);
       midis.forEach(function (midi, i) {
-        var v = startNote(ctx, master, buffers[id], midi, t + i * strum, level);
+        var v = startNote(ctx, instGain[id], buffers[id], midi, t + i * strum, level);
         if (!v) return;
         voices.push(v);
         var freq = 440 * Math.pow(2, (midi - 69) / 12);
@@ -334,15 +395,15 @@
     seconds = seconds || 1.5;
     var Offline = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     var offline = new Offline(2, Math.ceil(seconds * sr), sr);
-    var dest = offline.createGain();
-    dest.gain.value = 0.9;
-    dest.connect(offline.destination);
+    var chain = buildOutputChain(offline);
     var ids = [];
     events.forEach(function (e) { if (ids.indexOf(e.inst) < 0) ids.push(e.inst); });
     return Promise.all(ids.map(function (id) { return loadInst(id, offline).then(function (bufs) { return [id, bufs]; }); })).then(function (pairs) {
       var map = {};
       pairs.forEach(function (p) { map[p[0]] = p[1]; });
-      events.forEach(function (e) { startNote(offline, dest, map[e.inst], e.midi, e.when); });
+      events.forEach(function (e) {
+        startNote(offline, chain.instGain[e.inst], map[e.inst], e.midi, e.when, e.level);
+      });
       return offline.startRendering();
     });
   }
@@ -622,7 +683,9 @@
     state: state, spellMajor: spellMajor, relativeMinorName: relativeMinorName, keyMenuLabel: keyMenuLabel,
     chordInfo: chordInfo, chordMidis: chordMidis, currentChord: currentChord, CHORDS: CHORDS, DIATONIC: DIATONIC,
     render: render, loadInst: loadInst, playMidi: playMidi, soundingMidi: soundingMidi, renderOffline: renderOffline,
-    INSTRUMENTS: INSTRUMENTS, KEYS: KEYS,
+    ensureCtx: ensureCtx, buildOutputChain: buildOutputChain, chordLevel: chordLevel, dbToLin: dbToLin,
+    INSTRUMENTS: INSTRUMENTS, INST_ORDER: INST_ORDER, KEYS: KEYS, MASTER_GAIN: MASTER_GAIN, LIMITER: LIMITER,
+    getMaster: function () { return master; }, getLimiter: function () { return limiter; }, getInstGain: function () { return instGain; }, getClip: function () { return clip; },
     NOTE_ATTACK: NOTE_ATTACK, NOTE_FADE_AT: NOTE_FADE_AT, NOTE_FADE: NOTE_FADE, NOTE_LEN: NOTE_LEN
   };
 

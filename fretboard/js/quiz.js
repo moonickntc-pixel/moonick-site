@@ -19,26 +19,33 @@
     return a;
   }
 
-  // 難度由三軸一起往上：調性 → 圈幾個音 → 音階種類。調式不入題。
+  // 難度由多軸一起往上：調性、圈幾個音、音階種類、指型數量。調式不入題。
+  // 指型從最常用的 La 起，愈後面愈多。hint：full=整型淡圈、soft=更淡的淡圈、none=只留題目圈。
   var QUIZ_LEVELS = [
-    { id: 1, name: "第 1 級　起步", blurb: "最常見的調，圈 3 個音，只考大調與自然小調。",
+    { id: 1, name: "第 1 級　起步", blurb: "最常見的調，只練 La 指型，圈 3 個音。指型裡的音會先淡淡圈起來，方便邊玩邊記。",
       tonics: { major: ["C", "G"], minor: ["A", "E"] },
-      scales: ["major", "natMinor"], circleCount: 3, types: ["identify"], boards: ["guitar"], streakToUp: 3 },
-    { id: 2, name: "第 2 級　多一點調", blurb: "再加上 D、F 大調與 D、B 小調，還是圈 3 個音。",
+      scales: ["major", "natMinor"], circleCount: 3, types: ["identify"], boards: ["guitar"],
+      patterns: [3], hint: "full", streakToUp: 3 },
+    { id: 2, name: "第 2 級　多一點調", blurb: "再加上 D、F 大調與 D、B 小調，加入 Do 指型，還是圈 3 個音。指型淡圈會比較淡。",
       tonics: { major: ["C", "G", "D", "F"], minor: ["A", "E", "D", "B"] },
-      scales: ["major", "natMinor"], circleCount: 3, types: ["identify"], boards: ["guitar"], streakToUp: 3 },
-    { id: 3, name: "第 3 級　四個音", blurb: "圈 4 個音，開始有聽和弦、在指型裡找出指定音的題目。",
+      scales: ["major", "natMinor"], circleCount: 3, types: ["identify"], boards: ["guitar"],
+      patterns: [3, 4], hint: "soft", streakToUp: 3 },
+    { id: 3, name: "第 3 級　四個音", blurb: "再加入 Sol 指型，圈 4 個音，開始有聽和弦、在指型裡找出指定音的題目。這級起不再提示整型。",
       tonics: { major: ["C", "G", "D", "F"], minor: ["A", "E", "D", "B"] },
-      scales: ["major", "natMinor"], circleCount: 4, types: ["identify", "find"], boards: ["guitar"], streakToUp: 3 },
-    { id: 4, name: "第 4 級　五聲音階", blurb: "加入大調五聲、小調五聲，圈 4 個音，也會出到 Bass。",
+      scales: ["major", "natMinor"], circleCount: 4, types: ["identify", "find"], boards: ["guitar"],
+      patterns: [2, 3, 4], hint: "none", streakToUp: 3 },
+    { id: 4, name: "第 4 級　五聲音階", blurb: "加入 Mi 指型，還有大調五聲、小調五聲，圈 4 個音，也會出到 Bass。",
       tonics: { major: ["C", "G", "D", "F", "A"], minor: ["A", "E", "D", "B"] },
-      scales: ["major", "natMinor", "majPent", "minPent"], circleCount: 4, types: ["identify", "find"], boards: ["guitar", "bass"], streakToUp: 4 },
-    { id: 5, name: "第 5 級　和聲與藍調", blurb: "加入和聲小調、旋律小調、藍調，圈 4 個音。",
+      scales: ["major", "natMinor", "majPent", "minPent"], circleCount: 4, types: ["identify", "find"], boards: ["guitar", "bass"],
+      patterns: [1, 2, 3, 4], hint: "none", streakToUp: 4 },
+    { id: 5, name: "第 5 級　和聲與藍調", blurb: "五個指型都會出，加入和聲小調、旋律小調、藍調，圈 4 個音。",
       tonics: { major: ["C", "G", "D", "F", "A", "Bb"], minor: ["A", "E", "D", "B", "C", "F#"] },
-      scales: ["major", "natMinor", "majPent", "minPent", "harMinor", "melMinor", "blues"], circleCount: 4, types: ["identify", "find"], boards: ["guitar", "bass"], streakToUp: 4 },
-    { id: 6, name: "第 6 級　再多一點", blurb: "更多調、圈 5 個音，聽和弦找音會比較多。",
+      scales: ["major", "natMinor", "majPent", "minPent", "harMinor", "melMinor", "blues"], circleCount: 4, types: ["identify", "find"], boards: ["guitar", "bass"],
+      patterns: [1, 2, 3, 4, 5], hint: "none", streakToUp: 4 },
+    { id: 6, name: "第 6 級　再多一點", blurb: "五個指型、更多調、圈 5 個音，聽和弦找音會比較多。",
       tonics: { major: ["C", "G", "D", "A", "E", "F", "Bb", "Eb"], minor: ["A", "E", "B", "D", "G", "C", "F#", "F"] },
-      scales: ["major", "natMinor", "majPent", "minPent", "harMinor", "melMinor", "blues"], circleCount: 5, types: ["identify", "find"], boards: ["guitar", "bass"], streakToUp: 4 }
+      scales: ["major", "natMinor", "majPent", "minPent", "harMinor", "melMinor", "blues"], circleCount: 5, types: ["identify", "find"], boards: ["guitar", "bass"],
+      patterns: [1, 2, 3, 4, 5], hint: "none", streakToUp: 4 }
   ];
 
   var MODE_SCALE_IDS = ["dorian", "phrygian", "lydian", "mixolydian", "locrian"];
@@ -57,6 +64,18 @@
   function levelById(id) {
     for (var i = 0; i < QUIZ_LEVELS.length; i++) if (QUIZ_LEVELS[i].id === id) return QUIZ_LEVELS[i];
     return QUIZ_LEVELS[0];
+  }
+
+  function patternsForQuestion(level, opts) {
+    opts = opts || {};
+    if (opts.pattern) return [opts.pattern];
+    var lock = opts.shapeLock;
+    if (lock && lock !== "all" && lock !== "0" && lock !== 0) return [+lock];
+    return (level.patterns && level.patterns.length) ? level.patterns.slice() : [1, 2, 3, 4, 5];
+  }
+  function hintForQuestion(level, opts) {
+    if (opts && opts.hint) return opts.hint;
+    return level.hint || "none";
   }
 
   function compatibleScale(tonic, scaleId, level) {
@@ -192,7 +211,7 @@
     var rng = opts.rng;
     var pair = pickTonicAndScale(level, rng, opts);
     var boards = opts.board ? [opts.board] : level.boards;
-    var patterns = opts.pattern ? [opts.pattern] : [1, 2, 3, 4, 5];
+    var patterns = patternsForQuestion(level, opts);
     var count = opts.circleCount || level.circleCount;
     var guard = 0, q = null;
     while (!q && guard < 80) {
@@ -222,7 +241,8 @@
         }),
         boxNotes: notes.map(function (n) {
           return { string: n.string, fret: n.fret, degree: n.degree, name: n.name, midi: n.midi, tonic: n.tonic, key: n.string + "-" + n.fret };
-        })
+        }),
+        hint: hintForQuestion(level, opts)
       };
       q.prompt = identifyPrompt(q);
     }
@@ -261,7 +281,7 @@
     var rng = opts.rng;
     var pair = pickTonicAndScale(level, rng, opts);
     var boards = opts.board ? [opts.board] : level.boards;
-    var patterns = opts.pattern ? [opts.pattern] : [1, 2, 3, 4, 5];
+    var patterns = patternsForQuestion(level, opts);
     var guard = 0, q = null;
     while (!q && guard < 80) {
       guard++;
@@ -290,7 +310,8 @@
         progression: fixedProgressionFor(pair.tonic, pair.scale, progKind),
         boxNotes: notes.map(function (n) {
           return { string: n.string, fret: n.fret, degree: n.degree, name: n.name, midi: n.midi, tonic: n.tonic, key: n.string + "-" + n.fret };
-        })
+        }),
+        hint: hintForQuestion(level, opts)
       };
       q.prompt = findPrompt(q);
     }
@@ -423,6 +444,8 @@
   T.MODE_SCALE_IDS = MODE_SCALE_IDS;
   T.FIND_FRAGMENTS = FIND_FRAGMENTS;
   T.levelById = levelById;
+  T.patternsForQuestion = patternsForQuestion;
+  T.hintForQuestion = hintForQuestion;
   T.keyAndScaleTitle = keyAndScaleTitle;
   T.makeIdentifyQuestion = makeIdentifyQuestion;
   T.makeFindQuestion = makeFindQuestion;

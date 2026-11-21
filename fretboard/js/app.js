@@ -19,7 +19,8 @@
     level: 1,
     score: 0,
     streak: 0,
-    pendingLevelUp: false
+    pendingLevelUp: false,
+    shapeLock: "all"
   };
   var INLAYS = { 3: 1, 5: 1, 7: 1, 9: 1, 12: 2, 15: 1 };
 
@@ -232,6 +233,12 @@
           var qbox = state.question.box;
           if (fr >= qbox.lo && fr <= qbox.hi) btn.classList.add("in-box");
         }
+        if (state.mode === "quiz" && state.question && (state.question.hint === "full" || state.question.hint === "soft") && state.question.boxNotes) {
+          if (state.question.boxNotes.some(function (x) { return x.string === sIdx && x.fret === fr; })) {
+            btn.classList.add("shape-outline");
+            if (state.question.hint === "soft") btn.classList.add("shape-outline-soft");
+          }
+        }
         if (state.mode === "quiz" && state.question && state.question.kind === "identify" && state.question.targets) {
           if (state.question.targets.some(function (x) { return x.string === sIdx && x.fret === fr; })) btn.classList.add("circled");
         }
@@ -321,9 +328,11 @@
         '<li><span class="sw sw-bad"></span>多點了</li>' +
         '<li><span class="sw sw-miss"></span>漏了</li>';
     } else if (state.mode === "quiz") {
+      var hint = state.question && state.question.hint;
       ul.innerHTML = '<li>反黃的格子是這個指型的把位</li>' +
+        ((hint === "full" || hint === "soft") ? '<li><span class="sw sw-outline"></span>淡圈是這個指型的全部音</li>' : "") +
         (state.question && state.question.kind === "identify"
-          ? '<li>畫圈的是要作答的音</li>'
+          ? '<li>深圈是要作答的音</li>'
           : '<li>請在把位裡點出題目指定的數字音</li>');
     } else {
       ul.innerHTML = '<li><span class="sw sw-scale"></span>音階音</li>' +
@@ -345,6 +354,26 @@
       b.setAttribute("data-level", String(lv.id));
       b.setAttribute("role", "radio");
       b.textContent = "第 " + lv.id + " 級";
+      box.appendChild(b);
+    });
+    box.setAttribute("data-ready", "1");
+  }
+
+  function fillShapeLockBtns() {
+    var box = document.getElementById("shapeLockBtns");
+    if (!box || box.getAttribute("data-ready")) return;
+    var all = document.createElement("button");
+    all.type = "button";
+    all.setAttribute("data-shape", "all");
+    all.setAttribute("role", "radio");
+    all.textContent = "全部／依關卡";
+    box.appendChild(all);
+    T.PATTERNS.forEach(function (p) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("data-shape", String(p.id));
+      b.setAttribute("role", "radio");
+      b.textContent = p.label.replace(" 指型", "");
       box.appendChild(b);
     });
     box.setAttribute("data-ready", "1");
@@ -396,14 +425,30 @@
       document.getElementById(id).hidden = qOn;
     });
     fillLevelBtns();
+    fillShapeLockBtns();
     document.querySelectorAll("#levelBtns button").forEach(function (b) {
       b.classList.toggle("on", b.getAttribute("data-level") === String(state.level));
     });
+    document.querySelectorAll("#shapeLockBtns button").forEach(function (b) {
+      b.classList.toggle("on", b.getAttribute("data-shape") === String(state.shapeLock));
+    });
     var lv = T.levelById(state.level);
+    var lockHint = document.getElementById("shapeLockHint");
+    if (state.shapeLock !== "all") {
+      lockHint.textContent = "現在只練" + T.patternLabel(+state.shapeLock) + "，每一級都出這個指型。";
+    } else {
+      lockHint.textContent = "選「全部／依關卡」時，前面關卡先練 La 指型，愈後面指型愈多。也可以鎖成單一指型，專門練那一個。";
+    }
     document.getElementById("levelHint").textContent = lv.blurb || "";
-    document.getElementById("quizHow").textContent = q && q.kind === "find"
-      ? "先按「聽和弦進行」，再在反黃的把位裡點出指定的數字音。再點一次可以取消。"
-      : "在畫圈的格子上點一下，選數字音名（小調主音是 6，大調主音是 1）。";
+    var how;
+    if (q && q.kind === "find") {
+      how = "先按「聽和弦進行」，再在反黃的把位裡點出指定的數字音。再點一次可以取消。";
+    } else if (q && (q.hint === "full" || q.hint === "soft")) {
+      how = "淡圈是這個指型的全部音，深圈是要作答的音。點深圈，選數字音名（小調主音是 6，大調主音是 1）。";
+    } else {
+      how = "在畫圈的格子上點一下，選數字音名（小調主音是 6，大調主音是 1）。";
+    }
+    document.getElementById("quizHow").textContent = how;
     document.getElementById("playProg").hidden = !(qOn && q && q.kind === "find" && !state.grade);
     document.getElementById("stopProg").hidden = !(qOn && q && q.kind === "find" && A.isPlaying && A.isPlaying());
     renderBanner(qOn ? q : null);
@@ -554,7 +599,7 @@
     state.grade = null;
     state.pendingLevelUp = false;
     if (A.stopTransport) A.stopTransport();
-    state.question = forced || T.randomQuizQuestion({ level: state.level, board: state.board });
+    state.question = forced || T.randomQuizQuestion({ level: state.level, board: state.board, shapeLock: state.shapeLock });
     if (!state.question) return;
     state.board = state.question.board;
     state.scale = state.question.scale;
@@ -642,6 +687,14 @@
     document.getElementById("patBtns").appendChild(all);
 
     fillLevelBtns();
+    fillShapeLockBtns();
+    document.getElementById("shapeLockBtns").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-shape]");
+      if (!b) return;
+      state.shapeLock = b.getAttribute("data-shape");
+      if (state.mode === "quiz") newQuestion();
+      else render();
+    });
     document.getElementById("levelBtns").addEventListener("click", function (e) {
       var b = e.target.closest("button[data-level]");
       if (!b) return;

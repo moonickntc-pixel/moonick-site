@@ -14,6 +14,21 @@
   };
   var CHORD_SUF = { maj: "", m: "m", dim: "dim", "7": "7", maj7: "maj7", m7: "m7" };
   var MINOR_SHOU = ["6", "7", "1", "2", "3", "4", "5"]; // 首調：小調主音是 6
+  // 和弦級數：首調數字加性質（Nashville）。大調 1、2m、3m、4、5、6m、7dim；小調主和弦是 6m。
+  var MAJOR_SHOU_CHORD = ["1", "2m", "3m", "4", "5", "6m", "7dim"];
+  var MINOR_SHOU_CHORD = ["6m", "7dim", "1", "2m", "3m", "4", "5"];
+  function shouChordLabel(quality, degree) {
+    var list = quality === "minor" ? MINOR_SHOU_CHORD : MAJOR_SHOU_CHORD;
+    return list[degree - 1];
+  }
+  function degreeFromShou(quality, label) {
+    if (typeof label === "number" && label >= 1 && label <= 7) return label;
+    var list = quality === "minor" ? MINOR_SHOU_CHORD : MAJOR_SHOU_CHORD;
+    var i = list.indexOf(String(label));
+    if (i >= 0) return i + 1;
+    var n = parseInt(label, 10);
+    return n >= 1 && n <= 7 ? n : 1;
+  }
 
   var MAJOR_KEYS = ["C", "G", "D", "A", "E", "B", "F#", "F", "Bb", "Eb", "Ab", "Db"];
   var MINOR_KEYS = ["A", "E", "B", "F#", "C#", "G#", "D#", "D", "G", "C", "F", "Bb"];
@@ -131,6 +146,7 @@
       var rootPc = (sp.tonicPc + iv[i]) % 12;
       var info = chordTonesOf(rootPc, t, tonicName, quality);
       info.degree = i + 1;
+      info.shouLabel = shouChordLabel(quality, i + 1);
       return info;
     });
   }
@@ -223,7 +239,7 @@
         title: quality === "minor" ? "這是哪個小調？" : "這是哪個大調？",
         ask: "進行會停在主和弦上。請選一個" + (quality === "minor" ? "小調" : "大調") + "。"
       },
-      jam: { tonic: tonic, quality: quality, chords: chords }
+      jam: { kind: "chords", tonic: tonic, quality: quality, chords: chords }
     };
   }
 
@@ -251,6 +267,14 @@
         kicker: "先聽這段旋律",
         title: quality === "minor" ? "這是哪個小調？" : "這是哪個大調？",
         ask: "旋律會停在主音上。請選一個" + (quality === "minor" ? "小調" : "大調") + "。"
+      },
+      jam: {
+        kind: "melody",
+        tonic: tonic,
+        quality: quality,
+        degrees: degrees.slice(),
+        pcs: melodyPcs(tonic, quality, degrees),
+        chords: diatonicChords(tonic, quality)
       }
     };
   }
@@ -290,16 +314,17 @@
     var quality = opts.quality || rngPick(["major", "minor"], rng);
     var pool = quality === "minor" ? level.minors : level.majors;
     var tonic = opts.tonic || rngPick(pool, rng);
-    var degrees = opts.degree ? [opts.degree] : level.degrees;
-    var degree = rngPick(degrees, rng);
+    var rawDeg = opts.degree != null ? opts.degree : rngPick(level.degrees, rng);
+    var degree = degreeFromShou(quality, rawDeg);
     var diat = diatonicChords(tonic, quality);
     var correct = diat[degree - 1];
-    // 干擾項：同調其他級數，加上一兩個常見但不對的
+    var shou = correct.shouLabel;
+    // 干擾項：同調其他級數
     var others = diat.filter(function (c, i) { return i !== degree - 1; });
     var choiceChords = shuffle(others, rng).slice(0, 3);
     choiceChords.push(correct);
     var choices = shuffle(choiceChords.map(function (c) {
-      return { name: c.name, degree: c.degree, correct: c.degree === degree };
+      return { name: c.name, degree: c.degree, shouLabel: c.shouLabel, correct: c.degree === degree };
     }), rng);
     return {
       kind: "degreeChord",
@@ -307,13 +332,14 @@
       tonic: tonic,
       quality: quality,
       degree: degree,
+      shouLabel: shou,
       answer: correct.name,
       correctChord: correct,
       choices: choices,
       prompt: {
         kicker: "看調性與級數",
-        title: keyLabel(tonic, quality) + "　" + degree + " 級",
-        ask: "這個級數的和弦是哪一個？"
+        title: keyLabel(tonic, quality) + " " + shou,
+        ask: keyLabel(tonic, quality) + " " + shou + " 是哪個和弦？"
       }
     };
   }
@@ -375,7 +401,8 @@
   var api = {
     LEVELS: LEVELS, MAJOR_KEYS: MAJOR_KEYS, MINOR_KEYS: MINOR_KEYS,
     MAJOR_PROGS: MAJOR_PROGS, MINOR_PROGS: MINOR_PROGS, MELODIES: MELODIES,
-    CHORD_IV: CHORD_IV, MINOR_SHOU: MINOR_SHOU,
+    CHORD_IV: CHORD_IV, MINOR_SHOU: MINOR_SHOU, MAJOR_SHOU_CHORD: MAJOR_SHOU_CHORD, MINOR_SHOU_CHORD: MINOR_SHOU_CHORD,
+    shouChordLabel: shouChordLabel, degreeFromShou: degreeFromShou,
     levelById: levelById, pcOf: pcOf, spellScale: spellScale, scalePcs: scalePcs,
     keyLabel: keyLabel, chordTonesOf: chordTonesOf, diatonicChords: diatonicChords,
     progressionChords: progressionChords, progressionPcs: progressionPcs,

@@ -16,6 +16,7 @@
     choice: null,
     picked: {},
     jam: false,
+    jamKind: "",
     bpm: 96
   };
 
@@ -99,18 +100,28 @@
       playHat(t, step % 8 === 6);
     }
     var stepsPerChord = (plan.beatsPerChord || 2) * 2;
-    var chordIdx = Math.floor(step / stepsPerChord) % (plan.chords || []).length;
-    if (plan.chords && plan.chords.length && step % stepsPerChord === 0) {
+    var chordIdx = Math.floor(step / stepsPerChord) % Math.max(1, (plan.chords || []).length);
+    if (plan.autoChords && plan.chords && plan.chords.length && step % stepsPerChord === 0) {
       var midis = chordMidisFor(plan.chords[chordIdx]);
       if (C.playChord) C.playChord(midis, t);
     }
+    if (plan.melodyMidis && plan.melodyMidis.length) {
+      var mi = step % plan.melodyMidis.length;
+      C.playMidi(plan.melodyMidis[mi], t);
+      if (C.flash && plan.melodyPcs) C.flash(plan.melodyPcs[mi]);
+    }
+    if (plan.heldChord && step % stepsPerChord === 0) {
+      if (C.playChord) C.playChord(chordMidisFor(plan.heldChord), t, { choke: false });
+    }
     if (plan.onBeat) plan.onBeat(step, t, chordIdx);
     var notes = document.querySelectorAll("#circle .note");
-    if (plan.chords && plan.chords[chordIdx]) {
-      var pcs = plan.chords[chordIdx].pcs;
+    var glow = null;
+    if (plan.heldChord) glow = plan.heldChord;
+    else if (plan.autoChords && plan.chords && plan.chords[chordIdx]) glow = plan.chords[chordIdx];
+    if (glow) {
       notes.forEach(function (el) {
         var pc = +el.getAttribute("data-pc");
-        el.classList.toggle("jam-now", pcs.indexOf(pc) >= 0);
+        el.classList.toggle("jam-now", glow.pcs.indexOf(pc) >= 0);
       });
     }
   }
@@ -139,6 +150,8 @@
     transport.bpm = opts.bpm || state.bpm || 96;
     transport.loop = !!opts.loop;
     transport.plan = {
+      kind: "chords",
+      autoChords: true,
       chords: chords,
       beatsPerChord: opts.beatsPerChord || 2,
       drums: opts.drums !== false,
@@ -206,6 +219,7 @@
     state.choice = null;
     state.picked = {};
     state.jam = false;
+    state.jamKind = "";
     state.pendingLevelUp = false;
     stopTransport();
     C.state.key = -1;
@@ -229,14 +243,88 @@
     }
   }
 
+  function melodyMidisOf(pcs) {
+    var base = 60, midis = [], last = base + pcs[0];
+    midis.push(last);
+    for (var i = 1; i < pcs.length; i++) {
+      var m = base + pcs[i];
+      while (m < last - 6) m += 12;
+      while (m > last + 8) m -= 12;
+      midis.push(m);
+      last = m;
+    }
+    return midis;
+  }
+
+  function startMelodyJam(jam, opts) {
+    opts = opts || {};
+    if (C.unlock) C.unlock();
+    ctx();
+    if (ctx().state === "suspended") ctx().resume();
+    stopTransport();
+    transport.bpm = opts.bpm || state.bpm || 96;
+    transport.loop = true;
+    transport.plan = {
+      kind: "melody",
+      autoChords: false,
+      drums: opts.drums !== false,
+      beatsPerChord: 2,
+      melodyPcs: (jam.pcs || []).slice(),
+      melodyMidis: melodyMidisOf(jam.pcs || []),
+      heldChord: null,
+      jamChords: jam.chords || []
+    };
+    transport.step = 0;
+    transport.next = ctx().currentTime + 0.06;
+    transport.playing = true;
+    C.loadInst(C.state.inst).then(function () {
+      if (!transport.playing) return;
+      tick();
+      transport.timer = setInterval(tick, 25);
+    });
+    renderPractice();
+  }
+
+  function tapJamChord(ch) {
+    if (!state.jam || !transport.plan) return;
+    if (C.unlock) C.unlock();
+    transport.plan.heldChord = ch;
+    var audio = ctx();
+    var t = Math.max(audio.currentTime + 0.02, transport.next);
+    if (C.playChord) C.playChord(chordMidisFor(ch), t, { choke: false });
+    document.querySelectorAll("#jamChords button").forEach(function (b) {
+      b.classList.toggle("on", b.getAttribute("data-chord") === ch.name);
+    });
+  }
+
   function enterJam() {
     var q = state.question;
     if (!q || !q.jam) return;
     state.jam = true;
+    state.jamKind = q.jam.kind || (q.kind === "keyFromMelody" ? "melody" : "chords");
     stopTransport();
     C.render();
     renderPractice();
-    startProgression(q.jam.chords, { bpm: state.bpm, drums: true, loop: true, beatsPerChord: 2 });
+    if (state.jamKind === "melody") startMelodyJam(q.jam, { bpm: state.bpm, drums: true });
+    else startProgression(q.jam.chords, { bpm: state.bpm, drums: true, loop: true, beatsPerChord: 2 });
+  }
+
+  function fillJamChords(jam) {
+    var box = document.getElementById("jamChords");
+    if (!box) return;
+    box.innerHTML = "";
+    var isMel = state.jamKind === "melody";
+    box.hidden = !isMel;
+    if (!isMel || !jam || !jam.chords) return;
+    jam.chords.forEach(function (ch) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("data-chord", ch.name);
+      b.innerHTML = "<strong>" + ch.name + "</strong><span>" + (ch.shouLabel || "") + "</span>";
+      if (transport.plan && transport.plan.heldChord && transport.plan.heldChord.name === ch.name) b.classList.add("on");
+      b.addEventListener("click", function () { tapJamChord(ch); });
+      box.appendChild(b);
+    });
   }
 
   function paintCircle() {
@@ -267,6 +355,14 @@
       var sub = document.querySelector("#circle .center-sub");
       if (main) main.textContent = P.keyLabel(q.jam.tonic, q.jam.quality);
       if (sub) sub.textContent = q.jam.quality === "minor" ? "自然小調　主音是 6" : "主音是 1";
+      document.querySelectorAll("#legend li").forEach(function (li) {
+        if (li.textContent.indexOf("主音") >= 0) {
+          var sw = li.querySelector(".sw");
+          li.textContent = "";
+          if (sw) li.appendChild(sw);
+          li.appendChild(document.createTextNode(q.jam.quality === "minor" ? "主音（6 / La）" : "主音（1 / Do）"));
+        }
+      });
       return;
     }
     if (q && q.kind === "chordTones") {
@@ -322,7 +418,11 @@
       hero.hidden = false;
       hero.querySelector(".kicker").textContent = "Jam 時間";
       hero.querySelector(".q-title").textContent = P.keyLabel(q.jam.tonic, q.jam.quality);
-      hero.querySelector(".q-ask").textContent = "進行會一直循環，圓上只留下這個調的自然音階。點音就能一起彈。";
+      if (state.jamKind === "melody") {
+        hero.querySelector(".q-ask").textContent = "鼓點和旋律會一直循環。點下面的順階和弦，跟著一起彈；圓上只留下這個調的自然音。";
+      } else {
+        hero.querySelector(".q-ask").textContent = "進行會一直循環，圓上只留下這個調的自然音階。點音就能一起彈。";
+      }
       document.getElementById("pracPrompt").textContent = "Jam：" + P.keyLabel(q.jam.tonic, q.jam.quality);
     } else {
       hero.hidden = true;
@@ -358,11 +458,20 @@
     stop.hidden = !(on && transport.playing && !state.jam);
     submit.hidden = !(on && q && !state.jam && !state.grade);
     next.hidden = !(on && !state.jam);
-    jamBtn.hidden = !(on && q && q.kind === "keyFromChords" && state.grade && state.grade.perfect && !state.jam);
+    jamBtn.hidden = !(on && q && q.jam && state.grade && state.grade.perfect && !state.jam && (q.kind === "keyFromChords" || q.kind === "keyFromMelody"));
     upBtn.hidden = !(on && state.pendingLevelUp && !state.jam);
     jamBar.hidden = !(on && state.jam);
     document.getElementById("tempoVal").textContent = String(transport.bpm || state.bpm);
     document.getElementById("tempoRange").value = String(state.bpm);
+    var cap = document.getElementById("jamCaption");
+    if (on && state.jam && q && q.jam && state.jamKind === "chords") {
+      cap.hidden = false;
+      cap.textContent = (q.jam.chords || []).map(function (c) { return c.name + "（" + (c.shouLabel || "") + "）"; }).join("　");
+    } else if (cap) {
+      cap.hidden = true;
+      cap.textContent = "";
+    }
+    fillJamChords(on && state.jam && q ? q.jam : null);
 
     var res = document.getElementById("pracResult");
     if (on && state.grade && !state.jam) {
@@ -419,6 +528,7 @@
     state.mode = mode;
     stopTransport();
     state.jam = false;
+    state.jamKind = "";
     if (mode === "browse") {
       state.question = null;
       state.grade = null;
@@ -509,7 +619,7 @@
     state: state,
     newQuestion: newQuestion,
     setMode: setMode,
-    enterJam: enterJam,
+    enterJam: enterJam, tapJamChord: tapJamChord, startMelodyJam: startMelodyJam,
     startProgression: startProgression,
     stopTransport: stopTransport,
     playMelody: playMelody,

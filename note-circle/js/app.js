@@ -357,7 +357,8 @@
   }
 
   // 和弦：一起發聲（吉他快速往上刷，每弦約 25ms），先停掉上一個和弦。
-  function playChord(midis, when) {
+  function playChord(midis, when, opts) {
+    opts = opts || {};
     var id = state.inst;
     ensureCtx();
     if (ctx.state === "suspended") ctx.resume();
@@ -365,7 +366,7 @@
     var level = chordLevel(midis.length);
     return loadInst(id).then(function () {
       var t = Math.max(ctx.currentTime, when || 0);
-      chokeVoices(function () { return true; }, t);
+      if (opts.choke !== false) chokeVoices(function () { return true; }, t);
       midis.forEach(function (midi, i) {
         var v = startNote(ctx, instGain[id], buffers[id], midi, t + i * strum, level);
         if (!v) return;

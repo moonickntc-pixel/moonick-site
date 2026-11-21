@@ -126,3 +126,9 @@ footer a{color:inherit}
   .quiz-hero .q-ask{font-size:18px}
   .cell.circled::after{width:40px;height:40px}
 }
+
+.cell.shape-outline::before{content:"";position:absolute;left:50%;top:50%;width:min(32px,calc(var(--cell-w) - 10px));height:min(32px,calc(var(--cell-h) - 10px));transform:translate(-50%,-50%);border:2.5px solid color-mix(in srgb,var(--accent) 80%,transparent);border-radius:50%;pointer-events:none;z-index:1;box-sizing:border-box;background:transparent}
+.cell.shape-outline-soft::before{opacity:.4;border-width:2px}
+.cell.circled.shape-outline::before{display:none}
+.sw-outline{background:transparent;border:3px solid var(--accent)}
+@media(max-width:899px){.cell.shape-outline::before{width:28px;height:28px}}

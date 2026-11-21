@@ -119,3 +119,19 @@ html:not(.has-chord) .chord-only{display:none!important}
 }
 
 [hidden]{display:none!important}
+
+/* Jam：調外音完全隱藏，不可點 */
+html.practice-jam #circle .note.out{display:none!important;pointer-events:none;visibility:hidden}
+.jam-chords{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;width:100%;margin-top:8px}
+.jam-chords[hidden]{display:none!important}
+.jam-chords button{border:2px solid var(--accent);background:transparent;border-radius:12px;padding:8px 4px;font:inherit;font-weight:800;cursor:pointer;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15}
+.jam-chords button strong{font-size:18px}
+.jam-chords button span{font-size:14px;font-weight:700;color:var(--muted)}
+.jam-chords button.on{background:var(--accent);color:var(--accent-text)}
+.jam-chords button.on span{color:var(--accent-text);opacity:.9}
+#jamCaption{flex:1 0 100%;font-weight:700}
+@media(max-width:899px){
+  .jam-chords{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+  .jam-chords button{min-height:48px;padding:6px 2px}
+  .jam-chords button strong{font-size:16px}
+}

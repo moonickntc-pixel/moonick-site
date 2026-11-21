@@ -19,11 +19,10 @@
     electric: { label: "電吉他", dir: "electric", notes: grid(48, 84), octShift: 0 },
     bass: { label: "Bass", dir: "bass", notes: grid(24, 60), octShift: -2, hint: "Bass 實際音高比畫面上的八度低兩個八度。" },
     voice: { label: "人聲", dir: "voice", notes: grid(48, 84), octShift: 0 },
-    // 老師的聲音：把錄好的檔案放進 samples/teacher/，檔名用音名（例如 F4.mp3、G4.mp3），
-    // 再把對應的 MIDI 號碼列在 notes。只有一個取樣也可以，其他音會用它移調；有多個就用最近的。
-    // 目前 G4.mp3 是暫代用的合唱取樣，等老師錄音後替換。
-    teacher: { label: "老師的聲音", dir: "teacher", notes: [67], octShift: 0, pending: true,
-      hint: "待錄音：目前先用合唱的 G4 暫代，老師錄好後換成老師的聲音（一個音就能移成 12 個音）。" }
+    // 老師的聲音：老師唱的「啊」#F3（已校正到 185.0 Hz），一個取樣移調成 12 個音。
+    // 男聲，實際比畫面上的八度低一個八度：預設 C4–B4 會發出 C3–B3，都在 #F3 上下半個八度內。
+    teacher: { label: "老師的聲音", dir: "teacher", notes: [54], files: { 54: "Fs3" }, octShift: -1, single: true,
+      hint: "老師的聲音比顯示低一個八度。" }
   };
   var INST_ORDER = ["piano", "acoustic", "electric", "bass", "voice", "teacher"];
 
@@ -107,7 +106,7 @@
     buffers[id] = buffers[id] || {};
     var ok = 0, fail = 0;
     loading[id] = Promise.all(inst.notes.map(function (m) {
-      var url = "samples/" + inst.dir + "/" + midiName(m) + ".mp3";
+      var url = "samples/" + inst.dir + "/" + ((inst.files && inst.files[m]) || midiName(m)) + ".mp3";
       return fetch(url).then(function (r) {
         if (!r.ok) throw new Error(url + " " + r.status);
         return r.arrayBuffer();
@@ -237,7 +236,7 @@
     else sb.hidden = true;
     var shift = INSTRUMENTS[state.inst].octShift;
     document.getElementById("octText").textContent = "C" + state.octave + "–B" + state.octave;
-    document.getElementById("octHint").textContent = shift ? "Bass 實際發出 C" + (state.octave + shift) + "–B" + (state.octave + shift) + "（低兩個八度）。" : (state.octave === 4 ? "預設是中央 C（C4）這個八度。" : "按 − ＋ 換八度，中央 C 是 C4。");
+    document.getElementById("octHint").textContent = shift ? INSTRUMENTS[state.inst].label + " 實際發出 C" + (state.octave + shift) + "–B" + (state.octave + shift) + "（低" + (shift === -1 ? "一" : "兩") + "個八度）。" : (state.octave === 4 ? "預設是中央 C（C4）這個八度。" : "按 − ＋ 換八度，中央 C 是 C4。");
     document.getElementById("octDown").disabled = state.octave <= OCT_MIN;
     document.getElementById("octUp").disabled = state.octave >= OCT_MAX;
     var ib = document.querySelectorAll("#instBtns button");
@@ -277,9 +276,6 @@
     b.setAttribute("data-inst", id);
     b.setAttribute("role", "radio");
     b.textContent = INSTRUMENTS[id].label;
-    if (INSTRUMENTS[id].pending) {
-      var sp = document.createElement("span"); sp.className = "pending"; sp.textContent = "（待錄音）"; b.appendChild(sp);
-    }
     b.addEventListener("click", function () {
       state.inst = id; render();
       var st = document.getElementById("status");
@@ -297,6 +293,9 @@
     o.textContent = (k.enh ? k.name + " / " + k.enh : k.name) + " 大調";
     sel.appendChild(o);
   });
+  // 預設不選調（讓學生自己找音階）；不記住上次選的調，也不讓瀏覽器自動還原選單
+  sel.value = "-1"; state.key = -1;
+  window.addEventListener("pageshow", function () { if (sel.value !== String(state.key)) { sel.value = "-1"; state.key = -1; render(); } });
   sel.addEventListener("change", function () { state.key = +sel.value; state.useEnh = false; render(); });
   document.getElementById("spellBtn").addEventListener("click", function () { state.useEnh = !state.useEnh; render(); });
   document.querySelectorAll("#labelBtns button").forEach(function (b) {
@@ -314,7 +313,8 @@
     var gap = state.key >= 0 ? 0.42 : 0.3;
     var base = soundingMidi(0) + start;
     var maxS = Math.max.apply(null, INSTRUMENTS[state.inst].notes);
-    if (base + 12 > maxS + 1) base -= 12;
+    // 多取樣的音色不要超出最高取樣；單一取樣（老師的聲音）照畫面上的八度播
+    if (!INSTRUMENTS[state.inst].single && base + 12 > maxS + 1) base -= 12;
     loadInst(state.inst).then(function () {
       var t0 = ctx.currentTime + 0.05;
       steps.forEach(function (st, i) {

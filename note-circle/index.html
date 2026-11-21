@@ -20,7 +20,7 @@
 <meta name="twitter:title" id="twitter-title" content="十二音圓形音階｜慕尼克">
 <meta name="twitter:description" id="twitter-description" content="點圓上的 12 個音就能聽到音高，可換鋼琴、木吉他、電吉他、Bass、人聲，選調後自然音階會換顏色。">
 <meta name="twitter:image" id="twitter-image" content="https://moonickmusic.com/note-circle/og-moonick.png">
-<link rel="stylesheet" href="css/app.css?v=20261121c">
+<link rel="stylesheet" href="css/app.css?v=20261121d">
 <script>
   (function () {
     var h = location.hostname.toLowerCase().replace(/\.$/, "");
@@ -71,12 +71,18 @@
     <h1>十二音圓形音階圖</h1>
     <div id="circleWrap">
       <svg id="circle" viewBox="-36 -36 672 672" role="group" aria-label="十二個音，點一下發出音高"></svg>
+      <div id="chordCenter" role="status" hidden>
+        <div class="cc-name"></div>
+        <div class="cc-tones"></div>
+        <div class="cc-deg" hidden></div>
+      </div>
     </div>
     <ul id="legend">
       <li><span class="sw sw-white"></span>白鍵音（C D E F G A B）</li>
       <li><span class="sw sw-black"></span>黑鍵音（升降音）</li>
       <li class="key-only"><span class="sw sw-scale"></span>這個調的自然音階</li>
       <li class="key-only"><span class="sw sw-tonic"></span>主音（1 / Do）</li>
+      <li class="chord-only"><span class="sw sw-chord"></span>和弦組成音（粗框是根音）</li>
     </ul>
   </section>
 
@@ -93,6 +99,13 @@
         <select id="keySel" autocomplete="off"></select>
         <button type="button" id="spellBtn" class="small" hidden></button>
       </div>
+    </div>
+
+    <div class="group">
+      <div class="label">和弦</div>
+      <div class="chord-grid" id="chordBtns" role="radiogroup" aria-label="和弦"></div>
+      <div class="chord-grid auto key-only" id="autoBtns" role="radiogroup" aria-label="順階和弦"></div>
+      <p class="hint" id="chordHint"></p>
     </div>
 
     <div class="group key-only">
@@ -125,6 +138,6 @@
   <p>音色取樣：FluidR3 GM SoundFont（Frank Wen），依 <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a> 授權使用，轉檔版本來自 <a href="https://github.com/gleitz/midi-js-soundfonts" target="_blank" rel="noopener">gleitz/midi-js-soundfonts</a>。</p>
 </footer>
 
-<script src="js/app.js?v=20261121c"></script>
+<script src="js/app.js?v=20261121d"></script>
 </body>
 </html>

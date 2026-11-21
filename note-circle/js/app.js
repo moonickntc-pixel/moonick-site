@@ -81,8 +81,77 @@
     return tonicName + " Key (" + relativeMinorName(tonicName) + " Key)";
   }
 
+  // ---------- 和弦 ----------
+  // iv：根音往上的半音數；st：音名往上數幾個字母（拼寫用，例如 7 度 = 6）。
+  // degIn／degSup：級數寫法，m 寫在數字旁邊，其餘用上標（例如 2m⁷、5⁷、4ᵐᵃʲ⁷）。
+  var CHORDS = [
+    { id: "maj", btn: "大三", suf: "", iv: [0, 4, 7], st: [0, 2, 4], degIn: "", degSup: "" },
+    { id: "m", btn: "m", suf: "m", iv: [0, 3, 7], st: [0, 2, 4], degIn: "m", degSup: "", minor: true },
+    { id: "7", btn: "7", suf: "7", iv: [0, 4, 7, 10], st: [0, 2, 4, 6], degIn: "", degSup: "7" },
+    { id: "maj7", btn: "maj7", suf: "maj7", iv: [0, 4, 7, 11], st: [0, 2, 4, 6], degIn: "", degSup: "maj7" },
+    { id: "m7", btn: "m7", suf: "m7", iv: [0, 3, 7, 10], st: [0, 2, 4, 6], degIn: "m", degSup: "7", minor: true },
+    { id: "m7b5", btn: "m7b5", suf: "m7b5", iv: [0, 3, 6, 10], st: [0, 2, 4, 6], degIn: "m", degSup: "7\u266d5", minor: true },
+    { id: "dim", btn: "dim", suf: "dim", iv: [0, 3, 6], st: [0, 2, 4], degIn: "", degSup: "dim", minor: true },
+    { id: "dim7", btn: "dim7", suf: "dim7", iv: [0, 3, 6, 9], st: [0, 2, 4, 6], degIn: "", degSup: "dim7", minor: true },
+    { id: "aug", btn: "aug", suf: "aug", iv: [0, 4, 8], st: [0, 2, 4], degIn: "", degSup: "aug" },
+    { id: "sus2", btn: "sus2", suf: "sus2", iv: [0, 2, 7], st: [0, 1, 4], degIn: "", degSup: "sus2" },
+    { id: "sus4", btn: "sus4", suf: "sus4", iv: [0, 5, 7], st: [0, 3, 4], degIn: "", degSup: "sus4" },
+    { id: "6", btn: "6", suf: "6", iv: [0, 4, 7, 9], st: [0, 2, 4, 5], degIn: "", degSup: "6" },
+    { id: "m6", btn: "m6", suf: "m6", iv: [0, 3, 7, 9], st: [0, 2, 4, 5], degIn: "m", degSup: "6", minor: true },
+    { id: "add9", btn: "add9", suf: "add9", iv: [0, 4, 7, 14], st: [0, 2, 4, 1], degIn: "", degSup: "add9" },
+    { id: "9", btn: "9", suf: "9", iv: [0, 4, 7, 10, 14], st: [0, 2, 4, 6, 1], degIn: "", degSup: "9" }
+  ];
+  var CHORD_BY_ID = {};
+  CHORDS.forEach(function (c) { CHORD_BY_ID[c.id] = c; });
+  // 順階和弦（大調第 1–7 級）
+  var DIATONIC = { auto3: ["maj", "m", "m", "maj", "maj", "m", "dim"], auto7: ["maj7", "m7", "m7", "maj7", "7", "m7", "m7b5"] };
+  // 調外的根音：b2 b3 #4 b6 b7（[第幾級, 升降]）
+  var CHROMATIC_DEG = { 1: [1, -1], 3: [2, -1], 6: [3, 1], 8: [5, -1], 10: [6, -1] };
+  // 不選調時根音的寫法：小三類和弦用升記號（C#m、G#m），其他用降記號（Db、Ab）
+  var ROOT_FLAT = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+  var ROOT_MINOR = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "G#", "A", "Bb", "B"];
+
+  function accStr(diff) { return diff === 0 ? "" : diff > 0 ? new Array(diff + 1).join("#") : new Array(-diff + 1).join("b"); }
+  function spellLetter(L, pc) {
+    var diff = ((pc - LETTER_PC[L]) % 12 + 18) % 12 - 6;
+    return L + accStr(diff);
+  }
+  // 和弦資料：根音 pc、和弦種類 id、調名（例如 "F"，不選調傳空字串）
+  function chordInfo(rootPc, typeId, tonicName) {
+    var c = CHORD_BY_ID[typeId];
+    if (!c) return null;
+    var rootName = null, deg = null;
+    if (tonicName) {
+      var spelled = spellMajor(tonicName);
+      var tonicPc = (LETTER_PC[tonicName[0]] + (tonicName.slice(1) === "#" ? 1 : tonicName.slice(1) === "b" ? -1 : 0) + 12) % 12;
+      var off = (rootPc - tonicPc + 12) % 12;
+      if (spelled[rootPc]) {
+        rootName = spelled[rootPc].name;
+        deg = String(spelled[rootPc].degree + 1);
+      } else {
+        var cd = CHROMATIC_DEG[off];
+        var baseName = null;
+        for (var p = 0; p < 12; p++) if (spelled[p] && spelled[p].degree === cd[0]) baseName = spelled[p].name;
+        var cand = spellLetter(baseName[0], rootPc);
+        // 太難讀的寫法（Fb、Cb、E#、B#、重升重降）改用一般寫法
+        if (/^(Fb|Cb|E#|B#)$/.test(cand) || /##|bb/.test(cand)) cand = null;
+        rootName = cand;
+        deg = (cd[1] < 0 ? "b" : "#") + (cd[0] + 1);
+      }
+    }
+    if (!rootName) rootName = (c.minor ? ROOT_MINOR : ROOT_FLAT)[rootPc];
+    var li = LETTERS.indexOf(rootName[0]);
+    var tones = c.iv.map(function (iv, i) {
+      return spellLetter(LETTERS[(li + c.st[i]) % 7], (rootPc + iv) % 12);
+    });
+    var pcs = c.iv.map(function (iv) { return (rootPc + iv) % 12; });
+    var degText = deg === null ? "" : deg + c.degIn + c.degSup;
+    var degHtml = deg === null ? "" : deg + c.degIn + (c.degSup ? "<sup>" + c.degSup.replace("\u266d", '<span class="fl">\u266d</span>') + "</sup>" : "");
+    return { id: c.id, root: rootPc, name: rootName + c.suf, tones: tones, pcs: pcs, iv: c.iv.slice(), degree: deg, degText: degText, degHtml: degHtml };
+  }
+
   // ---------- 狀態 ----------
-  var state = { inst: "piano", key: -1, useEnh: false, label: "num", octave: 4 };
+  var state = { inst: "piano", key: -1, useEnh: false, label: "num", octave: 4, chord: "", shown: null };
   var OCT_MIN = 3, OCT_MAX = 5;
 
   // ---------- 音訊 ----------
@@ -155,13 +224,14 @@
 
   // 選了調時，以主音為這個八度的最低音：低於主音的音名往上提一個八度。
   // 例如 F Key、畫面 C4 八度：F→F4，C→C5，E→E5。不選調則維持 C–B。
-  function soundingMidi(pc) {
-    var midi = 12 * (state.octave + 1) + pc + 12 * INSTRUMENTS[state.inst].octShift;
+  function soundingMidi(pc, instId) {
+    var midi = 12 * (state.octave + 1) + pc + 12 * INSTRUMENTS[instId || state.inst].octShift;
     if (state.key >= 0 && pc < KEYS[state.key].pc) midi += 12;
     return midi;
   }
 
-  function applyEnvelope(gain, t, rawDur) {
+  function applyEnvelope(gain, t, rawDur, peak) {
+    if (!peak) peak = 1;
     var fadeAt = NOTE_FADE_AT;
     var fade = NOTE_FADE;
     if (rawDur < fadeAt + fade) {
@@ -170,13 +240,13 @@
     }
     var end = fadeAt + fade;
     gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(1, t + NOTE_ATTACK);
-    gain.gain.setValueAtTime(1, t + fadeAt);
+    gain.gain.linearRampToValueAtTime(peak, t + NOTE_ATTACK);
+    gain.gain.setValueAtTime(peak, t + fadeAt);
     gain.gain.exponentialRampToValueAtTime(0.001, t + end);
     return { fadeAt: fadeAt, fade: fade, dur: end };
   }
 
-  function startNote(audioCtx, dest, bufs, midi, when) {
+  function startNote(audioCtx, dest, bufs, midi, when, level) {
     var s = nearestIn(bufs, midi);
     if (s === null) return null;
     var rate = Math.pow(2, (midi - s) / 12);
@@ -185,7 +255,7 @@
     src.buffer = bufs[s];
     src.playbackRate.value = rate;
     var g = audioCtx.createGain();
-    var env = applyEnvelope(g, t, src.buffer.duration / rate);
+    var env = applyEnvelope(g, t, src.buffer.duration / rate, level);
     src.connect(g); g.connect(dest);
     src.start(t);
     src.stop(t + env.dur + 0.02);
@@ -222,6 +292,39 @@
     });
   }
 
+  // 和弦：一起發聲（吉他快速往上刷，每弦約 25ms），先停掉上一個和弦。
+  function playChord(midis, when) {
+    var id = state.inst;
+    ensureCtx();
+    if (ctx.state === "suspended") ctx.resume();
+    var strum = (id === "acoustic" || id === "electric") ? 0.025 : 0;
+    var level = Math.min(1, 1.1 / Math.sqrt(midis.length));
+    return loadInst(id).then(function () {
+      var t = Math.max(ctx.currentTime, when || 0);
+      chokeVoices(function () { return true; }, t);
+      midis.forEach(function (midi, i) {
+        var v = startNote(ctx, master, buffers[id], midi, t + i * strum, level);
+        if (!v) return;
+        voices.push(v);
+        var freq = 440 * Math.pow(2, (midi - 69) / 12);
+        window.__noteLog.push({ inst: id, midi: midi, freq: +freq.toFixed(2), sample: v.sample, rate: +v.rate.toFixed(4), t: v.start, dur: v.dur, fadeAt: v.fadeAt, chord: midis.slice() });
+      });
+    });
+  }
+
+  // 和弦的實際音高：根音照單音的八度規則（選調時主音最低），其他音往上疊。
+  // Bass 只彈根音；多取樣音色若最高音超出取樣範圍就整組降一個八度。
+  function chordMidis(rootPc, typeId, instId) {
+    var c = CHORD_BY_ID[typeId];
+    var inst = INSTRUMENTS[instId || state.inst];
+    var root = soundingMidi(rootPc, instId);
+    if (instId ? instId === "bass" : state.inst === "bass") return [root];
+    var list = c.iv.map(function (iv) { return root + iv; });
+    var maxS = Math.max.apply(null, inst.notes);
+    while (!inst.single && list[list.length - 1] > maxS + 1) list = list.map(function (m) { return m - 12; });
+    return list;
+  }
+
   // 離線渲染（試聽檔、測試音長用），套用與畫面相同的包絡與取樣移調。
   function renderOffline(events, seconds, sr) {
     sr = sr || 44100;
@@ -253,6 +356,7 @@
     return e;
   }
   el("circle", { cx: CX, cy: CY, r: R, "class": "ring" }, svg);
+  var chordLayer = el("g", { "class": "chord-layer" }, svg);
   var centerMain = el("text", { x: CX, y: CY - 8, "class": "center-main" }, svg);
   var centerSub = el("text", { x: CX, y: CY + 30, "class": "center-sub" }, svg);
 
@@ -320,6 +424,7 @@
       n.deg.textContent = info ? (state.label === "num" ? String(info.degree + 1) : SOLFA[info.degree]) : "";
       n.g.setAttribute("aria-label", label.replace("/", " 或 ") + (info ? "，第 " + (info.degree + 1) + " 級" : ""));
     });
+    renderChord();
     if (spelled) {
       centerMain.textContent = keyName() + " Key";
       centerSub.textContent = "(" + relativeMinorName(keyName()) + " Key)";
@@ -345,6 +450,47 @@
     var lb = document.querySelectorAll("#labelBtns button");
     for (var j = 0; j < lb.length; j++) lb[j].classList.toggle("on", lb[j].getAttribute("data-label") === state.label);
     document.getElementById("instHint").textContent = INSTRUMENTS[state.inst].hint || "";
+    var cb = document.querySelectorAll("#chordBtns button, #autoBtns button");
+    for (var c = 0; c < cb.length; c++) {
+      var on = cb[c].getAttribute("data-chord") === state.chord;
+      cb[c].classList.toggle("on", on);
+      cb[c].setAttribute("aria-checked", on ? "true" : "false");
+    }
+    document.getElementById("chordHint").textContent = !state.chord ? "點圓上的音只發出一個音。" :
+      DIATONIC[state.chord] ? "點調內的音，彈出它的順階" + (state.chord === "auto7" ? "七" : "三") + "和弦；調外的音只發單音。" :
+      "點圓上的音當根音，彈出整個和弦。" + (state.inst === "bass" ? "Bass 只彈根音。" : "");
+  }
+
+  var chordCenter = document.getElementById("chordCenter");
+  function currentChord() {
+    if (!state.shown) return null;
+    return chordInfo(state.shown.root, state.shown.type, keyName());
+  }
+  function renderChord() {
+    var info = currentChord();
+    while (chordLayer.firstChild) chordLayer.removeChild(chordLayer.firstChild);
+    document.documentElement.classList.toggle("has-chord", !!info);
+    noteEls.forEach(function (n, pc) {
+      n.g.classList.toggle("chord", !!info && info.pcs.indexOf(pc) >= 0);
+      n.g.classList.toggle("chord-root", !!info && pc === info.root);
+    });
+    if (!info) { chordCenter.hidden = true; return; }
+    // 依圓上的順序連線，畫成凸多邊形
+    var pcs = info.pcs.slice().sort(function (a, b) { return a - b; });
+    var pts = pcs.map(function (pc) { return noteEls[pc].x.toFixed(1) + "," + noteEls[pc].y.toFixed(1); }).join(" ");
+    el(pcs.length > 2 ? "polygon" : "polyline", { points: pts, "class": "chord-poly" }, chordLayer);
+    // 根音到其他音的放射線，看得出誰是根音
+    info.pcs.forEach(function (pc) {
+      if (pc === info.root) return;
+      el("line", { x1: noteEls[info.root].x, y1: noteEls[info.root].y, x2: noteEls[pc].x, y2: noteEls[pc].y, "class": "chord-spoke" }, chordLayer);
+    });
+    chordCenter.hidden = false;
+    chordCenter.querySelector(".cc-name").textContent = info.name;
+    chordCenter.querySelector(".cc-tones").textContent = info.tones.join(" ");
+    var dg = chordCenter.querySelector(".cc-deg");
+    dg.innerHTML = info.degHtml;
+    dg.hidden = !info.degHtml;
+    chordCenter.setAttribute("aria-label", info.name + "：" + info.tones.join(" ") + (info.degText ? "，級數 " + info.degText : ""));
   }
 
   function flash(pc) {
@@ -356,10 +502,30 @@
     g.__t = setTimeout(function () { g.classList.remove("lit"); }, 750);
   }
 
+  // 目前模式下，點這個音要彈哪一種和弦（單音或順階遇到調外音時回傳空字串）
+  function chordTypeFor(pc) {
+    if (!state.chord) return "";
+    if (DIATONIC[state.chord]) {
+      if (state.key < 0) return "";
+      var sp = spellMajor(keyName());
+      return sp[pc] ? DIATONIC[state.chord][sp[pc].degree] : "";
+    }
+    return state.chord;
+  }
+
   function hit(pc) {
     unlock();
-    flash(pc);
-    return playMidi(soundingMidi(pc));
+    var type = chordTypeFor(pc);
+    if (!type) {
+      if (state.shown) { state.shown = null; renderChord(); }
+      flash(pc);
+      return playMidi(soundingMidi(pc));
+    }
+    state.shown = { root: pc, type: type };
+    renderChord();
+    var info = currentChord();
+    info.pcs.forEach(flash);
+    return playChord(chordMidis(pc, type));
   }
 
   noteEls.forEach(function (n, pc) {
@@ -386,6 +552,23 @@
     instBox.appendChild(b);
   });
 
+  var chordBox = document.getElementById("chordBtns");
+  function addChordBtn(box, id, label, cls) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("data-chord", id);
+    b.setAttribute("role", "radio");
+    if (cls) b.className = cls;
+    b.textContent = label;
+    b.addEventListener("click", function () { state.chord = id; state.shown = null; render(); });
+    box.appendChild(b);
+  }
+  addChordBtn(chordBox, "", "單音", "wide");
+  CHORDS.forEach(function (c) { addChordBtn(chordBox, c.id, c.btn); });
+  var autoBox = document.getElementById("autoBtns");
+  addChordBtn(autoBox, "auto3", "順階三和弦");
+  addChordBtn(autoBox, "auto7", "順階七和弦");
+
   var sel = document.getElementById("keySel");
   var o0 = document.createElement("option"); o0.value = "-1"; o0.textContent = "不選調（顯示全部 12 音）"; sel.appendChild(o0);
   KEYS.forEach(function (k, i) {
@@ -396,8 +579,13 @@
   });
   // 預設不選調（讓學生自己找音階）；不記住上次選的調，也不讓瀏覽器自動還原選單
   sel.value = "-1"; state.key = -1;
-  window.addEventListener("pageshow", function () { if (sel.value !== String(state.key)) { sel.value = "-1"; state.key = -1; render(); } });
-  sel.addEventListener("change", function () { state.key = +sel.value; state.useEnh = false; render(); });
+  window.addEventListener("pageshow", function () { if (sel.value !== String(state.key)) { sel.value = "-1"; state.key = -1; if (DIATONIC[state.chord]) { state.chord = ""; state.shown = null; } render(); } });
+  sel.addEventListener("change", function () {
+    state.key = +sel.value; state.useEnh = false;
+    // 順階模式要有調；改成不選調就回到單音，換調就清掉上一個順階和弦
+    if (DIATONIC[state.chord]) { state.shown = null; if (state.key < 0) state.chord = ""; }
+    render();
+  });
   document.getElementById("spellBtn").addEventListener("click", function () { state.useEnh = !state.useEnh; render(); });
   document.querySelectorAll("#labelBtns button").forEach(function (b) {
     b.addEventListener("click", function () { state.label = b.getAttribute("data-label"); render(); });
@@ -429,6 +617,7 @@
 
   window.__noteCircle = {
     state: state, spellMajor: spellMajor, relativeMinorName: relativeMinorName, keyMenuLabel: keyMenuLabel,
+    chordInfo: chordInfo, chordMidis: chordMidis, currentChord: currentChord, CHORDS: CHORDS, DIATONIC: DIATONIC,
     render: render, loadInst: loadInst, playMidi: playMidi, soundingMidi: soundingMidi, renderOffline: renderOffline,
     INSTRUMENTS: INSTRUMENTS, KEYS: KEYS,
     NOTE_ATTACK: NOTE_ATTACK, NOTE_FADE_AT: NOTE_FADE_AT, NOTE_FADE: NOTE_FADE, NOTE_LEN: NOTE_LEN

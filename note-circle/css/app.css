@@ -1,5 +1,5 @@
-html[data-school="moonick"]{--bg:#f6f1e8;--text:#111;--muted:#6b6b66;--paper:#fff;--bar:#111;--bar-text:#fff;--accent:#b7804c;--accent-text:#111;--scale:#f2b84b;--scale-ink:#2a1d08;--tonic:#c0392b;--black:#1f2430;--font:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif}
-html[data-school="rhythm"]{--bg:#e7f3ea;--text:#1d3429;--muted:#3d5248;--paper:#fffdf8;--bar:#fffdf8;--bar-text:#1d3429;--accent:#2f6b4a;--accent-text:#fffdf8;--scale:#ffd166;--scale-ink:#2b2306;--tonic:#e07a3d;--black:#1d3429;--font:"Source Sans 3","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif}
+html[data-school="moonick"]{--bg:#f6f1e8;--text:#111;--muted:#6b6b66;--paper:#fff;--bar:#111;--bar-text:#fff;--accent:#b7804c;--accent-text:#111;--scale:#f2b84b;--scale-ink:#2a1d08;--tonic:#c0392b;--black:#1f2430;--chord:#2563eb;--font:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif}
+html[data-school="rhythm"]{--bg:#e7f3ea;--text:#1d3429;--muted:#3d5248;--paper:#fffdf8;--bar:#fffdf8;--bar-text:#1d3429;--accent:#2f6b4a;--accent-text:#fffdf8;--scale:#ffd166;--scale-ink:#2b2306;--tonic:#e07a3d;--black:#1d3429;--chord:#2563eb;--font:"Source Sans 3","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif}
 *,*::before,*::after{box-sizing:border-box}
 html,body{margin:0;overflow-x:hidden}
 body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:18px;line-height:1.5;-webkit-tap-highlight-color:transparent}
@@ -13,7 +13,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:18
 @media(min-width:900px){#main{grid-template-columns:minmax(0,1fr) 380px;align-items:start;padding:24px}}
 #stage{text-align:center}
 h1{margin:4px 0 8px;font-size:clamp(24px,3vw,34px);letter-spacing:.06em}
-#circleWrap{width:min(100%,calc(100vh - 250px),720px);min-width:280px;margin:0 auto}
+#circleWrap{position:relative;container-type:inline-size;width:min(100%,calc(100vh - 250px),720px);min-width:280px;margin:0 auto}
 @media(max-width:899px){#circleWrap{width:min(100%,560px)}}
 #circle{width:100%;height:auto;display:block;touch-action:manipulation;user-select:none;-webkit-user-select:none}
 .ring{fill:none;stroke:#cfc8bb;stroke-width:2;stroke-dasharray:4 6}
@@ -60,3 +60,27 @@ button.small{font-size:16px;padding:6px 12px;min-height:44px}
 footer{text-align:center;font-size:13px;color:var(--muted);padding:10px 16px 28px}
 footer a{color:inherit}
 @media(max-width:899px){body{font-size:16px}.home-back{font-size:13px}#brandbar{padding:6px 12px}#panel{padding:14px}.seg button{font-size:16px;padding:7px 12px;min-height:42px}}
+/* 和弦 */
+.chord-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.chord-grid.auto{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:10px}
+.chord-grid button{border:2px solid var(--accent);background:transparent;border-radius:12px;padding:6px 4px;font-size:19px;font-weight:700;cursor:pointer;min-height:46px;white-space:nowrap}
+.chord-grid button.wide{grid-column:1/-1}
+.chord-grid button.on{background:var(--accent);color:var(--accent-text)}
+.chord-poly{fill:var(--chord);fill-opacity:.12;stroke:var(--chord);stroke-width:5;stroke-linejoin:round}
+polyline.chord-poly{fill:none}
+.chord-spoke{stroke:var(--chord);stroke-width:2;stroke-dasharray:6 6;opacity:.55}
+.has-chord .note:not(.chord){opacity:.3}
+.has-chord .note.chord{opacity:1}
+#circle .note.chord circle.body{stroke:var(--chord);stroke-width:7}
+#circle .note.chord-root circle.body{stroke-width:12}
+#chordCenter{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;text-align:center;line-height:1.1;padding:2.2cqw 3.5cqw;border-radius:4cqw;background:color-mix(in srgb,var(--bg) 88%,transparent);max-width:46%}
+#chordCenter[hidden],.cc-deg[hidden]{display:none}
+.cc-name{font-size:11cqw;font-weight:800;color:var(--text);white-space:nowrap}
+.cc-tones{font-size:4.6cqw;font-weight:700;color:var(--chord);letter-spacing:.06em;margin-top:.6cqw;white-space:nowrap}
+.cc-deg{font-size:8cqw;font-weight:800;color:var(--tonic);margin-top:1cqw;white-space:nowrap}
+.cc-deg .fl{display:inline-block;margin:0 -.12em;transform:scaleX(.8)}
+.cc-deg sup{font-size:.58em;vertical-align:0;position:relative;top:-.75em;margin-left:.04em}
+.has-chord .center-main,.has-chord .center-sub{display:none}
+html:not(.has-chord) .chord-only{display:none!important}
+.sw-chord{background:transparent;border:4px solid var(--chord)}
+@media(max-width:899px){.chord-grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}.chord-grid.auto{grid-template-columns:repeat(2,minmax(0,1fr))}.chord-grid button{font-size:16px;min-height:42px;padding:4px 2px}}

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>十二音圓形音階｜慕尼克</title>
+<meta name="description" content="點圓上的 12 個音就能聽到音高，可換鋼琴、木吉他、電吉他、Bass、人聲，選調後自然音階會換顏色。">
+<meta name="theme-color" content="#111111">
+<link rel="icon" id="favicon" href="images/moonick-logo.png" type="image/png">
+<link rel="apple-touch-icon" id="appleIcon" href="images/moonick-logo.png">
+<meta property="og:type" content="website">
+<meta property="og:title" id="og-title" content="十二音圓形音階｜慕尼克">
+<meta property="og:description" id="og-description" content="點圓上的 12 個音就能聽到音高，可換鋼琴、木吉他、電吉他、Bass、人聲，選調後自然音階會換顏色。">
+<meta property="og:image" id="og-image" content="https://moonickmusic.com/note-circle/og-moonick.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" id="og-image-alt" content="慕尼克十二音圓形音階">
+<meta property="og:url" id="og-url" content="https://moonickmusic.com/note-circle/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" id="twitter-title" content="十二音圓形音階｜慕尼克">
+<meta name="twitter:description" id="twitter-description" content="點圓上的 12 個音就能聽到音高，可換鋼琴、木吉他、電吉他、Bass、人聲，選調後自然音階會換顏色。">
+<meta name="twitter:image" id="twitter-image" content="https://moonickmusic.com/note-circle/og-moonick.png">
+<link rel="stylesheet" href="css/app.css?v=20261121a">
+<script>
+  (function () {
+    var h = location.hostname.toLowerCase().replace(/\.$/, "");
+    var locked = h === "moonickmusic.com" || h.endsWith(".moonickmusic.com") ? "moonick" : h === "musicdance.com.tw" || h.endsWith(".musicdance.com.tw") ? "rhythm" : "";
+    var query = locked ? "" : new URLSearchParams(location.search).get("school");
+    var school = locked || (query === "moonick" || query === "rhythm" ? query : "rhythm");
+    window.__school = school;
+    document.documentElement.setAttribute("data-school", school);
+    var moonick = school === "moonick";
+    var img = new URL(moonick ? "og-moonick.png" : "og-rhythm.png", location.href).href;
+    var title = moonick ? "十二音圓形音階｜慕尼克" : "十二音圓形音階｜節奏感";
+    function put(id, v) { var el = document.getElementById(id); if (el) el.setAttribute("content", v); }
+    put("og-image", img); put("twitter-image", img);
+    put("og-title", title); put("twitter-title", title);
+    put("og-url", location.origin + location.pathname);
+    put("og-image-alt", moonick ? "慕尼克十二音圓形音階" : "節奏感十二音圓形音階");
+    document.title = title;
+  })();
+</script>
+</head>
+<body>
+<header id="brandbar">
+  <a class="brand-lockup" id="brandHome" href="https://www.musicdance.com.tw/">
+    <img id="brandLogo" alt="">
+    <span><strong id="brandName"></strong><em>十二音圓形音階</em></span>
+  </a>
+  <a class="home-back" id="homeBack" href="https://moonickmusic.com/">← 回官網</a>
+  <script>
+    (function () {
+      var moonick = window.__school === "moonick";
+      var name = moonick ? "慕尼克" : "節奏感";
+      var src = moonick ? "images/moonick-logo.png" : "images/musicdance-logo.png";
+      var home = moonick ? "https://moonickmusic.com/" : "https://www.musicdance.com.tw/";
+      var logo = document.getElementById("brandLogo");
+      logo.src = src; logo.alt = name;
+      document.getElementById("brandName").textContent = name;
+      document.getElementById("brandHome").href = home;
+      var back = document.getElementById("homeBack");
+      back.href = home; back.textContent = moonick ? "← 回慕尼克官網" : "← 回節奏感官網";
+      document.getElementById("favicon").href = src;
+      document.getElementById("appleIcon").href = src;
+    })();
+  </script>
+</header>
+
+<main id="main">
+  <section id="stage" aria-label="十二音圓形音階圖">
+    <h1>十二音圓形音階圖</h1>
+    <div id="circleWrap">
+      <svg id="circle" viewBox="-36 -36 672 672" role="group" aria-label="十二個音，點一下發出音高"></svg>
+    </div>
+    <ul id="legend">
+      <li><span class="sw sw-white"></span>白鍵音（C D E F G A B）</li>
+      <li><span class="sw sw-black"></span>黑鍵音（升降音）</li>
+      <li class="key-only"><span class="sw sw-scale"></span>這個調的自然音階</li>
+      <li class="key-only"><span class="sw sw-tonic"></span>主音（1 / Do）</li>
+    </ul>
+  </section>
+
+  <aside id="panel" aria-label="設定">
+    <div class="group">
+      <div class="label">音色</div>
+      <div class="seg" id="instBtns" role="radiogroup" aria-label="音色"></div>
+      <p class="hint" id="instHint"></p>
+    </div>
+
+    <div class="group">
+      <label class="label" for="keySel">調（大調）</label>
+      <div class="row">
+        <select id="keySel"></select>
+        <button type="button" id="spellBtn" class="small" hidden></button>
+      </div>
+    </div>
+
+    <div class="group key-only">
+      <div class="label">音階標示</div>
+      <div class="seg" id="labelBtns" role="radiogroup" aria-label="音階標示">
+        <button type="button" data-label="num" class="on">級數 1–7</button>
+        <button type="button" data-label="solfa">Do Re Mi</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="label">八度</div>
+      <div class="row oct">
+        <button type="button" id="octDown" aria-label="低八度">−</button>
+        <span id="octText">C4</span>
+        <button type="button" id="octUp" aria-label="高八度">＋</button>
+      </div>
+      <p class="hint" id="octHint">預設是中央 C（C4）這個八度。</p>
+    </div>
+
+    <div class="group">
+      <button type="button" id="playScale" class="big">▶ 播放音階</button>
+    </div>
+
+    <p id="status" class="hint" aria-live="polite"></p>
+  </aside>
+</main>
+
+<footer>
+  <p>音色取樣：FluidR3 GM SoundFont（Frank Wen），依 <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a> 授權使用，轉檔版本來自 <a href="https://github.com/gleitz/midi-js-soundfonts" target="_blank" rel="noopener">gleitz/midi-js-soundfonts</a>。</p>
+</footer>
+
+<script src="js/app.js?v=20261121a"></script>
+</body>
+</html>

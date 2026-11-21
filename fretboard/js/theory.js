@@ -251,7 +251,29 @@
         });
       }
     }
-    return notes;
+    // 同一把位裡，完全相同的音高（同 MIDI）只留一顆。
+    // 規則：若兩條相鄰弦出現同一個音，留較高音弦、較低品位的那顆，拿掉較低音弦較高品位的重複。
+    // 這就是標準 CAGED 七聲音階指型（例如 C 大調 Mi 指型留 B 弦空弦 B，拿掉 G 弦第 4 格 B）。
+    // 八度音（同音名不同 MIDI）都留。指型名字仍看最低弦最低音，不受這步影響。
+    return dedupeUnisonPitches(notes);
+  }
+
+  function dedupeUnisonPitches(notes) {
+    var best = {};
+    var i, n, prev;
+    for (i = 0; i < notes.length; i++) {
+      n = notes[i];
+      prev = best[n.midi];
+      if (!prev || n.string > prev.string || (n.string === prev.string && n.fret < prev.fret)) {
+        best[n.midi] = n;
+      }
+    }
+    var out = [];
+    for (i = 0; i < notes.length; i++) {
+      n = notes[i];
+      if (best[n.midi] === n) out.push(n);
+    }
+    return out;
   }
 
   function keyTitle(tonicName, scaleId) {
@@ -662,7 +684,7 @@
     solfaDisplay: solfaDisplay, solfaOfDegree: solfaOfDegree, solfaFamily: solfaFamily,
     isMinorSystem: isMinorSystem, allPatternAnchors: allPatternAnchors,
     namesakeInScale: namesakeInScale, quizDegreeChoices: quizDegreeChoices,
-    anchorFrets: anchorFrets, patternNotes: patternNotes,
+    anchorFrets: anchorFrets, patternNotes: patternNotes, dedupeUnisonPitches: dedupeUnisonPitches,
     keyTitle: keyTitle, patternLabel: patternLabel, questionPrompt: questionPrompt,
     makeQuestion: makeQuestion, gradeQuiz: gradeQuiz, randomQuestion: randomQuestion,
     answerSet: answerSet, scaleFormula: scaleFormula, scaleWalk: scaleWalk,

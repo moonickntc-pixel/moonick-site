@@ -10,6 +10,7 @@
     useEnh: false,
     scale: "harMinor",
     pattern: 3, // la
+    numMode: "solfa", // A：母調唱名；B tonic：從主音起算
     showAll: false,
     label: "name",
     question: null,
@@ -22,13 +23,20 @@
   function tonicName() {
     return T.tonicNameOf(T.KEYS[state.key], state.useEnh);
   }
+  function numModeOf() {
+    if (state.mode === "quiz" && state.question && state.question.numMode) return state.question.numMode;
+    return T.normalizeNumMode(state.numMode);
+  }
+  function anchorsOf(patternId) {
+    return T.anchorFrets(tonicName(), state.scale, patternId, T.TUNINGS[state.board].frets, numModeOf());
+  }
 
   function currentNotes() {
     var tun = T.TUNINGS[state.board];
     if (state.showAll && state.mode === "browse") {
       var all = [], seen = {};
       T.PATTERNS.forEach(function (p) {
-        var an = T.anchorFrets(tonicName(), state.scale, p.id, tun.frets);
+        var an = T.anchorFrets(tonicName(), state.scale, p.id, tun.frets, numModeOf());
         an.anchors.forEach(function (a) {
           T.patternNotes(state.board, tonicName(), state.scale, p.id, a).forEach(function (n) {
             var k = n.string + "-" + n.fret;
@@ -38,7 +46,7 @@
       });
       return all;
     }
-    var an = T.anchorFrets(tonicName(), state.scale, state.pattern, tun.frets);
+    var an = T.anchorFrets(tonicName(), state.scale, state.pattern, tun.frets, numModeOf());
     if (state.mode === "quiz" && state.question) {
       return T.patternNotes(state.board, state.question.tonic, state.question.scale, state.question.pattern, state.question.statedAnchor);
     }
@@ -394,16 +402,32 @@
       if (id === "all") b.classList.toggle("on", !!state.showAll);
     });
     document.getElementById("instHint").textContent = (A.INSTRUMENTS[state.inst].hint || "");
+    setSeg("#numModeBtns", "data-num-mode", numModeOf());
     var parent = T.parentDo(tonicName(), state.scale);
-    var an = T.anchorFrets(tonicName(), state.scale, state.pattern, T.TUNINGS[state.board].frets);
-    var solfa = T.patternById(state.pattern).solfa;
+    var an = T.anchorFrets(tonicName(), state.scale, state.pattern, T.TUNINGS[state.board].frets, numModeOf());
+    var solfa = an.solfa;
+    var modeHint = document.getElementById("numModeHint");
+    if (modeHint) {
+      if (numModeOf() === "tonic") {
+        modeHint.textContent = "編號 B：pattern 1 從這個音階的主音在 6 弦（Bass 是 4 弦）的位置開始，其餘四個把位依 mi→sol→la→do→re 接著排。五個位置仍與母大調相同。";
+      } else {
+        modeHint.textContent = "編號 A：pattern 1＝母調的 mi 指型，2＝sol、3＝la、4＝do、5＝re。五個位置跟著母大調走。";
+      }
+    }
+    document.querySelectorAll("#patBtns button[data-pattern]").forEach(function (b) {
+      var id = b.getAttribute("data-pattern");
+      if (id === "all") return;
+      b.textContent = T.patternLabelFor(+id, tonicName(), state.scale, numModeOf(), true);
+    });
     if (state.showAll && state.mode === "browse") {
       document.getElementById("boardHint").textContent =
-        "上面是最細的弦（1 弦），跟 TAB 譜一樣。指板可左右滑動。正在顯示這個音階的全部把位。";
+        "上面是最細的弦（1 弦），跟 TAB 譜一樣。指板可左右滑動。正在顯示這個音階的全部把位。母調是 " + parent.name + " 大調。";
     } else {
+      var where = "這個指型在第 " + an.anchors.join("、") + " 格（母調 " + parent.name + " 大調的 " + solfa;
+      if (numModeOf() === "tonic" && state.pattern === 1) where += "，主音 " + tonicName();
+      where += "）。";
       document.getElementById("boardHint").textContent =
-        "上面是最細的弦（1 弦），跟 TAB 譜一樣。指板可左右滑動。這個指型在第 " +
-        an.anchors.join("、") + " 格（關係大調 " + parent.name + " 大調的 " + solfa + "）。";
+        "上面是最細的弦（1 弦），跟 TAB 譜一樣。指板可左右滑動。" + where;
     }
     renderQuiz();
     buildBoard();
@@ -430,7 +454,8 @@
       boards: boards.length ? boards : ["guitar"],
       scales: scales.length ? scales : ["harMinor"],
       patterns: pats.length ? pats : [3],
-      useEnh: state.useEnh
+      useEnh: state.useEnh,
+      numMode: numModeOf()
     };
   }
 
@@ -442,6 +467,7 @@
     state.board = state.question.board;
     state.scale = state.question.scale;
     state.pattern = state.question.pattern;
+    if (state.question.numMode) state.numMode = state.question.numMode;
     state.showAll = false;
     var k = T.keyByName(state.question.tonic);
     state.key = T.KEYS.indexOf(k);
@@ -526,6 +552,17 @@
       state.scale = this.value;
       render();
     });
+    document.getElementById("numModeBtns").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-num-mode]");
+      if (!b) return;
+      var next = T.normalizeNumMode(b.getAttribute("data-num-mode"));
+      if (next === numModeOf()) return;
+      var shapeId = T.shapeIdForPattern(tonicName(), state.scale, state.pattern, numModeOf());
+      state.numMode = next;
+      state.pattern = T.patternIdForShape(tonicName(), state.scale, shapeId, next);
+      if (state.mode === "quiz") newQuestion();
+      else render();
+    });
     document.getElementById("labelBtns").addEventListener("click", function (e) {
       var b = e.target.closest("button[data-label]");
       if (!b) return;
@@ -533,7 +570,7 @@
       render();
     });
     document.getElementById("playPat").addEventListener("click", function () {
-      var an = T.anchorFrets(tonicName(), state.scale, state.pattern, T.TUNINGS[state.board].frets);
+      var an = T.anchorFrets(tonicName(), state.scale, state.pattern, T.TUNINGS[state.board].frets, numModeOf());
       var anchor = an.anchors[an.anchors.length - 1] || an.anchors[0];
       var notes = T.patternNotes(state.board, tonicName(), state.scale, state.pattern, anchor)
         .sort(function (a, b) { return a.string - b.string || a.fret - b.fret; });

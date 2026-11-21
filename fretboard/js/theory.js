@@ -20,10 +20,17 @@
     { pc: 11, name: "B" }
   ];
 
-  // 五指型：以關係大調的首調唱名，用最低弦（吉他 6 弦／Bass 4 弦，都是 E）上該把位的音來命名。
-  // 五聲音階由低往高是 mi–sol–la–do–re，所以固定：
-  // pattern 1 = mi 指型，2 = sol，3 = la，4 = do，5 = re。
-  // 與老師舉例一致：E 小調的 la（主音 E）在 6 弦第 0／12 格 → la 指型（pattern 3）。
+  // 五個把位（形狀）永遠等於母大調的五個位置；最低弦由低到高是 mi→sol→la→do→re。
+  // 編號有兩種，可切換（預設 A；老師尚未定案要用哪一種）：
+  //   A solfa：照母大調唱名，pattern1=mi、2=sol、3=la、4=do、5=re。
+  //   B tonic：不分大小調、調式，pattern1 一律從該音階主音在最低弦（吉他 6 弦／Bass 4 弦）的位置起算，
+  //            其餘依 mi→sol→la→do→re 循環接著排。若主音不是這五個起音（利底亞的 fa、洛克里亞的 si），
+  //            pattern1 用「低於或等於主音、最靠近的那個母調把位」（該盒子會含到主音）。
+  // 例：C 大調 A 在第 0／12 格（mi）；C 小調 B 在第 8 格（主音 C，母調 Eb 的 la）；A Dorian B 在第 5 格（主音 A）。
+  var NUM_MODES = {
+    solfa: { id: "solfa", letter: "A", name: "母調唱名" },
+    tonic: { id: "tonic", letter: "B", name: "從主音起算" }
+  };
   var PATTERNS = [
     { id: 1, solfa: "mi", parentDeg: 2, label: "mi 指型（pattern 1）" },
     { id: 2, solfa: "sol", parentDeg: 4, label: "sol 指型（pattern 2）" },
@@ -76,6 +83,75 @@
     for (var i = 0; i < PATTERNS.length; i++) if (PATTERNS[i].id === id) return PATTERNS[i];
     return null;
   }
+
+  function normalizeNumMode(m) {
+    return m === "tonic" ? "tonic" : "solfa";
+  }
+
+  function parentShapeStarts(tonicName, scaleId) {
+    var spelled = spellScale(tonicName, scaleId);
+    var openPc = 4;
+    return PATTERNS.map(function (pat) {
+      var namesakePc = (spelled.parent.pc + MAJOR[pat.parentDeg]) % 12;
+      var fret = (namesakePc - openPc + 12) % 12;
+      return { id: pat.id, solfa: pat.solfa, parentDeg: pat.parentDeg, namesakePc: namesakePc, fret: fret };
+    });
+  }
+
+  function tonicLowFret(tonicName) {
+    var tonic = parseTonic(tonicName);
+    return (tonic.pc - 4 + 12) % 12;
+  }
+
+  // PATTERNS 的 0-4 索引：此音階在編號 B 時，哪一個母調形狀當 pattern 1
+  function tonicShapeIndex(tonicName, scaleId) {
+    var starts = parentShapeStarts(tonicName, scaleId);
+    var tf = tonicLowFret(tonicName);
+    var best = -1, bestFret = -1, i;
+    for (i = 0; i < starts.length; i++) {
+      if (starts[i].fret <= tf && starts[i].fret > bestFret) {
+        bestFret = starts[i].fret;
+        best = i;
+      }
+    }
+    if (best < 0) {
+      for (i = 0; i < starts.length; i++) {
+        if (starts[i].fret > bestFret) { bestFret = starts[i].fret; best = i; }
+      }
+    }
+    return best;
+  }
+
+  function shapeIdForPattern(tonicName, scaleId, patternId, numMode) {
+    if (normalizeNumMode(numMode) !== "tonic") return patternId;
+    var rot = tonicShapeIndex(tonicName, scaleId);
+    return PATTERNS[(rot + (patternId - 1) + 5) % 5].id;
+  }
+
+  function patternIdForShape(tonicName, scaleId, shapeId, numMode) {
+    if (normalizeNumMode(numMode) !== "tonic") return shapeId;
+    var rot = tonicShapeIndex(tonicName, scaleId);
+    var idx = 0, i;
+    for (i = 0; i < PATTERNS.length; i++) if (PATTERNS[i].id === shapeId) idx = i;
+    return ((idx - rot + 5) % 5) + 1;
+  }
+
+  function shapeByPattern(tonicName, scaleId, patternId, numMode) {
+    return patternById(shapeIdForPattern(tonicName, scaleId, patternId, numMode));
+  }
+
+  function allPatternAnchors(tonicName, scaleId, maxFret, numMode) {
+    if (maxFret == null) maxFret = 16;
+    var set = [];
+    PATTERNS.forEach(function (p) {
+      anchorFrets(tonicName, scaleId, p.id, maxFret, numMode).anchors.forEach(function (a) {
+        if (set.indexOf(a) < 0) set.push(a);
+      });
+    });
+    set.sort(function (a, b) { return a - b; });
+    return set;
+  }
+
   function keyByName(name) {
     for (var i = 0; i < KEYS.length; i++) {
       if (KEYS[i].name === name || KEYS[i].enh === name) return KEYS[i];
@@ -121,17 +197,26 @@
     return { tonic: t, scale: sc, notes: notes, byPc: byPc, parent: parentDo(tonicName, scaleId) };
   }
 
-  function anchorFrets(tonicName, scaleId, patternId, maxFret) {
+  function anchorFrets(tonicName, scaleId, patternId, maxFret, numMode) {
     if (maxFret == null) maxFret = 16;
+    numMode = normalizeNumMode(numMode);
     var spelled = spellScale(tonicName, scaleId);
-    var pat = patternById(patternId);
+    var pat = shapeByPattern(tonicName, scaleId, patternId, numMode);
     var namesakePc = (spelled.parent.pc + MAJOR[pat.parentDeg]) % 12;
     var openPc = 4; // 最低弦都是 E
     var a = (namesakePc - openPc + 12) % 12;
     var out = [];
     if (a + BOX_SPAN <= maxFret) out.push(a);
     if (a + 12 + BOX_SPAN <= maxFret) out.push(a + 12);
-    return { namesakePc: namesakePc, anchors: out, solfa: pat.solfa, pattern: pat.id };
+    return {
+      namesakePc: namesakePc,
+      anchors: out,
+      solfa: pat.solfa,
+      pattern: patternId,
+      shapeId: pat.id,
+      numMode: numMode,
+      parent: spelled.parent
+    };
   }
 
   function patternNotes(board, tonicName, scaleId, patternId, anchor) {
@@ -173,12 +258,28 @@
     return p ? p.label : "";
   }
 
+  function patternLabelFor(patternId, tonicName, scaleId, numMode, short) {
+    var pat = patternById(patternId);
+    if (!pat) return "";
+    if (normalizeNumMode(numMode) !== "tonic") return pat.label;
+    var shape = shapeByPattern(tonicName, scaleId, patternId, "tonic");
+    var tonic = parseTonic(tonicName);
+    if (short) {
+      return patternId === 1
+        ? "pattern 1（主音／" + shape.solfa + "）"
+        : "pattern " + patternId + "（" + shape.solfa + "）";
+    }
+    if (patternId === 1) return "pattern 1（主音 " + tonic.name + "，母調 " + shape.solfa + " 指型）";
+    return "pattern " + patternId + "（母調 " + shape.solfa + " 指型）";
+  }
+
   function questionPrompt(q) {
     var pos = q.statedAnchor;
     var alt = q.anchors.filter(function (a) { return a !== pos; });
     var posText = "第 " + pos + " 格";
     if (alt.length) posText += "（或第 " + alt.join("、第 ") + " 格）";
-    return TUNINGS[q.board].name + "｜" + keyTitle(q.tonic, q.scale) + "｜" + scaleById(q.scale).name + "音階｜" + patternLabel(q.pattern) + "｜請在" + posText + "把這個指型的音階音點出來，並選音名";
+    var lab = patternLabelFor(q.pattern, q.tonic, q.scale, q.numMode);
+    return TUNINGS[q.board].name + "｜" + keyTitle(q.tonic, q.scale) + "｜" + scaleById(q.scale).name + "音階｜" + lab + "｜請在" + posText + "把這個指型的音階音點出來，並選音名";
   }
 
   function answerSet(q, anchor) {
@@ -487,14 +588,15 @@
     var scale = opts.scale || "harMinor";
     var pattern = opts.pattern || 3;
     var maxFret = TUNINGS[board].frets;
-    var an = anchorFrets(tonic, scale, pattern, maxFret);
+    var numMode = normalizeNumMode(opts.numMode);
+    var an = anchorFrets(tonic, scale, pattern, maxFret, numMode);
     if (!an.anchors.length) return null;
     var stated = opts.statedAnchor;
     if (stated == null) {
       stated = an.anchors.length > 1 ? an.anchors[an.anchors.length - 1] : an.anchors[0];
     }
     if (an.anchors.indexOf(stated) < 0) stated = an.anchors[0];
-    var q = { board: board, tonic: tonic, scale: scale, pattern: pattern, anchors: an.anchors.slice(), statedAnchor: stated };
+    var q = { board: board, tonic: tonic, scale: scale, pattern: pattern, anchors: an.anchors.slice(), statedAnchor: stated, numMode: numMode, shapeId: an.shapeId, solfa: an.solfa };
     q.prompt = questionPrompt(q);
     q.answers = {};
     an.anchors.forEach(function (a) { q.answers[a] = answerSet(q, a); });
@@ -515,7 +617,7 @@
       tonic = randomPick(tonics);
       scale = randomPick(scales);
       pattern = randomPick(patterns);
-      q = makeQuestion({ board: board, tonic: tonic, scale: scale, pattern: pattern, statedAnchor: scope.statedAnchor });
+      q = makeQuestion({ board: board, tonic: tonic, scale: scale, pattern: pattern, statedAnchor: scope.statedAnchor, numMode: scope.numMode });
       guard++;
     } while (!q && guard < 40);
     return q;
@@ -523,11 +625,15 @@
 
   var api = {
     LETTERS: LETTERS, KEYS: KEYS, MAJOR: MAJOR, SCALES: SCALES, PATTERNS: PATTERNS, TUNINGS: TUNINGS, BOX_SPAN: BOX_SPAN,
+    NUM_MODES: NUM_MODES,
     parseTonic: parseTonic, spellLetter: spellLetter, tonicNameOf: tonicNameOf,
     scaleById: scaleById, patternById: patternById, keyByName: keyByName,
     parentDo: parentDo, spellScale: spellScale, degreeLabel: degreeLabel,
+    normalizeNumMode: normalizeNumMode, parentShapeStarts: parentShapeStarts, tonicLowFret: tonicLowFret,
+    tonicShapeIndex: tonicShapeIndex, shapeIdForPattern: shapeIdForPattern, patternIdForShape: patternIdForShape,
+    allPatternAnchors: allPatternAnchors,
     anchorFrets: anchorFrets, patternNotes: patternNotes,
-    keyTitle: keyTitle, patternLabel: patternLabel, questionPrompt: questionPrompt,
+    keyTitle: keyTitle, patternLabel: patternLabel, patternLabelFor: patternLabelFor, questionPrompt: questionPrompt,
     makeQuestion: makeQuestion, gradeQuiz: gradeQuiz, randomQuestion: randomQuestion,
     answerSet: answerSet, scaleFormula: scaleFormula, scaleWalk: scaleWalk,
     explainGrade: explainGrade, intervalName: intervalName, fretTip: fretTip

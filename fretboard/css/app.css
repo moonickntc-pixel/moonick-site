@@ -91,3 +91,38 @@ footer a{color:inherit}
   #explain .formula,#explain .walk,#explain .explain-item p,#explain .explain-item strong{font-size:16px;line-height:1.7}
   #explain .explain-item{padding:12px}
 }
+
+/* 分級小測驗：大題幹、圈音、分數 */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+#quizBanner{margin:0 0 12px}
+.quiz-hud{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-weight:800;font-size:16px;margin:0 0 10px}
+.quiz-hud #quizLevelName{background:var(--accent);color:var(--accent-text);border-radius:999px;padding:4px 12px}
+.quiz-hero{background:var(--paper);border:3px solid var(--accent);border-radius:16px;padding:14px 16px 12px;text-align:center}
+.quiz-hero .kicker{margin:0 0 4px;font-size:15px;font-weight:800;color:var(--muted);letter-spacing:.04em}
+.quiz-hero .q-title{margin:0 0 4px;font-size:32px;line-height:1.25}
+.quiz-hero .q-shape{margin:0 0 8px;font-size:24px;font-weight:800}
+.quiz-hero .q-ask{margin:0;font-size:20px;font-weight:700;line-height:1.45}
+.quiz-slots{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.quiz-slots li{border:2px solid var(--accent);border-radius:12px;padding:6px 10px;font-weight:800;font-size:16px;min-height:44px;display:flex;align-items:center;gap:6px;background:var(--bg)}
+.quiz-slots li .slot-deg{display:inline-block;min-width:28px;text-align:center;font-size:22px;color:var(--accent)}
+.quiz-slots li.empty .slot-deg{color:var(--muted)}
+.cell.in-box{background:linear-gradient(#f8e7c4,#efd09a)}
+.cell.in-box[data-fret="0"]{background:linear-gradient(#e2cba4,#d4b58a)}
+.cell.circled{z-index:2}
+.cell.circled::after{content:"";position:absolute;left:50%;top:50%;width:min(44px,calc(var(--cell-w) - 4px));height:min(44px,calc(var(--cell-h) - 4px));transform:translate(-50%,-50%);border:3px solid var(--accent);border-radius:50%;box-shadow:0 0 0 3px rgba(0,0,0,.06);pointer-events:none;z-index:2}
+.cell.picked .dot, .cell.circled .dot{z-index:3}
+.cell.find-on{outline:3px solid var(--accent);outline-offset:-3px;z-index:2}
+.cell.find-on::after{content:"";position:absolute;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%);border-radius:50%;background:var(--accent);z-index:2;pointer-events:none}
+.level-seg{display:flex;flex-wrap:wrap}
+.level-seg button{font-size:15px;padding:8px 12px}
+#playScaleAll,#playMode,#playProg,#stopProg,#levelUpBtn{width:100%;font-size:18px;background:var(--accent);color:var(--accent-text);border-radius:12px;border:2px solid var(--accent);font-weight:800;min-height:48px;font-family:inherit;cursor:pointer}
+#stopProg,#nextQ{background:transparent;color:inherit}
+#levelUpBtn{margin-top:8px;background:var(--ok);border-color:var(--ok);color:#fff}
+#quizResult .levelup{margin-top:10px;font-size:18px;font-weight:800;color:var(--ok)}
+#quizHow{margin-top:0}
+@media(max-width:899px){
+  .quiz-hero .q-title{font-size:26px}
+  .quiz-hero .q-shape{font-size:20px}
+  .quiz-hero .q-ask{font-size:18px}
+  .cell.circled::after{width:40px;height:40px}
+}

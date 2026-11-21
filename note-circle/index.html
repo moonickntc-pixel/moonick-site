@@ -20,7 +20,7 @@
 <meta name="twitter:title" id="twitter-title" content="十二音圓形音階｜慕尼克">
 <meta name="twitter:description" id="twitter-description" content="點圓上的 12 個音就能聽到音高，可換鋼琴、木吉他、電吉他、Bass、人聲，選調後自然音階會換顏色。">
 <meta name="twitter:image" id="twitter-image" content="https://moonickmusic.com/note-circle/og-moonick.png">
-<link rel="stylesheet" href="css/app.css?v=20261121f">
+<link rel="stylesheet" href="css/app.css?v=20261122b">
 <script>
   (function () {
     var h = location.hostname.toLowerCase().replace(/\.$/, "");
@@ -69,6 +69,19 @@
 <main id="main">
   <section id="stage" aria-label="十二音圓形音階圖">
     <h1>十二音圓形音階圖</h1>
+    <div id="pracBanner" hidden>
+      <div id="pracHud" class="prac-hud" aria-live="polite">
+        <span id="pracLevelName">第 1 級</span>
+        <span>分數 <strong id="pracScore">0</strong></span>
+        <span>連對 <strong id="pracStreak">0</strong></span>
+      </div>
+      <div id="pracHero" class="prac-hero" role="status">
+        <p class="kicker"></p>
+        <h2 class="q-title"></h2>
+        <p class="q-ask"></p>
+      </div>
+    </div>
+    <p id="pracPrompt" class="sr-only"></p>
     <div id="circleWrap">
       <svg id="circle" viewBox="-36 -36 672 672" role="group" aria-label="十二個音，點一下發出音高"></svg>
       <div id="chordCenter" role="status" hidden>
@@ -88,12 +101,20 @@
 
   <aside id="panel" aria-label="設定">
     <div class="group">
+      <div class="label">模式</div>
+      <div class="seg" id="modeBtns" role="radiogroup" aria-label="模式">
+        <button type="button" data-mode="browse" class="on">瀏覽</button>
+        <button type="button" data-mode="practice">抓歌練習</button>
+      </div>
+    </div>
+
+    <div class="group">
       <div class="label">音色</div>
       <div class="seg" id="instBtns" role="radiogroup" aria-label="音色"></div>
       <p class="hint" id="instHint"></p>
     </div>
 
-    <div class="group">
+    <div class="group browse-only">
       <label class="label" for="keySel">調（大調）</label>
       <div class="row">
         <select id="keySel" autocomplete="off"></select>
@@ -101,14 +122,14 @@
       </div>
     </div>
 
-    <div class="group">
+    <div class="group browse-only">
       <div class="label">和弦</div>
       <div class="chord-grid" id="chordBtns" role="radiogroup" aria-label="和弦"></div>
       <div class="chord-grid auto key-only" id="autoBtns" role="radiogroup" aria-label="順階和弦"></div>
       <p class="hint" id="chordHint"></p>
     </div>
 
-    <div class="group key-only">
+    <div class="group key-only browse-only">
       <div class="label">音階標示</div>
       <div class="seg" id="labelBtns" role="radiogroup" aria-label="音階標示">
         <button type="button" data-label="num" class="on">級數 1–7</button>
@@ -126,8 +147,32 @@
       <p class="hint" id="octHint">預設是中央 C（C4）這個八度。</p>
     </div>
 
-    <div class="group">
+    <div class="group browse-only">
       <button type="button" id="playScale" class="big">▶ 播放音階</button>
+    </div>
+
+    <div id="pracBox" hidden>
+      <div class="group">
+        <div class="label">難度</div>
+        <div class="seg" id="pracLevelBtns" role="radiogroup" aria-label="難度"></div>
+        <p class="hint" id="pracLevelHint"></p>
+      </div>
+      <div class="prac-choices" id="pracChoices"></div>
+      <div class="prac-actions">
+        <button type="button" id="pracListen">▶ 聽和弦進行</button>
+        <button type="button" id="pracStop" hidden>■ 停止</button>
+        <button type="button" id="pracSubmit">送出答案</button>
+        <button type="button" id="pracNext">下一題</button>
+        <button type="button" id="pracJam" hidden>進入 Jam</button>
+        <button type="button" id="pracLevelUp" hidden>升到下一級</button>
+      </div>
+      <div id="jamBar" class="jam-bar" hidden>
+        <button type="button" id="jamStop">■ 停止音樂</button>
+        <label class="tempo-lab">速度 <strong id="tempoVal">96</strong>
+          <input type="range" id="tempoRange" min="60" max="140" value="96" step="2">
+        </label>
+      </div>
+      <div id="pracResult" hidden></div>
     </div>
 
     <p id="status" class="hint" aria-live="polite"></p>
@@ -138,6 +183,8 @@
   <p>音色取樣：FluidR3 GM SoundFont（Frank Wen），依 <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a> 授權使用，轉檔版本來自 <a href="https://github.com/gleitz/midi-js-soundfonts" target="_blank" rel="noopener">gleitz/midi-js-soundfonts</a>。</p>
 </footer>
 
-<script src="js/app.js?v=20261121f"></script>
+<script src="js/app.js?v=20261122b"></script>
+<script src="js/practice-theory.js?v=20261122b"></script>
+<script src="js/practice.js?v=20261122b"></script>
 </body>
 </html>

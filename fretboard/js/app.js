@@ -15,7 +15,11 @@
     question: null,
     clicks: {},
     grade: null,
-    autoInst: true
+    autoInst: true,
+    level: 1,
+    score: 0,
+    streak: 0,
+    pendingLevelUp: false
   };
   var INLAYS = { 3: 1, 5: 1, 7: 1, 9: 1, 12: 2, 15: 1 };
 
@@ -134,11 +138,26 @@
       return;
     }
     if (state.grade) {
-      showCellExplain(string, fret);
       A.playMidi(midi, state.inst);
       return;
     }
-    openNamePop(cell, string, fret);
+    var q = state.question;
+    if (!q) return;
+    if (q.kind === "identify") {
+      var isTarget = q.targets.some(function (x) { return x.string === string && x.fret === fret; });
+      if (!isTarget) return;
+      openNamePop(cell, string, fret);
+      return;
+    }
+    if (q.kind === "find") {
+      var inBox = q.box && fret >= q.box.lo && fret <= q.box.hi;
+      if (!inBox) return;
+      var key = string + "-" + fret;
+      if (state.clicks[key]) delete state.clicks[key];
+      else state.clicks[key] = { string: string, fret: fret, degree: "" };
+      A.playMidi(midi, state.inst);
+      render();
+    }
   }
 
   function cellDot(s, fr, tun, noteMap, gradeMap) {
@@ -147,10 +166,15 @@
       return { cls: gradeMap[key].kind, label: gradeMap[key].label };
     }
     if (state.mode === "quiz" && state.clicks[key]) {
-      var qTonic = state.question ? state.question.tonic : tonicName();
-      var qScale = state.question ? state.question.scale : state.scale;
+      var q = state.question;
+      if (q && q.kind === "find" && !state.grade) {
+        return { cls: "pick", label: "" };
+      }
+      var qTonic = q ? q.tonic : tonicName();
+      var qScale = q ? q.scale : state.scale;
       var rec = T.spellScale(qTonic, qScale).byPc[(tun.openMidi[s] + fr) % 12];
-      return { cls: rec && rec.iv === 0 ? "tonic" : "", label: state.clicks[key].name };
+      var lab = state.clicks[key].degree || state.clicks[key].name || "";
+      return { cls: rec && rec.iv === 0 ? "tonic" : "", label: lab };
     }
     if (state.mode === "browse" && noteMap[key]) {
       return {
@@ -204,6 +228,16 @@
         btn.setAttribute("data-string", String(sIdx));
         btn.setAttribute("data-fret", String(fr));
         btn.setAttribute("aria-label", nStr + "弦第" + fr + "格");
+        if (state.mode === "quiz" && state.question && state.question.box) {
+          var qbox = state.question.box;
+          if (fr >= qbox.lo && fr <= qbox.hi) btn.classList.add("in-box");
+        }
+        if (state.mode === "quiz" && state.question && state.question.kind === "identify" && state.question.targets) {
+          if (state.question.targets.some(function (x) { return x.string === sIdx && x.fret === fr; })) btn.classList.add("circled");
+        }
+        if (state.mode === "quiz" && state.question && state.question.kind === "find" && state.clicks[sIdx + "-" + fr] && !state.grade) {
+          btn.classList.add("find-on");
+        }
         var wire = document.createElement("span");
         wire.className = "string-wire";
         wire.style.height = (sIdx === 0 ? 3 : sIdx === 1 ? 2.5 : 2) + "px";
@@ -282,37 +316,117 @@
   function renderLegend() {
     var ul = document.getElementById("legend");
     if (state.mode === "quiz" && state.grade) {
-      ul.innerHTML = '<li><span class="sw sw-ok"></span>位置與音名都對</li>' +
+      ul.innerHTML = '<li><span class="sw sw-ok"></span>對了</li>' +
         '<li><span class="sw sw-warn"></span>位置對、音名錯</li>' +
         '<li><span class="sw sw-bad"></span>多點了</li>' +
-        '<li><span class="sw sw-miss"></span>漏點了</li>';
+        '<li><span class="sw sw-miss"></span>漏了</li>';
+    } else if (state.mode === "quiz") {
+      ul.innerHTML = '<li>反黃的格子是這個指型的把位</li>' +
+        (state.question && state.question.kind === "identify"
+          ? '<li>畫圈的是要作答的音</li>'
+          : '<li>請在把位裡點出題目指定的數字音</li>');
     } else {
       ul.innerHTML = '<li><span class="sw sw-scale"></span>音階音</li>' +
         '<li><span class="sw sw-tonic"></span>主音</li>';
     }
   }
 
+  function stringPhrase(board, string, fret) {
+    var tun = T.TUNINGS[board];
+    return (tun.stringCount - string) + " 弦第 " + fret + " 格";
+  }
+
+  function fillLevelBtns() {
+    var box = document.getElementById("levelBtns");
+    if (!box || box.getAttribute("data-ready")) return;
+    T.QUIZ_LEVELS.forEach(function (lv) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("data-level", String(lv.id));
+      b.setAttribute("role", "radio");
+      b.textContent = "第 " + lv.id + " 級";
+      box.appendChild(b);
+    });
+    box.setAttribute("data-ready", "1");
+  }
+
+  function renderBanner(q) {
+    var banner = document.getElementById("quizBanner");
+    var on = state.mode === "quiz" && q;
+    banner.hidden = !on;
+    document.getElementById("quizLevelName").textContent = T.levelById(state.level).name;
+    document.getElementById("quizScore").textContent = String(state.score);
+    document.getElementById("quizStreak").textContent = String(state.streak);
+    if (!on) return;
+    var pr = q.prompt || {};
+    banner.querySelector(".kicker").textContent = pr.kicker || "";
+    banner.querySelector(".q-title").textContent = pr.title || "";
+    banner.querySelector(".q-shape").textContent = pr.shape || "";
+    banner.querySelector(".q-ask").textContent = pr.ask || "";
+    document.getElementById("quizPrompt").textContent = pr.text || "";
+    var slots = document.getElementById("quizSlots");
+    slots.innerHTML = "";
+    if (q.kind === "identify") {
+      q.targets.forEach(function (tg, i) {
+        var click = state.clicks[tg.key];
+        var deg = click && (click.degree || click.name);
+        var li = document.createElement("li");
+        li.className = deg ? "" : "empty";
+        li.innerHTML = "<span>" + (i + 1) + ". " + stringPhrase(q.board, tg.string, tg.fret) + "</span>" +
+          '<span class="slot-deg">' + (deg || "？") + "</span>";
+        slots.appendChild(li);
+      });
+    } else if (q.kind === "find") {
+      q.targetDegrees.forEach(function (d) {
+        var found = false;
+        if (state.grade) found = (state.grade.foundDegrees || []).indexOf(d) >= 0;
+        var li = document.createElement("li");
+        li.className = found ? "" : "empty";
+        li.innerHTML = '<span class="slot-deg">' + d + "</span>" + (state.grade ? (found ? " 找到了" : " 還沒找到") : " 請點出來");
+        slots.appendChild(li);
+      });
+    }
+  }
+
   function renderQuiz() {
     var qOn = state.mode === "quiz";
+    var q = state.question;
     document.getElementById("quizBox").hidden = !qOn;
     ["playGroup", "labelGroup", "browseSettings", "scaleGroup", "patGroup"].forEach(function (id) {
       document.getElementById(id).hidden = qOn;
     });
-    document.getElementById("quizPrompt").textContent = qOn && state.question ? state.question.prompt : "";
+    fillLevelBtns();
+    document.querySelectorAll("#levelBtns button").forEach(function (b) {
+      b.classList.toggle("on", b.getAttribute("data-level") === String(state.level));
+    });
+    var lv = T.levelById(state.level);
+    document.getElementById("levelHint").textContent = lv.blurb || "";
+    document.getElementById("quizHow").textContent = q && q.kind === "find"
+      ? "先按「聽和弦進行」，再在反黃的把位裡點出指定的數字音。再點一次可以取消。"
+      : "在畫圈的格子上點一下，選數字音名（小調主音是 6，大調主音是 1）。";
+    document.getElementById("playProg").hidden = !(qOn && q && q.kind === "find" && !state.grade);
+    document.getElementById("stopProg").hidden = !(qOn && q && q.kind === "find" && A.isPlaying && A.isPlaying());
+    renderBanner(qOn ? q : null);
     var res = document.getElementById("quizResult");
+    var upBtn = document.getElementById("levelUpBtn");
+    upBtn.hidden = true;
     if (qOn && state.grade) {
       res.hidden = false;
       res.className = "shown";
       var g = state.grade;
       var bits = [];
       bits.push('<strong class="score">' + g.percent + " 分</strong>");
-      bits.push("對了 " + g.correct.length + "／" + g.expectedCount + " 個音");
-      if (g.wrongName.length) bits.push("音名錯 " + g.wrongName.length + " 處");
-      if (g.missing.length) bits.push("漏點 " + g.missing.length + " 處");
+      if (q.kind === "find") bits.push("找到 " + (g.foundDegrees ? g.foundDegrees.length : g.correct.length) + "／" + g.expectedCount + " 個指定音");
+      else bits.push("對了 " + g.correct.length + "／" + g.expectedCount + " 個音");
+      if (g.wrongName && g.wrongName.length) bits.push("音名錯 " + g.wrongName.length + " 處");
+      if (g.missing.length) bits.push("漏了 " + g.missing.length + " 處");
       if (g.extra.length) bits.push("多點 " + g.extra.length + " 處");
       if (g.perfect) bits.push("全部正確！");
-      if (state.question.anchors.length > 1) bits.push("（這題按第 " + g.usedAnchor + " 格的指型來批）");
-      res.innerHTML = bits[0] + bits.slice(1).join("，") + renderExplainHtml(g);
+      if (state.pendingLevelUp) {
+        bits.push('<p class="levelup">連對 ' + state.streak + " 題，可以升到" + T.levelById(state.level + 1).name + "了！</p>");
+        upBtn.hidden = false;
+      }
+      res.innerHTML = bits[0] + bits.slice(1).join("，");
     } else {
       res.hidden = true;
       res.innerHTML = "";
@@ -386,6 +500,10 @@
       if (id === "all") b.classList.toggle("on", !!state.showAll);
     });
     document.getElementById("instHint").textContent = (A.INSTRUMENTS[state.inst].hint || "");
+    var isMode = T.isModeScale(state.scale);
+    document.getElementById("playMode").hidden = state.mode !== "browse" || !isMode;
+    document.getElementById("modeHint").hidden = state.mode !== "browse" || !isMode;
+    document.getElementById("playScaleAll").hidden = state.mode !== "browse";
     var an = T.anchorFrets(tonicName(), state.scale, state.pattern, T.TUNINGS[state.board].frets);
     var solfaLab = an.lowSolfaLabel || T.solfaDisplay(an.solfa);
     var tonicSolfa = T.isMinorSystem(state.scale) ? "La" : "Do";
@@ -434,7 +552,9 @@
   function newQuestion(forced) {
     state.clicks = {};
     state.grade = null;
-    state.question = forced || T.randomQuestion(collectScope());
+    state.pendingLevelUp = false;
+    if (A.stopTransport) A.stopTransport();
+    state.question = forced || T.randomQuizQuestion({ level: state.level, board: state.board });
     if (!state.question) return;
     state.board = state.question.board;
     state.scale = state.question.scale;
@@ -442,10 +562,48 @@
     state.showAll = false;
     var k = T.keyByName(state.question.tonic);
     state.key = T.KEYS.indexOf(k);
+    if (state.key < 0) state.key = 0;
     if (T.KEYS[state.key].enh === state.question.tonic) state.useEnh = true;
     else if (T.KEYS[state.key].name === state.question.tonic) state.useEnh = false;
     if (state.autoInst) state.inst = defaultInstForBoard();
     render();
+  }
+
+  function applyGrade(g) {
+    state.grade = g;
+    if (g && g.perfect) {
+      state.streak += 1;
+      state.score += 10 + Math.min(10, state.streak) * 2;
+      var lv = T.levelById(state.level);
+      if (state.streak >= (lv.streakToUp || 3) && state.level < T.QUIZ_LEVELS.length) state.pendingLevelUp = true;
+    } else {
+      state.streak = 0;
+      state.pendingLevelUp = false;
+    }
+  }
+
+  function playQuizProgression() {
+    var q = state.question;
+    if (!q || !q.progression) return;
+    A.unlock();
+    A.startProgression(q.progression, { bpm: 92, drums: true, inst: "acoustic", loop: false, beatsPerChord: 2 });
+    renderQuiz();
+  }
+
+  function playScaleOrMode(asMode) {
+    A.unlock();
+    if (A.stopTransport) A.stopTransport();
+    var tonic = tonicName();
+    var plan = T.modeListenPlan(tonic, state.scale);
+    plan.scaleMidis.forEach(function (m, i) {
+      setTimeout(function () { A.playMidi(m, state.inst === "bass" ? "bass" : "acoustic"); }, i * 280);
+    });
+    if (asMode && plan.vampDegrees) {
+      var wait = plan.scaleMidis.length * 280 + 250;
+      setTimeout(function () {
+        A.startProgression({ tonic: tonic, minor: plan.minorColor, degrees: plan.vampDegrees }, { bpm: 88, drums: true, inst: "acoustic", loop: false, beatsPerChord: 2 });
+      }, wait);
+    }
   }
 
   function initPanel() {
@@ -483,16 +641,15 @@
     all.addEventListener("click", function () { state.showAll = true; render(); });
     document.getElementById("patBtns").appendChild(all);
 
-    T.SCALES.forEach(function (s) {
-      var lab = document.createElement("label");
-      var on = s.id === "harMinor" || s.id === "natMinor" || s.id === "major" || s.id === "minPent";
-      lab.innerHTML = '<input type="checkbox" value="' + s.id + '"' + (on ? " checked" : "") + "> " + s.name;
-      document.getElementById("scopeScales").appendChild(lab);
-    });
-    T.PATTERNS.forEach(function (p) {
-      var lab = document.createElement("label");
-      lab.innerHTML = '<input type="checkbox" value="' + p.id + '" checked> ' + p.label;
-      document.getElementById("scopePats").appendChild(lab);
+    fillLevelBtns();
+    document.getElementById("levelBtns").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-level]");
+      if (!b) return;
+      state.level = +b.getAttribute("data-level");
+      state.streak = 0;
+      state.pendingLevelUp = false;
+      if (state.mode === "quiz") newQuestion();
+      else render();
     });
 
     document.getElementById("modeBtns").addEventListener("click", function (e) {
@@ -534,17 +691,33 @@
       var anchor = an.anchors[an.anchors.length - 1] || an.anchors[0];
       var notes = T.patternNotes(state.board, tonicName(), state.scale, state.pattern, anchor)
         .sort(function (a, b) { return a.string - b.string || a.fret - b.fret; });
-      A.stopAll();
+      if (A.stopTransport) A.stopTransport();
+      else A.stopAll();
       notes.forEach(function (n, i) {
         setTimeout(function () { A.playMidi(n.midi, state.inst); }, i * 320);
       });
     });
+    document.getElementById("playScaleAll").addEventListener("click", function () { playScaleOrMode(false); });
+    document.getElementById("playMode").addEventListener("click", function () { playScaleOrMode(true); });
+    document.getElementById("playProg").addEventListener("click", function () { playQuizProgression(); });
+    document.getElementById("stopProg").addEventListener("click", function () {
+      if (A.stopTransport) A.stopTransport();
+      renderQuiz();
+    });
     document.getElementById("nextQ").addEventListener("click", function () { newQuestion(); });
+    document.getElementById("levelUpBtn").addEventListener("click", function () {
+      if (!state.pendingLevelUp) return;
+      state.level += 1;
+      state.streak = 0;
+      state.pendingLevelUp = false;
+      newQuestion();
+    });
     document.getElementById("submitQ").addEventListener("click", function () {
       if (!state.question) return;
       var clicks = Object.keys(state.clicks).map(function (k) { return state.clicks[k]; });
-      state.grade = T.gradeQuiz(clicks, state.question);
+      applyGrade(T.gradeQuizQuestion(clicks, state.question));
       closePop();
+      if (A.stopTransport) A.stopTransport();
       render();
     });
     document.addEventListener("click", function (e) {
@@ -564,6 +737,7 @@
     currentNotes: currentNotes,
     scrollToFret: scrollToFret,
     collectScope: collectScope, showCellExplain: showCellExplain,
+    applyGrade: applyGrade, playQuizProgression: playQuizProgression,
     setState: function (p) {
       Object.keys(p).forEach(function (k) { state[k] = p[k]; });
       render();

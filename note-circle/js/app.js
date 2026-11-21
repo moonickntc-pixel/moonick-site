@@ -578,6 +578,10 @@
   }
 
   function hit(pc) {
+    if (typeof window.__notePracticeHit === "function") {
+      var handled = window.__notePracticeHit(pc);
+      if (handled === false) return;
+    }
     unlock();
     var type = chordTypeFor(pc);
     if (!type) {
@@ -682,8 +686,9 @@
   window.__noteCircle = {
     state: state, spellMajor: spellMajor, relativeMinorName: relativeMinorName, keyMenuLabel: keyMenuLabel,
     chordInfo: chordInfo, chordMidis: chordMidis, currentChord: currentChord, CHORDS: CHORDS, DIATONIC: DIATONIC,
-    render: render, loadInst: loadInst, playMidi: playMidi, soundingMidi: soundingMidi, renderOffline: renderOffline,
-    ensureCtx: ensureCtx, buildOutputChain: buildOutputChain, chordLevel: chordLevel, dbToLin: dbToLin,
+    render: render, loadInst: loadInst, playMidi: playMidi, playChord: playChord, soundingMidi: soundingMidi, renderOffline: renderOffline,
+    ensureCtx: ensureCtx, unlock: unlock, chokeVoices: chokeVoices, flash: flash,
+    buildOutputChain: buildOutputChain, chordLevel: chordLevel, dbToLin: dbToLin,
     INSTRUMENTS: INSTRUMENTS, INST_ORDER: INST_ORDER, KEYS: KEYS, MASTER_GAIN: MASTER_GAIN, LIMITER: LIMITER,
     getMaster: function () { return master; }, getLimiter: function () { return limiter; }, getInstGain: function () { return instGain; }, getClip: function () { return clip; },
     NOTE_ATTACK: NOTE_ATTACK, NOTE_FADE_AT: NOTE_FADE_AT, NOTE_FADE: NOTE_FADE, NOTE_LEN: NOTE_LEN

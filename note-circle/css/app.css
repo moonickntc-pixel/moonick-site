@@ -84,3 +84,38 @@ polyline.chord-poly{fill:none}
 html:not(.has-chord) .chord-only{display:none!important}
 .sw-chord{background:transparent;border:4px solid var(--chord)}
 @media(max-width:899px){.chord-grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}.chord-grid.auto{grid-template-columns:repeat(2,minmax(0,1fr))}.chord-grid button{font-size:16px;min-height:42px;padding:4px 2px}}
+
+/* 抓歌練習 */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+.practice-on .browse-only{display:none!important}
+.prac-hud{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:center;font-weight:800;font-size:16px;margin:0 0 10px}
+.prac-hud #pracLevelName{background:var(--accent);color:var(--accent-text);border-radius:999px;padding:4px 12px}
+.prac-hero{background:var(--paper);border:3px solid var(--accent);border-radius:16px;padding:14px 16px 12px;text-align:center;margin:0 auto 12px;max-width:720px}
+.prac-hero .kicker{margin:0 0 4px;font-size:15px;font-weight:800;color:var(--muted);letter-spacing:.04em}
+.prac-hero .q-title{margin:0 0 6px;font-size:32px;line-height:1.25}
+.prac-hero .q-ask{margin:0;font-size:20px;font-weight:700;line-height:1.45}
+.prac-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0 0 12px}
+.prac-choices button{border:2px solid var(--accent);background:transparent;border-radius:12px;padding:10px 8px;font:inherit;font-weight:800;font-size:18px;cursor:pointer;min-height:48px}
+.prac-choices button.on{background:var(--accent);color:var(--accent-text)}
+.prac-choices button.is-ok{background:#2f6b4a;color:#fff;border-color:#2f6b4a}
+.prac-choices button.is-bad{background:#a33;color:#fff;border-color:#a33}
+.prac-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.prac-actions button,.jam-bar button{border:2px solid var(--accent);background:transparent;border-radius:12px;padding:9px 14px;font:inherit;font-weight:700;cursor:pointer;min-height:46px}
+.prac-actions #pracSubmit,.prac-actions #pracNext,#jamStop{background:var(--accent);color:var(--accent-text);flex:1}
+#pracJam{flex:1 0 100%}
+#pracResult.shown{margin-top:8px;padding:10px 12px;border-radius:12px;background:var(--bg);font-weight:800;font-size:18px}
+.jam-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin:8px 0}
+.tempo-lab{display:flex;align-items:center;gap:8px;font-weight:700;flex:1}
+#tempoRange{flex:1;min-width:120px}
+.note.picked circle.body{stroke:var(--accent);stroke-width:8}
+.note.tone-ok circle.body{stroke:#2f6b4a;stroke-width:8}
+.note.tone-miss circle.body{stroke:#c0392b;stroke-width:8;stroke-dasharray:6 4}
+.note.tone-bad circle.body{stroke:#a33;stroke-width:8}
+.note.jam-now circle.glow{opacity:.8;stroke-width:10}
+@media(max-width:899px){
+  .prac-hero .q-title{font-size:26px}
+  .prac-hero .q-ask{font-size:18px}
+  .prac-choices button{font-size:16px;min-height:44px}
+}
+
+[hidden]{display:none!important}

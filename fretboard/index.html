@@ -20,7 +20,7 @@
 <meta name="twitter:title" id="twitter-title" content="吉他／Bass 音階工具｜慕尼克">
 <meta name="twitter:description" id="twitter-description" content="在指板上練習吉他與 Bass 的各種調性、音階與五個指型，點音就能聽到聲音，也可以做小測驗自己批改。">
 <meta name="twitter:image" id="twitter-image" content="https://moonickmusic.com/fretboard/og-moonick.png">
-<link rel="stylesheet" href="css/app.css?v=20261122a">
+<link rel="stylesheet" href="css/app.css?v=20261122b">
 <script>
   (function () {
     var h = location.hostname.toLowerCase().replace(/\.$/, "");
@@ -68,6 +68,20 @@
 
 <main id="main">
   <section id="stage" aria-label="指板">
+    <div id="quizBanner" hidden>
+      <div id="quizHud" class="quiz-hud" aria-live="polite">
+        <span id="quizLevelName">第 1 級</span>
+        <span>分數 <strong id="quizScore">0</strong></span>
+        <span>連對 <strong id="quizStreak">0</strong></span>
+      </div>
+      <div id="quizHero" class="quiz-hero" role="status">
+        <p class="kicker"></p>
+        <h2 class="q-title"></h2>
+        <p class="q-shape"></p>
+        <p class="q-ask"></p>
+        <ol id="quizSlots" class="quiz-slots"></ol>
+      </div>
+    </div>
     <h1>吉他／Bass 音階工具</h1>
     <p class="hint" id="boardHint">上面是最細的弦（1 弦），跟 TAB 譜一樣。指板可左右滑動，空弦是第 0 格。</p>
     <div id="fretScroll">
@@ -129,25 +143,26 @@
 
     <div class="group" id="playGroup">
       <button type="button" id="playPat">▶ 播放這個指型</button>
+      <button type="button" id="playScaleAll" style="margin-top:8px">▶ 聽整個音階</button>
+      <button type="button" id="playMode" hidden style="margin-top:8px">▶ 聽這個調式</button>
+      <p class="hint" id="modeHint" hidden>調式先聽就好，小測驗不會考調式。</p>
     </div>
 
     <div id="quizBox" hidden>
-      <div class="group">
-        <div class="label">出題範圍</div>
-        <div class="hint" style="margin-bottom:8px">可複選。按「下一題」會從範圍裡出題。</div>
-        <div class="scope" id="scopeBoards">
-          <label><input type="checkbox" value="guitar" checked> 吉他</label>
-          <label><input type="checkbox" value="bass" checked> Bass</label>
-        </div>
-        <div class="scope" id="scopeScales" style="margin-top:8px"></div>
-        <div class="scope" id="scopePats" style="margin-top:8px"></div>
+      <div class="group" id="levelGroup">
+        <div class="label">難度</div>
+        <div class="seg level-seg" id="levelBtns" role="radiogroup" aria-label="難度"></div>
+        <p class="hint" id="levelHint"></p>
       </div>
-      <p id="quizPrompt" role="status"></p>
-      <p class="hint">點指板上的格子，再選數字音名（小調系主音是 6，大調系主音是 1）。再點一次可以改或取消。</p>
+      <p class="hint" id="quizHow"></p>
       <div class="quiz-actions">
-        <button type="button" id="submitQ">送出批改</button>
-        <button type="button" id="nextQ" style="margin-top:8px;background:transparent;color:inherit">下一題</button>
+        <button type="button" id="playProg">▶ 聽和弦進行</button>
+        <button type="button" id="stopProg" hidden>■ 停止</button>
+        <button type="button" id="submitQ">送出答案</button>
+        <button type="button" id="nextQ">下一題</button>
+        <button type="button" id="levelUpBtn" hidden>升到下一級</button>
       </div>
+      <p id="quizPrompt" class="sr-only"></p>
       <div id="quizResult" hidden></div>
     </div>
 
@@ -159,8 +174,9 @@
   <p>音色取樣：FluidR3 GM SoundFont（Frank Wen），依 <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a> 授權使用，轉檔版本來自 <a href="https://github.com/gleitz/midi-js-soundfonts" target="_blank" rel="noopener">gleitz/midi-js-soundfonts</a>。與十二音圓形音階工具同一套音色與音量。</p>
 </footer>
 
-<script src="js/theory.js?v=20261122a"></script>
-<script src="js/audio.js?v=20261122a"></script>
-<script src="js/app.js?v=20261122a"></script>
+<script src="js/theory.js?v=20261122b"></script>
+<script src="js/quiz.js?v=20261122b"></script>
+<script src="js/audio.js?v=20261122b"></script>
+<script src="js/app.js?v=20261122b"></script>
 </body>
 </html>

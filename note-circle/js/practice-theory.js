@@ -398,6 +398,60 @@
     return null;
   }
 
+  // Jam 可切換的音階（大調／小調各一組；數字是首調：大調主音 1，小調主音 6）
+  var JAM_SCALES = {
+    major:    { id: "major",    quality: "major", name: "自然大調", short: "自然大調",
+                notes: [{iv:0,deg:"1"},{iv:2,deg:"2"},{iv:4,deg:"3"},{iv:5,deg:"4"},{iv:7,deg:"5"},{iv:9,deg:"6"},{iv:11,deg:"7"}] },
+    majPent:  { id: "majPent",  quality: "major", name: "大調五聲", short: "大調五聲",
+                notes: [{iv:0,deg:"1"},{iv:2,deg:"2"},{iv:4,deg:"3"},{iv:7,deg:"5"},{iv:9,deg:"6"}] },
+    majBlues: { id: "majBlues", quality: "major", name: "大調藍調", short: "大調藍調",
+                notes: [{iv:0,deg:"1"},{iv:2,deg:"2"},{iv:3,deg:"b3"},{iv:4,deg:"3"},{iv:7,deg:"5"},{iv:9,deg:"6"}] },
+    natMinor: { id: "natMinor", quality: "minor", name: "自然小調", short: "自然小調",
+                notes: [{iv:0,deg:"6"},{iv:2,deg:"7"},{iv:3,deg:"1"},{iv:5,deg:"2"},{iv:7,deg:"3"},{iv:8,deg:"4"},{iv:10,deg:"5"}] },
+    minPent:  { id: "minPent",  quality: "minor", name: "小調五聲", short: "小調五聲",
+                notes: [{iv:0,deg:"6"},{iv:3,deg:"1"},{iv:5,deg:"2"},{iv:7,deg:"3"},{iv:10,deg:"5"}] },
+    blues:    { id: "blues",    quality: "minor", name: "藍調", short: "藍調",
+                notes: [{iv:0,deg:"6"},{iv:3,deg:"1"},{iv:5,deg:"2"},{iv:6,deg:"b3"},{iv:7,deg:"3"},{iv:10,deg:"5"}] },
+    harMinor: { id: "harMinor", quality: "minor", name: "和聲小調", short: "和聲小調",
+                notes: [{iv:0,deg:"6"},{iv:2,deg:"7"},{iv:3,deg:"1"},{iv:5,deg:"2"},{iv:7,deg:"3"},{iv:8,deg:"4"},{iv:11,deg:"#5"}] },
+    melMinor: { id: "melMinor", quality: "minor", name: "旋律小調", short: "旋律小調",
+                notes: [{iv:0,deg:"6"},{iv:2,deg:"7"},{iv:3,deg:"1"},{iv:5,deg:"2"},{iv:7,deg:"3"},{iv:9,deg:"#4"},{iv:11,deg:"#5"}] }
+  };
+  var DEG_LETTER_MAJOR = { "1": 0, "2": 1, "3": 2, "4": 3, "5": 4, "6": 5, "7": 6 };
+  var DEG_LETTER_MINOR = { "6": 0, "7": 1, "1": 2, "2": 3, "3": 4, "4": 5, "5": 6 };
+  function jamScaleById(id) { return JAM_SCALES[id] || null; }
+  function defaultJamScale(quality) { return quality === "minor" ? "natMinor" : "major"; }
+  function jamScalesFor(quality) {
+    var ids = quality === "minor"
+      ? ["natMinor", "minPent", "blues", "harMinor", "melMinor"]
+      : ["major", "majPent", "majBlues"];
+    return ids.map(function (id) { return JAM_SCALES[id]; });
+  }
+  function isJamScaleFor(id, quality) {
+    var sc = JAM_SCALES[id];
+    return !!(sc && sc.quality === (quality === "minor" ? "minor" : "major"));
+  }
+  function degFamily(deg) {
+    return String(deg).replace(/^#+/, "").replace(/^b+/, "");
+  }
+  function spellJamScale(tonicName, scaleId) {
+    var quality = (JAM_SCALES[scaleId] && JAM_SCALES[scaleId].quality) || (scaleId === "minor" ? "minor" : "major");
+    if (!JAM_SCALES[scaleId]) scaleId = defaultJamScale(quality);
+    var sc = JAM_SCALES[scaleId];
+    var tonicPc = pcOf(tonicName);
+    var letterMap = sc.quality === "minor" ? DEG_LETTER_MINOR : DEG_LETTER_MAJOR;
+    var li0 = LETTERS.indexOf(tonicName[0]);
+    var byPc = {};
+    sc.notes.forEach(function (n) {
+      var pc = (tonicPc + n.iv) % 12;
+      var steps = letterMap[degFamily(n.deg)];
+      if (steps == null) steps = 0;
+      var L = LETTERS[(li0 + steps) % 7];
+      byPc[pc] = { name: spellLetter(L, pc), degree: n.deg, label: n.deg, pc: pc, iv: n.iv };
+    });
+    return { tonicPc: tonicPc, tonicName: tonicName, scaleId: sc.id, quality: sc.quality, name: sc.name, byPc: byPc };
+  }
+
   var api = {
     LEVELS: LEVELS, MAJOR_KEYS: MAJOR_KEYS, MINOR_KEYS: MINOR_KEYS,
     MAJOR_PROGS: MAJOR_PROGS, MINOR_PROGS: MINOR_PROGS, MELODIES: MELODIES,
@@ -417,7 +471,9 @@
     randomPracticeQuestion: randomPracticeQuestion,
     gradeKeyChoice: gradeKeyChoice, gradeChordTones: gradeChordTones,
     gradeDegreeChord: gradeDegreeChord, gradePracticeQuestion: gradePracticeQuestion,
-    isDiatonicPcs: isDiatonicPcs
+    isDiatonicPcs: isDiatonicPcs,
+    JAM_SCALES: JAM_SCALES, jamScaleById: jamScaleById, defaultJamScale: defaultJamScale,
+    jamScalesFor: jamScalesFor, isJamScaleFor: isJamScaleFor, spellJamScale: spellJamScale
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;

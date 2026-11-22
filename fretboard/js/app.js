@@ -562,8 +562,10 @@
         "上面是最細的弦（1 弦），跟 TAB 譜一樣。指板可左右滑動。正在顯示這個音階的全部把位。主音當 " + tonicSolfa + "。";
     } else {
       document.getElementById("boardHint").textContent =
-        "上面是最細的弦（1 弦），跟 TAB 譜一樣。指板可左右滑動。這個指型在第 " +
-        an.anchors.join("、") + " 格（主音當 " + tonicSolfa + "，6 弦最低音是 " + solfaLab + "）。";
+        "上面是最細的弦（1 弦），跟 TAB 譜一樣。指板可左右滑動。這個指型在" +
+        T.anchorsRangeText(state.pattern, an.anchors, T.TUNINGS[state.board].frets) +
+        "。主音當 " + tonicSolfa + "，6 弦名字音是 " + solfaLab +
+        "（第 " + an.anchors.join("、") + " 格）。";
     }
     renderQuiz();
     buildBoard();

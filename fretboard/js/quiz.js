@@ -169,9 +169,9 @@
     return {
       kicker: "請看圈起來的音",
       title: keyAndScaleTitle(q.tonic, q.scale),
-      shape: T.patternLabel(q.pattern),
+      shape: T.patternLabel(q.pattern) + "　" + T.boxRangeText(q),
       ask: "圈起來的 " + n + " 個音，分別是哪個音？用數字音名作答（小調主音是 6，大調主音是 1）。",
-      text: keyAndScaleTitle(q.tonic, q.scale) + "　" + T.patternLabel(q.pattern) + "　圈起來的 " + n + " 個音是哪些？"
+      text: keyAndScaleTitle(q.tonic, q.scale) + "　" + T.patternLabel(q.pattern) + "　" + T.boxRangeText(q) + "　圈起來的 " + n + " 個音是哪些？"
     };
   }
 
@@ -180,9 +180,9 @@
     return {
       kicker: "先聽和弦，再找音",
       title: keyAndScaleTitle(q.tonic, q.scale),
-      shape: T.patternLabel(q.pattern),
-      ask: "請在這個指型裡，把 " + seq + " 點出來。",
-      text: "聽這串和弦。請在" + keyAndScaleTitle(q.tonic, q.scale) + "的" + T.patternLabel(q.pattern) + "裡，把 " + seq + " 點出來。"
+      shape: T.patternLabel(q.pattern) + "　" + T.boxRangeText(q),
+      ask: "請在這個指型裡（" + T.boxRangeText(q) + "），把 " + seq + " 點出來。",
+      text: "聽這串和弦。請在" + keyAndScaleTitle(q.tonic, q.scale) + "的" + T.patternLabel(q.pattern) + "（" + T.boxRangeText(q) + "）裡，把 " + seq + " 點出來。"
     };
   }
 

@@ -17,6 +17,7 @@
     picked: {},
     jam: false,
     jamKind: "",
+    jamScale: "",
     bpm: 96
   };
 
@@ -220,6 +221,7 @@
     state.picked = {};
     state.jam = false;
     state.jamKind = "";
+    state.jamScale = "";
     state.pendingLevelUp = false;
     stopTransport();
     C.state.key = -1;
@@ -297,11 +299,51 @@
     });
   }
 
+  function currentJamSpell() {
+    var q = state.question;
+    if (!q || !q.jam) return null;
+    var id = state.jamScale || P.defaultJamScale(q.jam.quality);
+    return P.spellJamScale(q.jam.tonic, id);
+  }
+
+  function setJamScale(id) {
+    var q = state.question;
+    if (!state.jam || !q || !q.jam) return;
+    if (!P.isJamScaleFor(id, q.jam.quality)) return;
+    if (state.jamScale === id) return;
+    state.jamScale = id;
+    renderPractice();
+  }
+
+  function fillJamScales() {
+    var box = document.getElementById("jamScales");
+    if (!box) return;
+    box.innerHTML = "";
+    var q = state.question;
+    var on = state.mode === "practice" && state.jam && q && q.jam;
+    box.hidden = !on;
+    if (!on) return;
+    var lab = document.createElement("p");
+    lab.className = "lab";
+    lab.textContent = "音階";
+    box.appendChild(lab);
+    P.jamScalesFor(q.jam.quality).forEach(function (sc) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("data-scale", sc.id);
+      b.textContent = sc.short || sc.name;
+      if (state.jamScale === sc.id) b.classList.add("on");
+      b.addEventListener("click", function () { setJamScale(sc.id); });
+      box.appendChild(b);
+    });
+  }
+
   function enterJam() {
     var q = state.question;
     if (!q || !q.jam) return;
     state.jam = true;
     state.jamKind = q.jam.kind || (q.kind === "keyFromMelody" ? "melody" : "chords");
+    state.jamScale = P.defaultJamScale(q.jam.quality);
     stopTransport();
     C.render();
     renderPractice();
@@ -336,25 +378,31 @@
     if (state.mode !== "practice") return;
     var q = state.question;
     if (state.jam && q && q.jam) {
-      var sp = P.spellScale(q.jam.tonic, q.jam.quality);
+      var sp = currentJamSpell();
       root.classList.add("has-key");
       notes.forEach(function (el) {
         var pc = +el.getAttribute("data-pc");
-        var info = sp.byPc[pc];
+        var info = sp && sp.byPc[pc];
         el.classList.toggle("in", !!info);
         el.classList.toggle("out", !info);
-        el.classList.toggle("tonic", pc === sp.tonicPc);
+        el.classList.toggle("tonic", !!(sp && pc === sp.tonicPc));
         var degEl = el.querySelector("text.deg");
-        if (degEl) {
-          if (!info) degEl.textContent = "";
-          else if (q.jam.quality === "minor") degEl.textContent = P.MINOR_SHOU[info.degree];
-          else degEl.textContent = String(info.degree + 1);
+        if (degEl) degEl.textContent = info ? info.label : "";
+        var nameEl = el.querySelector("text.name");
+        if (nameEl && info) {
+          while (nameEl.firstChild) nameEl.removeChild(nameEl.firstChild);
+          nameEl.setAttribute("class", "name");
+          nameEl.textContent = info.name;
+          el.setAttribute("data-name", info.name);
         }
       });
       var main = document.querySelector("#circle .center-main");
       var sub = document.querySelector("#circle .center-sub");
       if (main) main.textContent = P.keyLabel(q.jam.tonic, q.jam.quality);
-      if (sub) sub.textContent = q.jam.quality === "minor" ? "自然小調　主音是 6" : "主音是 1";
+      if (sub) {
+        var tonicNum = q.jam.quality === "minor" ? "6" : "1";
+        sub.textContent = (sp && sp.name ? sp.name + "　" : "") + "主音是 " + tonicNum;
+      }
       document.querySelectorAll("#legend li").forEach(function (li) {
         if (li.textContent.indexOf("主音") >= 0) {
           var sw = li.querySelector(".sw");
@@ -419,9 +467,9 @@
       hero.querySelector(".kicker").textContent = "Jam 時間";
       hero.querySelector(".q-title").textContent = P.keyLabel(q.jam.tonic, q.jam.quality);
       if (state.jamKind === "melody") {
-        hero.querySelector(".q-ask").textContent = "鼓點和旋律會一直循環。點下面的順階和弦，跟著一起彈；圓上只留下這個調的自然音。";
+        hero.querySelector(".q-ask").textContent = "鼓點和旋律會一直循環。點下面的順階和弦，跟著一起彈；下面可以換音階，圓上只留下選中的音。";
       } else {
-        hero.querySelector(".q-ask").textContent = "進行會一直循環，圓上只留下這個調的自然音階。點音就能一起彈。";
+        hero.querySelector(".q-ask").textContent = "進行會一直循環。點音就能一起彈。下面可以換音階，圓上只留下選中的音。";
       }
       document.getElementById("pracPrompt").textContent = "Jam：" + P.keyLabel(q.jam.tonic, q.jam.quality);
     } else {
@@ -472,6 +520,7 @@
       cap.textContent = "";
     }
     fillJamChords(on && state.jam && q ? q.jam : null);
+    fillJamScales();
 
     var res = document.getElementById("pracResult");
     if (on && state.grade && !state.jam) {
@@ -503,8 +552,8 @@
     if (state.jam) {
       var q = state.question;
       if (q && q.jam) {
-        var sp = P.spellScale(q.jam.tonic, q.jam.quality);
-        if (!sp.byPc[pc]) return false; // 只留自然音階
+        var sp = currentJamSpell();
+        if (!sp || !sp.byPc[pc]) return false; // 只留目前選中的音階
       }
       if (C.flash) C.flash(pc);
       C.playMidi(C.soundingMidi(pc));
@@ -529,6 +578,7 @@
     stopTransport();
     state.jam = false;
     state.jamKind = "";
+    state.jamScale = "";
     if (mode === "browse") {
       state.question = null;
       state.grade = null;
@@ -619,7 +669,7 @@
     state: state,
     newQuestion: newQuestion,
     setMode: setMode,
-    enterJam: enterJam, tapJamChord: tapJamChord, startMelodyJam: startMelodyJam,
+    enterJam: enterJam, setJamScale: setJamScale, tapJamChord: tapJamChord, startMelodyJam: startMelodyJam,
     startProgression: startProgression,
     stopTransport: stopTransport,
     playMelody: playMelody,

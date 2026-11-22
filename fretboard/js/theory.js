@@ -609,6 +609,17 @@
     var box = boxWindow(question.pattern, a, maxFret);
     return "第 " + box.lo + " 到 " + box.hi + " 格";
   }
+  function anchorsRangeText(patternId, anchors, maxFret) {
+    if (!anchors || !anchors.length) return "";
+    var parts = [];
+    var i, box;
+    for (i = 0; i < anchors.length; i++) {
+      box = boxWindow(patternId, anchors[i], maxFret);
+      parts.push("第 " + box.lo + " 到 " + box.hi + " 格");
+    }
+    if (parts.length === 1) return parts[0];
+    return parts[0] + "（或" + parts.slice(1).join("、") + "）";
+  }
 
   function explainGrade(grade, question) {
     var sc = scaleById(question.scale);
@@ -716,6 +727,7 @@
     isMinorSystem: isMinorSystem, allPatternAnchors: allPatternAnchors,
     namesakeInScale: namesakeInScale, quizDegreeChoices: quizDegreeChoices,
     boxOffset: boxOffset, boxWindow: boxWindow, boxFits: boxFits,
+    boxRangeText: boxRangeText, anchorsRangeText: anchorsRangeText,
     anchorFrets: anchorFrets, patternNotes: patternNotes, dedupeUnisonPitches: dedupeUnisonPitches,
     keyTitle: keyTitle, patternLabel: patternLabel, questionPrompt: questionPrompt,
     makeQuestion: makeQuestion, gradeQuiz: gradeQuiz, randomQuestion: randomQuestion,

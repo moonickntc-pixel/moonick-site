@@ -18,8 +18,20 @@
     jam: false,
     jamKind: "",
     jamScale: "",
-    bpm: 96
+    bpm: 96,
+    freejam: {
+      tonic: "C",
+      quality: "major",
+      scale: "major",
+      slots: [],
+      rhythm: "8beat",
+      bpm: 96,
+      chordIndex: -1,
+      jianpu: [],
+      kbOn: false
+    }
   };
+  var kbHeld = {};
 
   var transport = { timer: null, next: 0, step: 0, playing: false, plan: null, bpm: 96, loop: false };
   var drumGain = null;
@@ -94,16 +106,55 @@
 
   function beatDur() { return 60 / transport.bpm; }
 
+  function planSubdiv(plan) { return (plan && plan.subdiv) || 2; }
+  function chordAtPlanStep(plan, step) {
+    if (plan.chordBeats && plan.chordBeats.length && plan.chords && plan.chords.length) {
+      var tagged = plan.chords.map(function (ch, i) {
+        var o = { beats: plan.chordBeats[i] || 0 };
+        for (var k in ch) if (Object.prototype.hasOwnProperty.call(ch, k)) o[k] = ch[k];
+        return o;
+      });
+      return P.freeJamChordAtStep(tagged, plan.rhythm || "8beat", step);
+    }
+    var stepsPerChord = (plan.beatsPerChord || 2) * planSubdiv(plan);
+    var n = Math.max(1, (plan.chords || []).length);
+    var chordIdx = Math.floor(step / stepsPerChord) % n;
+    return {
+      index: (plan.chords && plan.chords.length) ? chordIdx : -1,
+      chord: plan.chords && plan.chords[chordIdx],
+      atAttack: !!(plan.chords && plan.chords.length && step % stepsPerChord === 0),
+      localStep: stepsPerChord ? step % stepsPerChord : 0
+    };
+  }
+  function totalPlanSteps(plan) {
+    if (plan.chordBeats && plan.chordBeats.length) {
+      var beats = plan.chordBeats.reduce(function (n, b) { return n + b; }, 0);
+      return beats * planSubdiv(plan);
+    }
+    return (plan.chords || []).length * (plan.beatsPerChord || 2) * planSubdiv(plan);
+  }
+  function stepAdvance(plan, step) {
+    if (plan.rhythm) return P.freeJamStepDurationBeats(plan.rhythm, step) * beatDur();
+    return beatDur() / 2;
+  }
+
   function scheduleStep(step, t, plan) {
     if (plan.drums !== false) {
-      if (step % 8 === 0 || step % 8 === 4) playKick(t);
-      if (step % 8 === 2 || step % 8 === 6) playSnare(t);
-      playHat(t, step % 8 === 6);
+      if (plan.rhythm) {
+        var hits = P.freeJamDrumHits(plan.rhythm, step);
+        if (hits.kick) playKick(t);
+        if (hits.snare) playSnare(t);
+        if (hits.hat) playHat(t, hits.open);
+      } else {
+        if (step % 8 === 0 || step % 8 === 4) playKick(t);
+        if (step % 8 === 2 || step % 8 === 6) playSnare(t);
+        playHat(t, step % 8 === 6);
+      }
     }
-    var stepsPerChord = (plan.beatsPerChord || 2) * 2;
-    var chordIdx = Math.floor(step / stepsPerChord) % Math.max(1, (plan.chords || []).length);
-    if (plan.autoChords && plan.chords && plan.chords.length && step % stepsPerChord === 0) {
-      var midis = chordMidisFor(plan.chords[chordIdx]);
+    var at = chordAtPlanStep(plan, step);
+    var chordIdx = at.index;
+    if (plan.autoChords && at.chord && at.atAttack) {
+      var midis = chordMidisFor(at.chord);
       if (C.playChord) C.playChord(midis, t);
     }
     if (plan.melodyMidis && plan.melodyMidis.length) {
@@ -111,14 +162,14 @@
       C.playMidi(plan.melodyMidis[mi], t);
       if (C.flash && plan.melodyPcs) C.flash(plan.melodyPcs[mi]);
     }
-    if (plan.heldChord && step % stepsPerChord === 0) {
+    if (plan.heldChord && at.atAttack) {
       if (C.playChord) C.playChord(chordMidisFor(plan.heldChord), t, { choke: false });
     }
-    if (plan.onBeat) plan.onBeat(step, t, chordIdx);
+    if (plan.onBeat) plan.onBeat(step, t, chordIdx, at);
     var notes = document.querySelectorAll("#circle .note");
     var glow = null;
     if (plan.heldChord) glow = plan.heldChord;
-    else if (plan.autoChords && plan.chords && plan.chords[chordIdx]) glow = plan.chords[chordIdx];
+    else if (plan.autoChords && at.chord) glow = at.chord;
     if (glow) {
       notes.forEach(function (el) {
         var pc = +el.getAttribute("data-pc");
@@ -133,10 +184,10 @@
     var horizon = audio.currentTime + 0.14;
     while (transport.next < horizon) {
       scheduleStep(transport.step, transport.next, transport.plan);
-      transport.next += beatDur() / 2;
+      transport.next += stepAdvance(transport.plan, transport.step);
       transport.step += 1;
       if (!transport.loop) {
-        var total = (transport.plan.chords || []).length * (transport.plan.beatsPerChord || 2) * 2;
+        var total = totalPlanSteps(transport.plan);
         if (transport.step >= total) { stopTransport(); return; }
       }
     }
@@ -150,11 +201,17 @@
     stopTransport();
     transport.bpm = opts.bpm || state.bpm || 96;
     transport.loop = !!opts.loop;
+    var rhythm = opts.rhythm || "";
+    var r = rhythm ? P.freeJamRhythmById(rhythm) : null;
     transport.plan = {
       kind: "chords",
       autoChords: true,
       chords: chords,
       beatsPerChord: opts.beatsPerChord || 2,
+      chordBeats: opts.chordBeats || null,
+      rhythm: rhythm || null,
+      subdiv: r ? r.subdiv : 2,
+      swing: !!(r && r.swing),
       drums: opts.drums !== false,
       onBeat: opts.onBeat || null
     };
@@ -173,6 +230,7 @@
     transport.playing = false;
     if (transport.timer) { clearInterval(transport.timer); transport.timer = null; }
     document.querySelectorAll("#circle .note.jam-now").forEach(function (el) { el.classList.remove("jam-now"); });
+    if (state.freejam) state.freejam.chordIndex = -1;
     renderPractice();
   }
 
@@ -299,14 +357,31 @@
     });
   }
 
-  function currentJamSpell() {
+  function jamContext() {
+    if (state.mode === "freejam") {
+      var f = state.freejam;
+      return { tonic: f.tonic, quality: f.quality, scale: f.scale || P.defaultJamScale(f.quality) };
+    }
     var q = state.question;
-    if (!q || !q.jam) return null;
-    var id = state.jamScale || P.defaultJamScale(q.jam.quality);
-    return P.spellJamScale(q.jam.tonic, id);
+    if (state.mode === "practice" && state.jam && q && q.jam) {
+      return { tonic: q.jam.tonic, quality: q.jam.quality, scale: state.jamScale || P.defaultJamScale(q.jam.quality) };
+    }
+    return null;
+  }
+  function currentJamSpell() {
+    var ctxj = jamContext();
+    if (!ctxj) return null;
+    return P.spellJamScale(ctxj.tonic, ctxj.scale);
   }
 
   function setJamScale(id) {
+    if (state.mode === "freejam") {
+      if (!P.isJamScaleFor(id, state.freejam.quality)) return;
+      if (state.freejam.scale === id) return;
+      state.freejam.scale = id;
+      renderPractice();
+      return;
+    }
     var q = state.question;
     if (!state.jam || !q || !q.jam) return;
     if (!P.isJamScaleFor(id, q.jam.quality)) return;
@@ -330,27 +405,34 @@
     });
   }
 
-  function fillJamScales() {
-    var box = document.getElementById("jamScales");
+  function fillScaleBox(box, quality, current, hidden) {
     if (!box) return;
     box.innerHTML = "";
-    var q = state.question;
-    var on = state.mode === "practice" && state.jam && q && q.jam;
-    box.hidden = !on;
-    if (!on) return;
+    box.hidden = !!hidden;
+    if (hidden) return;
     var lab = document.createElement("p");
     lab.className = "lab";
     lab.textContent = "音階";
     box.appendChild(lab);
-    P.jamScalesFor(q.jam.quality).forEach(function (sc) {
+    P.jamScalesFor(quality).forEach(function (sc) {
       var b = document.createElement("button");
       b.type = "button";
       b.setAttribute("data-scale", sc.id);
       b.textContent = sc.short || sc.name;
-      if (state.jamScale === sc.id) b.classList.add("on");
+      if (current === sc.id) b.classList.add("on");
       b.addEventListener("click", function () { setJamScale(sc.id); });
       box.appendChild(b);
     });
+  }
+  function fillJamScales() {
+    var q = state.question;
+    var on = state.mode === "practice" && state.jam && q && q.jam;
+    fillScaleBox(document.getElementById("jamScales"), on ? q.jam.quality : "major", state.jamScale, !on);
+  }
+  function fillFreeJamScales() {
+    var on = state.mode === "freejam";
+    var f = state.freejam;
+    fillScaleBox(document.getElementById("fjScales"), on ? f.quality : "major", f.scale, !on);
   }
 
   function enterJam() {
@@ -384,16 +466,48 @@
     });
   }
 
+  function currentGlowChord() {
+    if (state.mode === "freejam") {
+      var i = state.freejam.chordIndex;
+      return i >= 0 ? state.freejam.slots[i] : null;
+    }
+    if (transport.plan) {
+      if (transport.plan.heldChord) return transport.plan.heldChord;
+      if (transport.playing && transport.plan.autoChords && transport.plan.chords) {
+        return chordAtPlanStep(transport.plan, transport.step).chord;
+      }
+    }
+    return null;
+  }
+  function paintKbOnNote(el, info) {
+    var old = el.querySelector("text.kb");
+    if (old) old.remove();
+    if (state.mode !== "freejam" || !info) return;
+    var body = el.querySelector("circle.body");
+    if (!body) return;
+    var kb = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    var ctxk = jamContext();
+    var keys = ctxk ? P.freeJamKeysForPc(ctxk.tonic, ctxk.scale, +el.getAttribute("data-pc")) : { high:"", mid:"", low:"" };
+    kb.setAttribute("class", "kb");
+    kb.setAttribute("x", body.getAttribute("cx"));
+    kb.setAttribute("y", String(+body.getAttribute("cy") + 24));
+    kb.setAttribute("text-anchor", "middle");
+    kb.setAttribute("dominant-baseline", "central");
+    kb.textContent = [keys.high, keys.mid, keys.low].filter(Boolean).join(" ");
+    el.appendChild(kb);
+  }
   function paintCircle() {
     var root = document.documentElement;
     var notes = document.querySelectorAll("#circle .note");
     notes.forEach(function (el) {
-      el.classList.remove("picked", "tone-ok", "tone-miss", "tone-bad");
+      el.classList.remove("picked", "tone-ok", "tone-miss", "tone-bad", "jam-chord", "jam-chord-root");
+      var kb = el.querySelector("text.kb");
+      if (kb && state.mode !== "freejam") kb.remove();
     });
-    if (state.mode !== "practice") return;
-    var q = state.question;
-    if (state.jam && q && q.jam) {
+    var ctxj = jamContext();
+    if (ctxj) {
       var sp = currentJamSpell();
+      var glow = currentGlowChord();
       root.classList.add("has-key");
       notes.forEach(function (el) {
         var pc = +el.getAttribute("data-pc");
@@ -401,6 +515,9 @@
         el.classList.toggle("in", !!info);
         el.classList.toggle("out", !info);
         el.classList.toggle("tonic", !!(sp && pc === sp.tonicPc));
+        var isChord = !!(glow && glow.pcs && glow.pcs.indexOf(pc) >= 0);
+        el.classList.toggle("jam-chord", isChord);
+        el.classList.toggle("jam-chord-root", !!(glow && glow.rootPc === pc));
         var degEl = el.querySelector("text.deg");
         if (degEl) degEl.textContent = info ? info.label : "";
         var nameEl = el.querySelector("text.name");
@@ -410,12 +527,13 @@
           nameEl.textContent = info.name;
           el.setAttribute("data-name", info.name);
         }
+        paintKbOnNote(el, info);
       });
       var main = document.querySelector("#circle .center-main");
       var sub = document.querySelector("#circle .center-sub");
-      if (main) main.textContent = P.keyLabel(q.jam.tonic, q.jam.quality);
+      if (main) main.textContent = P.keyLabel(ctxj.tonic, ctxj.quality);
       if (sub) {
-        var tonicNum = q.jam.quality === "minor" ? "6" : "1";
+        var tonicNum = ctxj.quality === "minor" ? "6" : "1";
         sub.textContent = (sp && sp.name ? sp.name + "　" : "") + "主音是 " + tonicNum;
       }
       document.querySelectorAll("#legend li").forEach(function (li) {
@@ -423,16 +541,18 @@
         if (li.querySelector(".sw-scale") || (li.textContent.indexOf("音階") >= 0 && li.textContent.indexOf("主音") < 0)) {
           li.textContent = "";
           if (sw) li.appendChild(sw);
-          li.appendChild(document.createTextNode(P.jamLegendText(q.jam.tonic, state.jamScale)));
+          li.appendChild(document.createTextNode(P.jamLegendText(ctxj.tonic, ctxj.scale)));
         } else if (li.querySelector(".sw-tonic") || li.textContent.indexOf("主音") >= 0) {
           li.textContent = "";
           if (sw) li.appendChild(sw);
-          li.appendChild(document.createTextNode(q.jam.quality === "minor" ? "主音（6 / La）" : "主音（1 / Do）"));
+          li.appendChild(document.createTextNode(ctxj.quality === "minor" ? "主音（6 / La）" : "主音（1 / Do）"));
         }
       });
       return;
     }
     resetLegend();
+    if (state.mode !== "practice") return;
+    var q = state.question;
     if (q && q.kind === "chordTones") {
       Object.keys(state.picked).forEach(function (k) {
         var el = document.querySelector('#circle .note[data-pc="' + k + '"]');
@@ -457,14 +577,21 @@
 
   function renderPractice() {
     var on = state.mode === "practice";
+    var fj = state.mode === "freejam";
     document.documentElement.classList.toggle("practice-on", on);
-    document.documentElement.classList.toggle("practice-jam", on && state.jam);
+    document.documentElement.classList.toggle("practice-jam", (on && state.jam) || fj);
+    document.documentElement.classList.toggle("freejam-on", fj);
     document.getElementById("pracBanner").hidden = !on;
     document.getElementById("pracBox").hidden = !on;
+    var fjBox = document.getElementById("freeJamBox");
+    if (fjBox) fjBox.hidden = !fj;
+    var fjBan = document.getElementById("fjBanner");
+    if (fjBan) fjBan.hidden = !fj;
     fillLevels();
     document.querySelectorAll("#modeBtns button").forEach(function (b) {
       b.classList.toggle("on", b.getAttribute("data-mode") === state.mode);
     });
+    if (fj) { renderFreeJam(); return; }
     document.querySelectorAll("#pracLevelBtns button").forEach(function (b) {
       b.classList.toggle("on", b.getAttribute("data-level") === String(state.level));
     });
@@ -567,16 +694,17 @@
   }
 
   window.__notePracticeHit = function (pc) {
-    if (state.mode !== "practice") return;
+    if (state.mode !== "practice" && state.mode !== "freejam") return;
     if (C.unlock) C.unlock();
-    if (state.jam) {
-      var q = state.question;
-      if (q && q.jam) {
-        var sp = currentJamSpell();
-        if (!sp || !sp.byPc[pc]) return false; // 只留目前選中的音階
-      }
+    if (state.mode === "freejam" || state.jam) {
+      var sp = currentJamSpell();
+      if (!sp || !sp.byPc[pc]) return false; // 只留目前選中的音階
       if (C.flash) C.flash(pc);
-      C.playMidi(C.soundingMidi(pc));
+      var inst = C.INSTRUMENTS[C.state.inst];
+      var ctxj = jamContext();
+      var midi = P.freeJamMidi(pc, P.pcOf(ctxj.tonic), C.state.octave, 0, inst && inst.octShift);
+      if (C.playMidiImmediate && C.instBuffersReady && C.instBuffersReady()) C.playMidiImmediate(midi);
+      else C.playMidi(midi);
       return false;
     }
     if (state.question && state.question.kind === "chordTones" && !state.grade) {
@@ -594,15 +722,28 @@
   };
 
   function setMode(mode) {
-    state.mode = mode;
     stopTransport();
+    releaseAllKb();
+    state.mode = mode;
     state.jam = false;
     state.jamKind = "";
     state.jamScale = "";
     if (mode === "browse") {
       state.question = null;
       state.grade = null;
-      document.documentElement.classList.remove("practice-on", "practice-jam");
+      document.documentElement.classList.remove("practice-on", "practice-jam", "freejam-on");
+      C.render();
+      renderPractice();
+    } else if (mode === "freejam") {
+      state.question = null;
+      state.grade = null;
+      if (!P.isJamScaleFor(state.freejam.scale, state.freejam.quality)) {
+        state.freejam.scale = P.defaultJamScale(state.freejam.quality);
+      }
+      C.state.key = -1;
+      C.state.chord = "";
+      C.state.shown = null;
+      if (C.loadInst) C.loadInst(C.state.inst);
       C.render();
       renderPractice();
     } else {
@@ -612,6 +753,415 @@
       if (!state.question) newQuestion();
       else { C.render(); renderPractice(); }
     }
+  }
+
+
+  function releaseAllKb() {
+    Object.keys(kbHeld).forEach(function (k) { releaseFreeJamKey(k); });
+    kbHeld = {};
+  }
+  function isTypingTarget(el) {
+    if (!el || !el.tagName) return false;
+    var tag = el.tagName.toLowerCase();
+    if (tag === "textarea" || el.isContentEditable) return true;
+    if (tag === "input") {
+      if (el.id === "fjKbInput") return false;
+      var typ = (el.type || "text").toLowerCase();
+      return typ !== "range" && typ !== "button" && typ !== "checkbox" && typ !== "radio" && typ !== "hidden";
+    }
+    return false;
+  }
+  function jamNoteMidi(pc, octShift) {
+    var inst = C.INSTRUMENTS[C.state.inst];
+    var ctxj = jamContext();
+    var tonicPc = ctxj ? P.pcOf(ctxj.tonic) : 0;
+    return P.freeJamMidi(pc, tonicPc, C.state.octave, octShift || 0, inst && inst.octShift);
+  }
+  function playFreeJamKey(letter, opts) {
+    opts = opts || {};
+    if (state.mode !== "freejam") return null;
+    var f = state.freejam;
+    var pitch = P.freeJamPitchForKey(f.tonic, f.scale, letter);
+    if (!pitch) return null;
+    if (C.unlock) C.unlock();
+    var midi = jamNoteMidi(pitch.pc, pitch.oct);
+    if (C.playMidiImmediate) C.playMidiImmediate(midi, { hold: !!opts.hold });
+    else if (C.playMidi) C.playMidi(midi);
+    if (C.flash) C.flash(pitch.pc);
+    if (opts.record !== false) appendJianpu(pitch.label, pitch.oct);
+    return { pitch: pitch, midi: midi };
+  }
+  function releaseFreeJamKey(letter) {
+    if (!C.releaseMidi) return;
+    var f = state.freejam;
+    var pitch = P.freeJamPitchForKey(f.tonic, f.scale, letter);
+    if (!pitch) return;
+    C.releaseMidi(jamNoteMidi(pitch.pc, pitch.oct));
+  }
+  function appendJianpu(label, oct) {
+    var f = state.freejam;
+    f.jianpu = f.jianpu.concat([P.jianpuToken(label, oct)]);
+    if (f.jianpu.length > 64) f.jianpu = f.jianpu.slice(-64);
+    renderJianpu();
+  }
+  function renderJianpu() {
+    var box = document.getElementById("fjJianpu");
+    if (!box) return;
+    box.innerHTML = "";
+    state.freejam.jianpu.forEach(function (tok) {
+      var s = document.createElement("span");
+      s.className = "jp" + (tok.oct > 0 ? " hi" : tok.oct < 0 ? " lo" : "");
+      s.textContent = tok.text;
+      box.appendChild(s);
+    });
+  }
+  function setKbOn(on) {
+    state.freejam.kbOn = !!on;
+    var inp = document.getElementById("fjKbInput");
+    var btn = document.getElementById("fjKbBtn");
+    if (inp) inp.classList.toggle("kb-on", state.freejam.kbOn);
+    if (btn) {
+      btn.classList.toggle("on", state.freejam.kbOn);
+      btn.textContent = state.freejam.kbOn ? "收起鍵盤" : "用鍵盤彈";
+    }
+    if (state.freejam.kbOn) {
+      if (C.unlock) C.unlock();
+      if (C.loadInst) C.loadInst(C.state.inst);
+      if (inp) inp.focus();
+    } else if (inp) {
+      inp.blur();
+    }
+  }
+  function onFjKeydown(e) {
+    if (state.mode !== "freejam") return;
+    if (e.repeat) return;
+    if (isTypingTarget(e.target)) return;
+    var k = e.key && e.key.length === 1 ? e.key.toUpperCase() : "";
+    if (!P.freeJamKeySpec(k)) return;
+    e.preventDefault();
+    if (kbHeld[k]) return;
+    kbHeld[k] = true;
+    playFreeJamKey(k, { hold: true, record: true });
+  }
+  function onFjKeyup(e) {
+    var k = e.key && e.key.length === 1 ? e.key.toUpperCase() : "";
+    if (!kbHeld[k]) return;
+    delete kbHeld[k];
+    releaseFreeJamKey(k);
+  }
+  function onFjSoftInput() {
+    var inp = document.getElementById("fjKbInput");
+    if (!inp || state.mode !== "freejam") return;
+    var val = inp.value;
+    inp.value = "";
+    var i, k;
+    for (i = 0; i < val.length; i++) {
+      k = val.charAt(i).toUpperCase();
+      if (kbHeld[k]) continue;
+      playFreeJamKey(k, { hold: false, record: true });
+    }
+  }
+  function setFreeJamKey(tonic, quality, restart) {
+    var f = state.freejam;
+    var q = quality || f.quality;
+    var name = P.tonicInQuality(tonic || f.tonic, q);
+    var playing = transport.playing && state.mode === "freejam";
+    f.quality = q;
+    f.tonic = name;
+    if (!P.isJamScaleFor(f.scale, f.quality)) f.scale = P.defaultJamScale(f.quality);
+    f.slots = P.retargetFreeJamSlots(f.slots, f.tonic, f.quality, f.rhythm);
+    if (restart !== false && playing) startFreeJam();
+    else renderPractice();
+  }
+  function addFreeJamDegree(degreeOrLabel) {
+    var f = state.freejam;
+    var before = f.slots.length;
+    f.slots = P.addFreeJamSlot(f.slots, f.tonic, f.quality, degreeOrLabel, null, f.rhythm);
+    if (f.slots.length === before) return;
+    if (transport.playing && state.mode === "freejam") startFreeJam();
+    else renderPractice();
+  }
+  function removeFreeJamAt(index) {
+    var f = state.freejam;
+    f.slots = P.removeFreeJamSlot(f.slots, index);
+    if (transport.playing && state.mode === "freejam") {
+      if (!f.slots.length) stopTransport();
+      else startFreeJam();
+    } else renderPractice();
+  }
+  function clearFreeJamSlots() {
+    state.freejam.slots = [];
+    if (transport.playing && state.mode === "freejam") stopTransport();
+    else renderPractice();
+  }
+  function cycleSlotBeats(index) {
+    var f = state.freejam;
+    var s = f.slots[index];
+    if (!s) return;
+    f.slots = P.setFreeJamSlotBeats(f.slots, index, P.cycleFreeJamBeats(f.rhythm, s.beats), f.rhythm);
+    if (transport.playing && state.mode === "freejam") startFreeJam();
+    else renderPractice();
+  }
+  function setFreeJamRhythm(id) {
+    var f = state.freejam;
+    var playing = transport.playing && state.mode === "freejam";
+    f.rhythm = (P.freeJamRhythmById(id) || P.FREE_JAM_RHYTHMS[0]).id;
+    f.slots = P.retargetFreeJamSlots(f.slots, f.tonic, f.quality, f.rhythm);
+    if (playing) startFreeJam();
+    else renderPractice();
+  }
+  function startFreeJam() {
+    var f = state.freejam;
+    if (!f.slots.length) return;
+    if (C.unlock) C.unlock();
+    startProgression(f.slots, {
+      bpm: f.bpm,
+      drums: true,
+      loop: true,
+      rhythm: f.rhythm,
+      chordBeats: f.slots.map(function (s) { return s.beats; }),
+      onBeat: function (step, t, idx) {
+        if (state.mode !== "freejam") return;
+        var changed = state.freejam.chordIndex !== idx;
+        state.freejam.chordIndex = idx;
+        document.querySelectorAll("#fjProg .slot").forEach(function (el, i) {
+          el.classList.toggle("now", i === idx);
+        });
+        if (changed) paintCircle();
+      }
+    });
+    f.chordIndex = 0;
+    document.querySelectorAll("#fjProg .slot").forEach(function (el, i) {
+      el.classList.toggle("now", i === 0);
+    });
+    paintCircle();
+  }
+  function fillFreeJamTonics() {
+    var box = document.getElementById("fjTonics");
+    if (!box) return;
+    box.innerHTML = "";
+    var f = state.freejam;
+    var list = f.quality === "minor" ? P.MINOR_KEYS : P.MAJOR_KEYS;
+    list.forEach(function (name) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("data-tonic", name);
+      b.setAttribute("role", "radio");
+      b.textContent = name;
+      if (name === f.tonic) b.classList.add("on");
+      box.appendChild(b);
+    });
+  }
+  function fillFreeJamDegrees() {
+    var box = document.getElementById("fjDegrees");
+    if (!box) return;
+    box.innerHTML = "";
+    var f = state.freejam;
+    var chords = P.diatonicChords(f.tonic, f.quality);
+    chords.forEach(function (ch) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("data-degree", String(ch.degree));
+      b.innerHTML = "<strong>" + ch.shouLabel + "</strong><span>(" + ch.name + ")</span>";
+      box.appendChild(b);
+    });
+  }
+  function fillFreeJamProg() {
+    var box = document.getElementById("fjProg");
+    if (!box) return;
+    box.innerHTML = "";
+    var f = state.freejam;
+    f.slots.forEach(function (s, i) {
+      var row = document.createElement("div");
+      row.className = "slot" + (transport.playing && f.chordIndex === i ? " now" : "");
+      row.setAttribute("data-index", String(i));
+      var nm = document.createElement("div");
+      nm.className = "nm";
+      nm.textContent = s.label;
+      var beat = document.createElement("button");
+      beat.type = "button";
+      beat.className = "beats";
+      beat.setAttribute("data-beats-of", String(i));
+      beat.textContent = s.beats + " 拍";
+      var del = document.createElement("button");
+      del.type = "button";
+      del.className = "del";
+      del.setAttribute("data-del", String(i));
+      del.setAttribute("aria-label", "刪除");
+      del.textContent = "刪除";
+      row.appendChild(nm);
+      row.appendChild(beat);
+      row.appendChild(del);
+      box.appendChild(row);
+    });
+  }
+  function fillFreeJamRhythms() {
+    var box = document.getElementById("fjRhythms");
+    if (!box || box.getAttribute("data-ready")) {
+      if (box) box.querySelectorAll("button").forEach(function (b) {
+        b.classList.toggle("on", b.getAttribute("data-rhythm") === state.freejam.rhythm);
+      });
+      return;
+    }
+    P.FREE_JAM_RHYTHMS.forEach(function (r) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("data-rhythm", r.id);
+      b.setAttribute("role", "radio");
+      b.textContent = r.name;
+      if (r.id === state.freejam.rhythm) b.classList.add("on");
+      box.appendChild(b);
+    });
+    box.setAttribute("data-ready", "1");
+  }
+  function fillKbGuide() {
+    var f = state.freejam;
+    ["high", "mid", "low"].forEach(function (row) {
+      var el = document.querySelector('#fjKbGuide .fj-kb-row[data-row="' + row + '"]');
+      if (!el) return;
+      el.querySelectorAll(".fj-kb-key").forEach(function (n) { n.remove(); });
+      (P.FREE_JAM_KEY_ROWS[row] || []).forEach(function (ch, i) {
+        var deg = String(i + 1);
+        var pitch = P.freeJamPitchForKey(f.tonic, f.scale, ch);
+        var b = document.createElement("div");
+        b.className = "fj-kb-key" + (pitch ? "" : " off");
+        b.setAttribute("data-key", ch);
+        b.innerHTML = "<span class=\"ch\">" + ch + "</span><span class=\"deg\">" + (pitch ? pitch.label : deg) + "</span>";
+        el.appendChild(b);
+      });
+    });
+  }
+  function renderFreeJam() {
+    var f = state.freejam;
+    document.querySelectorAll("#fjQuality button").forEach(function (b) {
+      b.classList.toggle("on", b.getAttribute("data-quality") === f.quality);
+    });
+    fillFreeJamTonics();
+    fillFreeJamDegrees();
+    fillFreeJamProg();
+    fillFreeJamRhythms();
+    fillFreeJamScales();
+    fillKbGuide();
+    renderJianpu();
+    var play = document.getElementById("fjPlay");
+    var stop = document.getElementById("fjStop");
+    if (play) {
+      play.disabled = !f.slots.length;
+      play.classList.toggle("on", !!transport.playing);
+      play.textContent = transport.playing ? "▶ 播放中" : "▶ 播放";
+    }
+    if (stop) stop.disabled = !transport.playing;
+    var tv = document.getElementById("fjTempoVal");
+    var tr = document.getElementById("fjTempoRange");
+    if (tv) tv.textContent = String(f.bpm);
+    if (tr) tr.value = String(f.bpm);
+    var hint = document.getElementById("fjDegHint");
+    if (hint) {
+      hint.textContent = f.slots.length >= P.FREE_JAM_MAX
+        ? "已經有 16 個和弦了，先刪掉或清空再加。"
+        : "最多 16 個和弦。點一下加到進行裡。每個和弦可改拍數。";
+    }
+    var btn = document.getElementById("fjKbBtn");
+    if (btn) {
+      btn.classList.toggle("on", f.kbOn);
+      btn.textContent = f.kbOn ? "收起鍵盤" : "用鍵盤彈";
+    }
+    var inp = document.getElementById("fjKbInput");
+    if (inp) inp.classList.toggle("kb-on", f.kbOn);
+    var ban = document.getElementById("fjBanner");
+    if (ban) {
+      var title = ban.querySelector(".q-title");
+      var ask = ban.querySelector(".q-ask");
+      if (title) title.textContent = P.keyLabel(f.tonic, f.quality);
+      if (ask) {
+        if (transport.playing && f.chordIndex >= 0 && f.slots[f.chordIndex]) {
+          ask.textContent = "現在是 " + f.slots[f.chordIndex].label + "。用圓上的音或鍵盤即興。";
+        } else if (!f.slots.length) {
+          ask.textContent = "先選調，點級數排出和弦，按播放後就可以在圓上即興。";
+        } else {
+          ask.textContent = "進行已排好，按播放就會循環。圓上只留下目前音階，也可用鍵盤彈。";
+        }
+      }
+    }
+    paintCircle();
+  }
+  function bindFreeJam() {
+    var qbox = document.getElementById("fjQuality");
+    if (qbox) qbox.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-quality]");
+      if (!b) return;
+      setFreeJamKey(state.freejam.tonic, b.getAttribute("data-quality"));
+    });
+    var tbox = document.getElementById("fjTonics");
+    if (tbox) tbox.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-tonic]");
+      if (!b) return;
+      setFreeJamKey(b.getAttribute("data-tonic"), state.freejam.quality);
+    });
+    var dbox = document.getElementById("fjDegrees");
+    if (dbox) dbox.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-degree]");
+      if (!b) return;
+      addFreeJamDegree(+b.getAttribute("data-degree"));
+    });
+    var pbox = document.getElementById("fjProg");
+    if (pbox) pbox.addEventListener("click", function (e) {
+      var del = e.target.closest("button[data-del]");
+      if (del) { removeFreeJamAt(+del.getAttribute("data-del")); return; }
+      var beat = e.target.closest("button[data-beats-of]");
+      if (beat) cycleSlotBeats(+beat.getAttribute("data-beats-of"));
+    });
+    var clr = document.getElementById("fjClear");
+    if (clr) clr.addEventListener("click", function () { clearFreeJamSlots(); });
+    var rbox = document.getElementById("fjRhythms");
+    if (rbox) rbox.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-rhythm]");
+      if (!b) return;
+      setFreeJamRhythm(b.getAttribute("data-rhythm"));
+    });
+    var play = document.getElementById("fjPlay");
+    if (play) play.addEventListener("click", function () {
+      if (!state.freejam.slots.length) return;
+      if (transport.playing) { stopTransport(); return; }
+      startFreeJam();
+    });
+    var stop = document.getElementById("fjStop");
+    if (stop) stop.addEventListener("click", function () { stopTransport(); });
+    var tempo = document.getElementById("fjTempoRange");
+    if (tempo) tempo.addEventListener("input", function () {
+      state.freejam.bpm = Math.max(60, Math.min(160, +this.value || 96));
+      transport.bpm = state.freejam.bpm;
+      var tv = document.getElementById("fjTempoVal");
+      if (tv) tv.textContent = String(state.freejam.bpm);
+    });
+    var kbBtn = document.getElementById("fjKbBtn");
+    if (kbBtn) kbBtn.addEventListener("click", function () { setKbOn(!state.freejam.kbOn); });
+    var inp = document.getElementById("fjKbInput");
+    if (inp) {
+      inp.addEventListener("compositionstart", function () { inp.setAttribute("data-composing", "1"); });
+      inp.addEventListener("compositionend", function () {
+        inp.setAttribute("data-composing", "0");
+        onFjSoftInput();
+      });
+      inp.addEventListener("input", function (e) {
+        if (e.isComposing || inp.getAttribute("data-composing") === "1") return;
+        onFjSoftInput();
+      });
+      inp.addEventListener("blur", function () {
+        setTimeout(function () {
+          if (document.activeElement === inp) return;
+          if (state.freejam.kbOn) setKbOn(false);
+        }, 300);
+      });
+    }
+    var jpClr = document.getElementById("fjJpClear");
+    if (jpClr) jpClr.addEventListener("click", function () {
+      state.freejam.jianpu = [];
+      renderJianpu();
+    });
+    window.addEventListener("keydown", onFjKeydown);
+    window.addEventListener("keyup", onFjKeyup);
+    window.addEventListener("blur", releaseAllKb);
   }
 
   function init() {
@@ -680,8 +1230,9 @@
     var _render = C.render;
     C.render = function () {
       _render();
-      if (state.mode === "practice") paintCircle();
+      if (state.mode === "practice" || state.mode === "freejam") paintCircle();
     };
+    bindFreeJam();
     renderPractice();
   }
 
@@ -695,7 +1246,14 @@
     playMelody: playMelody,
     renderPractice: renderPractice,
     applyGrade: applyGrade,
-    isPlaying: function () { return !!transport.playing; }
+    isPlaying: function () { return !!transport.playing; },
+    setFreeJamKey: setFreeJamKey,
+    addFreeJamDegree: addFreeJamDegree,
+    setFreeJamRhythm: setFreeJamRhythm,
+    startFreeJam: startFreeJam,
+    playFreeJamKey: playFreeJamKey,
+    setKbOn: setKbOn,
+    currentGlowChord: currentGlowChord
   };
 
   init();

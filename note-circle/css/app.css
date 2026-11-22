@@ -144,3 +144,58 @@ html.practice-jam #circle .note.out{display:none!important;pointer-events:none;v
 @media(max-width:899px){
   .jam-scales button{min-height:42px;padding:7px 10px;font-size:15px}
 }
+
+/* 自由 Jam */
+.freejam-on .browse-only{display:none!important}
+html.freejam-on #circle .note.out{display:none!important;pointer-events:none;visibility:hidden}
+#circle .note.jam-chord circle.body{stroke:var(--chord);stroke-width:7}
+#circle .note.jam-chord-root circle.body{stroke-width:12}
+#circle .note text.kb{font-size:14px;font-weight:800;fill:var(--muted);letter-spacing:.02em}
+.has-key .note.in text.kb{fill:var(--text)}
+.has-key .note.tonic text.kb{fill:#fff}
+.fj-tonics,.fj-degrees{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.fj-tonics button,.fj-degrees button,#fjPlay,#fjStop,#fjKbBtn,#fjClear,#fjJpClear{
+  border:2px solid var(--accent);background:transparent;border-radius:12px;padding:10px 12px;font:inherit;font-weight:800;cursor:pointer;min-height:48px
+}
+.fj-tonics button{min-width:48px}
+.fj-degrees button{flex:1 1 calc(25% - 8px);min-width:72px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;padding:8px 4px}
+.fj-degrees button strong{font-size:20px}
+.fj-degrees button span{font-size:14px;font-weight:700;color:var(--muted)}
+.fj-tonics button.on,.fj-degrees button.on,#fjRhythms button.on,#fjQuality button.on,
+.fj-prog .slot.now,#fjPlay.on,#fjKbBtn.on{background:var(--accent);color:var(--accent-text)}
+.fj-degrees button.on span{color:var(--accent-text);opacity:.9}
+.fj-prog{display:flex;flex-direction:column;gap:8px;margin-bottom:8px;min-height:8px}
+.fj-prog .slot{display:flex;align-items:center;gap:8px;border:2px solid var(--accent);border-radius:12px;padding:6px 8px;background:var(--paper)}
+.fj-prog .slot.now{background:var(--accent);color:var(--accent-text)}
+.fj-prog .slot .nm{flex:1;font-weight:800;font-size:18px;text-align:left}
+.fj-prog .slot .beats,#fjProg .slot .del{border:2px solid var(--accent);background:var(--paper);color:var(--text);border-radius:10px;font:inherit;font-weight:800;cursor:pointer;min-height:44px;padding:6px 10px}
+.fj-prog .slot.now .beats,.fj-prog .slot.now .del{border-color:var(--accent-text)}
+#fjBar{align-items:stretch}
+#fjPlay,#fjStop{flex:1 1 140px;white-space:nowrap;min-width:140px;min-height:52px;font-size:20px}
+#fjKbBtn{flex:1 0 100%;white-space:nowrap;min-height:52px;font-size:20px}
+#fjPlay,#fjKbBtn{background:var(--accent);color:var(--accent-text)}
+#fjStop{background:transparent;color:inherit}
+#fjBar .tempo-lab{flex:1 1 100%}
+#freeJamBox #fjScales:not([hidden]){display:flex}
+#fjKbGuide{display:flex;flex-direction:column;gap:8px;margin:8px 0 12px;padding:10px;border:2px dashed var(--accent);border-radius:14px;background:color-mix(in srgb,var(--bg) 70%,transparent)}
+.fj-kb-row{display:grid;grid-template-columns:2.4em repeat(7,minmax(0,1fr));gap:6px;align-items:stretch}
+.fj-kb-row .lab{display:flex;align-items:center;font-weight:800;font-size:13px;color:var(--muted)}
+.fj-kb-key{min-width:0;min-height:52px;border:2px solid var(--accent);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;background:var(--paper)}
+.fj-kb-key .ch{font-weight:800;font-size:18px}
+.fj-kb-key .deg{font-size:13px;font-weight:700;color:var(--muted)}
+.fj-kb-key.off{opacity:.38}
+.fj-jianpu{min-height:52px;border:2px solid var(--accent);border-radius:12px;padding:10px 12px;font-size:26px;font-weight:800;letter-spacing:.08em;text-align:left;line-height:1.6;background:var(--bg);word-break:break-word}
+.fj-jianpu .jp{display:inline-block;margin:0 .12em;position:relative}
+.fj-jianpu .jp.hi::after{content:"";position:absolute;left:50%;top:-.15em;width:6px;height:6px;border-radius:50%;background:currentColor;transform:translateX(-50%)}
+.fj-jianpu .jp.lo::after{content:"";position:absolute;left:50%;bottom:-.12em;width:6px;height:6px;border-radius:50%;background:currentColor;transform:translateX(-50%)}
+#fjKbInput{position:fixed;left:8px;bottom:8px;width:16px;height:16px;opacity:0.01;font-size:16px;border:0;padding:0;margin:0;z-index:2;background:transparent;color:transparent;caret-color:transparent}
+#fjKbInput.kb-on{position:relative;left:auto;bottom:auto;width:100%;height:48px;opacity:1;color:var(--text);caret-color:var(--text);background:var(--paper);border:2px solid var(--accent);border-radius:12px;padding:8px 12px;margin:8px 0;z-index:1}
+.fj-jp-lab{margin-top:14px}
+@media(max-width:899px){
+  .fj-degrees button{flex:1 1 calc(33.33% - 8px);min-height:56px}
+  .fj-degrees button strong{font-size:22px}
+  .fj-tonics button{min-height:48px;min-width:52px;font-size:18px}
+  .fj-kb-key{min-height:48px}
+  .fj-jianpu{font-size:22px}
+  #fjPlay,#fjStop,#fjKbBtn{min-height:52px;font-size:18px}
+}

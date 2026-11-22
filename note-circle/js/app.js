@@ -310,7 +310,7 @@
     return { fadeAt: fadeAt, fade: fade, dur: end };
   }
 
-  function startNote(audioCtx, dest, bufs, midi, when, level) {
+  function startNote(audioCtx, dest, bufs, midi, when, level, opts) {
     var s = nearestIn(bufs, midi);
     if (s === null) return null;
     var rate = Math.pow(2, (midi - s) / 12);
@@ -319,11 +319,52 @@
     src.buffer = bufs[s];
     src.playbackRate.value = rate;
     var g = audioCtx.createGain();
-    var env = applyEnvelope(g, t, src.buffer.duration / rate, level);
+    var peak = level || 1;
+    var rawDur = src.buffer.duration / rate;
+    var env;
+    if (opts && opts.hold) {
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(peak, t + NOTE_ATTACK);
+      g.gain.setValueAtTime(peak, t + NOTE_ATTACK);
+      src.connect(g); g.connect(dest);
+      src.start(t);
+      src.stop(t + rawDur);
+      return { src: src, gain: g, midi: midi, start: t, sample: s, rate: rate, fadeAt: rawDur, dur: rawDur, held: true };
+    }
+    env = applyEnvelope(g, t, rawDur, level);
     src.connect(g); g.connect(dest);
     src.start(t);
     src.stop(t + env.dur + 0.02);
     return { src: src, gain: g, midi: midi, start: t, sample: s, rate: rate, fadeAt: env.fadeAt, dur: env.dur };
+  }
+
+  // 低延遲即時發聲：取樣已載入時同步開始，不走 Promise。按住時 hold:true，放開用 releaseMidi。
+  function playMidiImmediate(midi, opts) {
+    opts = opts || {};
+    var id = state.inst;
+    ensureCtx();
+    if (ctx.state === "suspended") ctx.resume();
+    var bufs = buffers[id];
+    if (!bufs || !Object.keys(bufs).length) {
+      return loadInst(id).then(function () { return playMidiImmediate(midi, opts); });
+    }
+    var t = Math.max(ctx.currentTime, opts.when || 0);
+    if (opts.chokeSame !== false) chokeVoices(function (v) { return v.midi === midi; }, t);
+    var v = startNote(ctx, instGain[id], bufs, midi, t, opts.level, { hold: !!opts.hold });
+    if (!v) return null;
+    voices.push(v);
+    var freq = 440 * Math.pow(2, (midi - 69) / 12);
+    window.__noteLog.push({ inst: id, midi: midi, freq: +freq.toFixed(2), sample: v.sample, rate: +v.rate.toFixed(4), t: v.start, dur: v.dur, fadeAt: v.fadeAt, held: !!v.held });
+    return v;
+  }
+  function releaseMidi(midi, when) {
+    if (!ctx) return;
+    var t = Math.max(ctx.currentTime, when || 0);
+    chokeVoices(function (v) { return v.midi === midi; }, t);
+  }
+  function instBuffersReady(id) {
+    var b = buffers[id || state.inst];
+    return !!(b && Object.keys(b).length);
   }
 
   function chokeVoices(pred, t) {
@@ -687,7 +728,7 @@
   window.__noteCircle = {
     state: state, spellMajor: spellMajor, relativeMinorName: relativeMinorName, keyMenuLabel: keyMenuLabel,
     chordInfo: chordInfo, chordMidis: chordMidis, currentChord: currentChord, CHORDS: CHORDS, DIATONIC: DIATONIC,
-    render: render, loadInst: loadInst, playMidi: playMidi, playChord: playChord, soundingMidi: soundingMidi, renderOffline: renderOffline,
+    render: render, loadInst: loadInst, playMidi: playMidi, playMidiImmediate: playMidiImmediate, releaseMidi: releaseMidi, instBuffersReady: instBuffersReady, playChord: playChord, soundingMidi: soundingMidi, renderOffline: renderOffline,
     ensureCtx: ensureCtx, unlock: unlock, chokeVoices: chokeVoices, flash: flash,
     buildOutputChain: buildOutputChain, chordLevel: chordLevel, dbToLin: dbToLin,
     INSTRUMENTS: INSTRUMENTS, INST_ORDER: INST_ORDER, KEYS: KEYS, MASTER_GAIN: MASTER_GAIN, LIMITER: LIMITER,

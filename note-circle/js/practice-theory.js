@@ -466,6 +466,236 @@
   }
 
 
+  // ---------- 自由 Jam ----------
+  var FREE_JAM_MAX = 16;
+  var FREE_JAM_ENH = { "C#": "Db", "Db": "C#", "D#": "Eb", "Eb": "D#", "F#": "Gb", "Gb": "F#", "G#": "Ab", "Ab": "G#", "A#": "Bb", "Bb": "A#" };
+  var FREE_JAM_RHYTHMS = [
+    { id: "8beat",   name: "8 Beat",  meter: 4, subdiv: 2, swing: false, beats: [1, 2, 4], defaultBeats: 4 },
+    { id: "16beat",  name: "16 Beat", meter: 4, subdiv: 4, swing: false, beats: [1, 2, 4], defaultBeats: 4 },
+    { id: "shuffle", name: "Shuffle", meter: 4, subdiv: 2, swing: true,  beats: [1, 2, 4], defaultBeats: 4 },
+    { id: "funk",    name: "Funk",    meter: 4, subdiv: 4, swing: false, beats: [1, 2, 4], defaultBeats: 4 },
+    { id: "ballad",  name: "慢板",    meter: 4, subdiv: 2, swing: false, beats: [1, 2, 4], defaultBeats: 4 },
+    { id: "waltz",   name: "華爾滋",  meter: 3, subdiv: 2, swing: false, beats: [1, 2, 3, 6], defaultBeats: 3 }
+  ];
+  // 電腦／手機鍵盤：低音 Z–M、中音 A–J、高音 Q–U，對應首調 1–7
+  var FREE_JAM_KEY_ROWS = {
+    high: ["Q", "W", "E", "R", "T", "Y", "U"],
+    mid:  ["A", "S", "D", "F", "G", "H", "J"],
+    low:  ["Z", "X", "C", "V", "B", "N", "M"]
+  };
+  var FREE_JAM_KEYS = {};
+  ["low", "mid", "high"].forEach(function (row, ri) {
+    FREE_JAM_KEY_ROWS[row].forEach(function (k, i) {
+      FREE_JAM_KEYS[k] = { deg: String(i + 1), oct: ri - 1, row: row };
+    });
+  });
+
+  function freeJamRhythmById(id) {
+    for (var i = 0; i < FREE_JAM_RHYTHMS.length; i++) if (FREE_JAM_RHYTHMS[i].id === id) return FREE_JAM_RHYTHMS[i];
+    return FREE_JAM_RHYTHMS[0];
+  }
+  function freeJamBeatOptions(rhythmId) { return freeJamRhythmById(rhythmId).beats.slice(); }
+  function defaultFreeJamBeats(rhythmId) { return freeJamRhythmById(rhythmId).defaultBeats; }
+  function clampFreeJamBeats(rhythmId, beats) {
+    var r = freeJamRhythmById(rhythmId);
+    var n = +beats;
+    if (r.beats.indexOf(n) >= 0) return n;
+    return r.defaultBeats;
+  }
+  function cycleFreeJamBeats(rhythmId, beats) {
+    var opts = freeJamBeatOptions(rhythmId);
+    var i = opts.indexOf(+beats);
+    return opts[(i < 0 ? 0 : i + 1) % opts.length];
+  }
+  function tonicInQuality(name, quality) {
+    var list = quality === "minor" ? MINOR_KEYS : MAJOR_KEYS;
+    if (list.indexOf(name) >= 0) return name;
+    var enh = FREE_JAM_ENH[name];
+    if (enh && list.indexOf(enh) >= 0) return enh;
+    return list[0];
+  }
+  function freeJamSlotLabel(shouLabel, chordName) {
+    return shouLabel + " (" + chordName + ")";
+  }
+  function makeFreeJamSlot(tonicName, quality, degreeOrLabel, beats, rhythmId) {
+    var degree = degreeFromShou(quality, degreeOrLabel);
+    var ch = diatonicChords(tonicName, quality)[degree - 1];
+    var b = beats == null ? defaultFreeJamBeats(rhythmId) : clampFreeJamBeats(rhythmId, beats);
+    return {
+      degree: ch.degree,
+      shouLabel: ch.shouLabel,
+      name: ch.name,
+      rootPc: ch.rootPc,
+      type: ch.type,
+      tones: ch.tones.slice(),
+      pcs: ch.pcs.slice(),
+      beats: b,
+      label: freeJamSlotLabel(ch.shouLabel, ch.name)
+    };
+  }
+  function addFreeJamSlot(slots, tonicName, quality, degreeOrLabel, beats, rhythmId) {
+    var list = (slots || []).slice();
+    if (list.length >= FREE_JAM_MAX) return list;
+    list.push(makeFreeJamSlot(tonicName, quality, degreeOrLabel, beats, rhythmId));
+    return list;
+  }
+  function removeFreeJamSlot(slots, index) {
+    return (slots || []).filter(function (_, i) { return i !== index; });
+  }
+  function setFreeJamSlotBeats(slots, index, beats, rhythmId) {
+    return (slots || []).map(function (s, i) {
+      if (i !== index) return s;
+      var next = {};
+      for (var k in s) if (Object.prototype.hasOwnProperty.call(s, k)) next[k] = s[k];
+      next.beats = clampFreeJamBeats(rhythmId, beats);
+      return next;
+    });
+  }
+  function retargetFreeJamSlots(slots, tonicName, quality, rhythmId) {
+    return (slots || []).map(function (s) {
+      return makeFreeJamSlot(tonicName, quality, s.shouLabel || s.degree, s.beats, rhythmId);
+    });
+  }
+  function freeJamTotalBeats(slots) {
+    return (slots || []).reduce(function (n, s) { return n + (s.beats || 0); }, 0);
+  }
+  function freeJamTotalSteps(slots, rhythmId) {
+    return freeJamTotalBeats(slots) * freeJamRhythmById(rhythmId).subdiv;
+  }
+  function freeJamChordAtStep(slots, rhythmId, step) {
+    var r = freeJamRhythmById(rhythmId);
+    var total = freeJamTotalSteps(slots, rhythmId);
+    if (!slots || !slots.length || total <= 0) return { index: -1, chord: null, atAttack: false, localStep: 0 };
+    var s = ((step % total) + total) % total;
+    var acc = 0;
+    for (var i = 0; i < slots.length; i++) {
+      var n = slots[i].beats * r.subdiv;
+      if (s < acc + n) return { index: i, chord: slots[i], atAttack: s === acc, localStep: s - acc };
+      acc += n;
+    }
+    return { index: slots.length - 1, chord: slots[slots.length - 1], atAttack: false, localStep: 0 };
+  }
+  function freeJamStepDurationBeats(rhythmId, step) {
+    var r = freeJamRhythmById(rhythmId);
+    if (r.swing) return step % 2 === 0 ? 2 / 3 : 1 / 3;
+    return 1 / r.subdiv;
+  }
+  function freeJamElapsedBeats(rhythmId, fromStep, toStep) {
+    var t = 0, i;
+    for (i = fromStep; i < toStep; i++) t += freeJamStepDurationBeats(rhythmId, i);
+    return t;
+  }
+  function freeJamBarStep(rhythmId, step) {
+    var r = freeJamRhythmById(rhythmId);
+    var bar = r.meter * r.subdiv;
+    return ((step % bar) + bar) % bar;
+  }
+  function freeJamDrumHits(rhythmId, step) {
+    var r = freeJamRhythmById(rhythmId);
+    var i = freeJamBarStep(rhythmId, step);
+    var kick = false, snare = false, hat = false, open = false;
+    if (r.id === "8beat" || r.id === "shuffle") {
+      kick = i === 0 || i === 4;
+      snare = i === 2 || i === 6;
+      hat = true;
+      open = i === 6;
+    } else if (r.id === "16beat") {
+      kick = i === 0 || i === 8;
+      snare = i === 4 || i === 12;
+      hat = true;
+      open = i === 14;
+    } else if (r.id === "funk") {
+      kick = i === 0 || i === 3 || i === 6 || i === 10;
+      snare = i === 4 || i === 12;
+      hat = true;
+      open = i === 14;
+    } else if (r.id === "ballad") {
+      kick = i === 0;
+      snare = i === 4;
+      hat = i % 2 === 0;
+      open = false;
+    } else if (r.id === "waltz") {
+      kick = i === 0;
+      snare = i === 4;
+      hat = i === 0 || i === 2 || i === 4;
+      open = false;
+    }
+    return { kick: kick, snare: snare, hat: hat, open: open };
+  }
+
+  function freeJamKeySpec(key) {
+    if (key == null) return null;
+    return FREE_JAM_KEYS[String(key).toUpperCase()] || null;
+  }
+  function scaleNotesAscending(tonicName, scaleId) {
+    var sp = spellJamScale(tonicName, scaleId);
+    var tonicPc = sp.tonicPc;
+    return Object.keys(sp.byPc).map(function (pc) {
+      var info = sp.byPc[pc];
+      return { pc: info.pc, info: info, rel: (info.pc - tonicPc + 12) % 12 };
+    }).sort(function (a, b) { return a.rel - b.rel; });
+  }
+  function freeJamKeysForDegree(deg) {
+    var d = String(deg);
+    var out = { high: "", mid: "", low: "" };
+    Object.keys(FREE_JAM_KEYS).forEach(function (k) {
+      var spec = FREE_JAM_KEYS[k];
+      if (spec.deg === d) out[spec.row] = k;
+    });
+    return out;
+  }
+  function freeJamKeysForPc(tonicName, scaleId, pc) {
+    var notes = scaleNotesAscending(tonicName, scaleId);
+    var idx = -1, i;
+    for (i = 0; i < notes.length; i++) if (notes[i].pc === ((pc % 12) + 12) % 12) idx = i;
+    if (idx < 0) return { high: "", mid: "", low: "" };
+    return {
+      high: FREE_JAM_KEY_ROWS.high[idx] || "",
+      mid: FREE_JAM_KEY_ROWS.mid[idx] || "",
+      low: FREE_JAM_KEY_ROWS.low[idx] || ""
+    };
+  }
+  function freeJamPitchForKey(tonicName, scaleId, key) {
+    var spec = freeJamKeySpec(key);
+    if (!spec) return null;
+    var notes = scaleNotesAscending(tonicName, scaleId);
+    var idx = parseInt(spec.deg, 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= notes.length) return null;
+    var hit = notes[idx];
+    return {
+      pc: hit.pc,
+      label: hit.info.label,
+      degree: hit.info.degree,
+      name: hit.info.name,
+      oct: spec.oct,
+      key: String(key).toUpperCase(),
+      row: spec.row,
+      index: idx
+    };
+  }
+  function freeJamMidi(pc, tonicPc, octave, octShift, instOctShift) {
+    var midi = 12 * ((octave == null ? 4 : octave) + 1) + (pc % 12) + 12 * (instOctShift || 0);
+    if ((pc % 12) < (tonicPc % 12)) midi += 12;
+    midi += (octShift || 0) * 12;
+    return midi;
+  }
+  function isJamScalePc(tonicName, scaleId, pc) {
+    var sp = spellJamScale(tonicName, scaleId);
+    return !!(sp && sp.byPc[(pc % 12 + 12) % 12]);
+  }
+  function jianpuToken(degreeLabel, oct) {
+    return { text: String(degreeLabel), oct: oct || 0 };
+  }
+  function jianpuToString(tokens) {
+    return (tokens || []).map(function (t) {
+      var s = t.text;
+      if (t.oct > 0) s += "˙";
+      if (t.oct < 0) s += ".";
+      return s;
+    }).join(" ");
+  }
+
+
   var api = {
     LEVELS: LEVELS, MAJOR_KEYS: MAJOR_KEYS, MINOR_KEYS: MINOR_KEYS,
     MAJOR_PROGS: MAJOR_PROGS, MINOR_PROGS: MINOR_PROGS, MELODIES: MELODIES,
@@ -488,7 +718,17 @@
     isDiatonicPcs: isDiatonicPcs,
     JAM_SCALES: JAM_SCALES, jamScaleById: jamScaleById, defaultJamScale: defaultJamScale,
     jamScalesFor: jamScalesFor, isJamScaleFor: isJamScaleFor, spellJamScale: spellJamScale,
-    jamLegendText: jamLegendText
+    jamLegendText: jamLegendText,
+    FREE_JAM_MAX: FREE_JAM_MAX, FREE_JAM_RHYTHMS: FREE_JAM_RHYTHMS, FREE_JAM_KEYS: FREE_JAM_KEYS, FREE_JAM_KEY_ROWS: FREE_JAM_KEY_ROWS,
+    freeJamRhythmById: freeJamRhythmById, freeJamBeatOptions: freeJamBeatOptions, defaultFreeJamBeats: defaultFreeJamBeats,
+    clampFreeJamBeats: clampFreeJamBeats, cycleFreeJamBeats: cycleFreeJamBeats, tonicInQuality: tonicInQuality,
+    freeJamSlotLabel: freeJamSlotLabel, makeFreeJamSlot: makeFreeJamSlot, addFreeJamSlot: addFreeJamSlot,
+    removeFreeJamSlot: removeFreeJamSlot, setFreeJamSlotBeats: setFreeJamSlotBeats, retargetFreeJamSlots: retargetFreeJamSlots,
+    freeJamTotalBeats: freeJamTotalBeats, freeJamTotalSteps: freeJamTotalSteps, freeJamChordAtStep: freeJamChordAtStep,
+    freeJamStepDurationBeats: freeJamStepDurationBeats, freeJamElapsedBeats: freeJamElapsedBeats,
+    freeJamBarStep: freeJamBarStep, freeJamDrumHits: freeJamDrumHits,
+    degFamily: degFamily, scaleNotesAscending: scaleNotesAscending, freeJamKeySpec: freeJamKeySpec, freeJamKeysForDegree: freeJamKeysForDegree, freeJamKeysForPc: freeJamKeysForPc, freeJamPitchForKey: freeJamPitchForKey,
+    freeJamMidi: freeJamMidi, isJamScalePc: isJamScalePc, jianpuToken: jianpuToken, jianpuToString: jianpuToString
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;

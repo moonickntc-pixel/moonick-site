@@ -27,8 +27,7 @@ Hits are not replaced with a drum machine and are not cut down to a click.
 The cowbell is a separate CC0 agogo from Virtuosity Drums auxiliary percussion
 (Versilian Studios and Karoryfer Samples); it is not part of the main kit.
 
-小江老師真鼓
-Recorded by 小江老師 on 2026-11-22 with an iPhone, then cut into one-shots
+Acoustic kit recorded by 小江老師 on 2026-11-22 with an iPhone, then cut into one-shots
 for this tool (onset detection, short pre-roll, fade-out, loudness matched
 to the Rock kit). Original takes are kept separately and were not overwritten.
 

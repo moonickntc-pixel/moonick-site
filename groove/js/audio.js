@@ -48,7 +48,7 @@ const ARTICULATION_GAIN = {
 };
 
 export const KITS = [
-  { id: "xjiang", label: "小江老師真鼓", recordedBuzz: true },
+  { id: "xjiang", label: "鼓組", recordedBuzz: true },
 ];
 
 const KIT_KEY = "drumgrid-kit";

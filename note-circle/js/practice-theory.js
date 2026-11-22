@@ -55,7 +55,7 @@
     popEnd: [1, 6, 7, 1]     // i VI VII i
   };
 
-  // 旋律：含全部 7 個級數，結束在主音
+  // 旋律輪廓：含全部 7 個級數。實際出題會另配 4/4 節奏，結尾音不一定是主音。
   var MELODIES = [
     [1, 2, 3, 4, 5, 6, 7, 1],
     [1, 3, 5, 6, 7, 6, 5, 4, 3, 2, 1],
@@ -196,8 +196,170 @@
     });
     var pool = (choices || []).map(function (c) { return c.name; });
     var hits = keysMatchingPcs(pcs, quality, pool);
-    var last = degrees[degrees.length - 1];
-    return { ok: hits.length === 1 && hits[0] === tonicName && last === 1, hits: hits, pcs: pcs };
+    return { ok: hits.length === 1 && hits[0] === tonicName, hits: hits, pcs: pcs };
+  }
+
+  // 調性線索：要有主音、主和弦音（1 3 5）與特徵音 4、7，才聽得出是哪個調。
+  function melodyHasKeyClues(degrees) {
+    var seen = {};
+    (degrees || []).forEach(function (d) { seen[+d] = 1; });
+    return !!(seen[1] && seen[3] && seen[5] && seen[4] && seen[7]);
+  }
+
+  // 結尾音權重：主音約 36%，3 與 5 為主，偶爾 2、6。不結束在 4、7。
+  var MELODY_END_WEIGHTS = [[1, 36], [3, 24], [5, 24], [2, 8], [6, 8]];
+  function pickMelodyEnding(rng) {
+    var r = (rng || Math.random)() * 100, acc = 0, i;
+    for (i = 0; i < MELODY_END_WEIGHTS.length; i++) {
+      acc += MELODY_END_WEIGHTS[i][1];
+      if (r < acc) return MELODY_END_WEIGHTS[i][0];
+    }
+    return 1;
+  }
+
+  function melodyMeterInfo(beats) {
+    var meter = 4, measures = [], acc = 0, start = 0, i, b, items = [];
+    beats = beats || [];
+    for (i = 0; i < beats.length; i++) {
+      b = +beats[i];
+      if (!(b > 0)) return { ok: false, reason: "bad-beat", measures: measures, leftover: acc, totalBeats: 0 };
+      if (Math.abs(start * 2 - Math.round(start * 2)) > 1e-6) {
+        return { ok: false, reason: "off-grid", measures: measures, leftover: acc, totalBeats: 0 };
+      }
+      if (acc + b > meter + 1e-9) {
+        return { ok: false, reason: "cross-bar", measures: measures, leftover: acc, totalBeats: 0 };
+      }
+      items.push(b);
+      acc += b;
+      start += b;
+      if (Math.abs(acc - meter) < 1e-9) {
+        measures.push({ beats: items.slice(), total: meter });
+        items = [];
+        acc = 0;
+      }
+    }
+    var total = measures.length * meter;
+    return {
+      ok: acc < 1e-9 && measures.length > 0 && measures.every(function (m) { return Math.abs(m.total - meter) < 1e-9; }),
+      measures: measures,
+      leftover: acc,
+      totalBeats: total,
+      meter: meter
+    };
+  }
+
+  function rngChoice(arr, rng) {
+    var r = rng || Math.random;
+    return arr[Math.floor(r() * arr.length)];
+  }
+
+  function fillMeasureBeats(n, rng, longLast) {
+    var parts = [], i, slack = 8 - n, r = rng || Math.random, guard, nxt;
+    if (n < 1) n = 1;
+    if (n > 8) n = 8;
+    for (i = 0; i < n; i++) parts.push(0.5);
+    if (longLast) {
+      var allowed = [0, 1, 2, 3, 5, 7].filter(function (a) { return a <= slack; });
+      var add = allowed.length ? allowed[allowed.length - 1] : 0;
+      parts[n - 1] += add * 0.5;
+      slack -= add;
+    }
+    guard = 0;
+    while (slack > 0 && guard++ < 80) {
+      i = Math.floor(r() * (longLast && n > 1 ? n - 1 : n));
+      nxt = parts[i] + 0.5;
+      if (nxt > 4 + 1e-9) continue;
+      if (Math.abs(nxt - 2.5) < 1e-9 || Math.abs(nxt - 3.5) < 1e-9) continue;
+      parts[i] = nxt;
+      slack -= 1;
+    }
+    if (slack > 0) parts[n - 1] += slack * 0.5;
+    return parts;
+  }
+
+  function makeMelodyRhythm(noteCount, rng) {
+    var r = rng || Math.random;
+    var n = Math.max(1, noteCount | 0);
+    var minBeats = n * 0.5;
+    var measures = minBeats <= 4 ? (r() < 0.45 ? 1 : 2) : (minBeats <= 8 ? 2 : 4);
+    if (n * 0.5 > measures * 4) measures = Math.ceil((n * 0.5) / 4);
+    var left = n, m, counts = [], measLeft, beatsAfter, minThis, maxThis, c;
+    for (m = 0; m < measures; m++) {
+      measLeft = measures - m;
+      beatsAfter = (measLeft - 1) * 4;
+      minThis = Math.max(1, left - beatsAfter * 2, left - (measLeft - 1) * 8);
+      maxThis = Math.min(left - (measLeft - 1), 8);
+      if (minThis > maxThis) { minThis = 1; maxThis = Math.max(1, Math.min(left, 8)); }
+      c = minThis + Math.floor(r() * (maxThis - minThis + 1));
+      counts.push(c);
+      left -= c;
+    }
+    if (left) counts[counts.length - 1] += left;
+    var beats = [];
+    for (m = 0; m < counts.length; m++) {
+      beats = beats.concat(fillMeasureBeats(counts[m], r, m === counts.length - 1));
+    }
+    return beats;
+  }
+
+  function repairMelodyDegrees(degrees, ending) {
+    var d = (degrees || []).slice(), need = [1, 3, 5, 4, 7], i, j, v, cnt;
+    if (!d.length) d = [1, 2, 3, 4, 5, 6, 7, ending || 1];
+    d[d.length - 1] = ending || d[d.length - 1] || 1;
+    if (d.length >= 7) need = [1, 2, 3, 4, 5, 6, 7];
+    for (i = 0; i < need.length; i++) {
+      v = need[i];
+      if (d.indexOf(v) >= 0) continue;
+      for (j = 0; j < d.length - 1; j++) {
+        cnt = 0;
+        d.forEach(function (x) { if (x === d[j]) cnt++; });
+        if (j === 0 && d[0] === 1) continue;
+        if (cnt > 1 || need.indexOf(d[j]) < 0) { d[j] = v; break; }
+      }
+      if (d.indexOf(v) < 0 && d.length > 2) d[1] = v;
+    }
+    d[d.length - 1] = ending || d[d.length - 1];
+    if (d.indexOf(1) < 0) d[0] = 1;
+    return d;
+  }
+
+  function makeMelodyDegrees(length, ending, rng) {
+    var r = rng || Math.random;
+    var base = rngChoice(MELODIES, r).slice();
+    var i, prev;
+    if (base.length > length) base = base.slice(0, length);
+    while (base.length < length) {
+      i = 1 + Math.floor(r() * Math.max(1, base.length - 1));
+      prev = base[i - 1] || 1;
+      base.splice(i, 0, prev >= 7 ? prev - 1 : prev + 1);
+    }
+    return repairMelodyDegrees(base, ending);
+  }
+
+  function makePracticeMelody(rng) {
+    var r = rng || Math.random;
+    var ending = pickMelodyEnding(r);
+    var length = 8 + Math.floor(r() * 5);
+    var degrees, beats, info, guard = 0, clues;
+    do {
+      degrees = makeMelodyDegrees(length, ending, r);
+      beats = makeMelodyRhythm(degrees.length, r);
+      info = melodyMeterInfo(beats);
+      clues = melodyHasKeyClues(degrees);
+      guard++;
+    } while (guard < 24 && (!info.ok || !clues || beats.length !== degrees.length));
+    if (!info.ok || !clues || beats.length !== degrees.length) {
+      degrees = repairMelodyDegrees([1, 2, 3, 4, 5, 6, 7, ending], ending);
+      beats = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5];
+      info = melodyMeterInfo(beats);
+    }
+    return {
+      degrees: degrees,
+      beats: beats,
+      totalBeats: info.totalBeats,
+      lastDegree: degrees[degrees.length - 1],
+      measures: info.measures
+    };
   }
 
   function makeChoices(correct, quality, level, rng) {
@@ -250,30 +412,48 @@
     var quality = opts.quality || rngPick(["major", "minor"], rng);
     var pool = quality === "minor" ? level.minors : level.majors;
     var tonic = opts.tonic || rngPick(pool, rng);
-    var degrees = opts.degrees || rngPick(MELODIES, rng);
+    var mel = opts.melody || null;
+    if (!mel) {
+      if (opts.degrees) {
+        var ending = opts.degrees[opts.degrees.length - 1];
+        var beats = opts.beats || makeMelodyRhythm(opts.degrees.length, rng);
+        mel = { degrees: opts.degrees.slice(), beats: beats, totalBeats: melodyMeterInfo(beats).totalBeats, lastDegree: ending };
+      } else {
+        mel = makePracticeMelody(rng);
+      }
+    }
+    var degrees = mel.degrees;
+    var beats = (mel.beats || []).slice();
     var choices = makeChoices(tonic, quality, level, rng);
     var check = assertUnambiguousMelody(degrees, tonic, quality, choices);
-    if (!check.ok) return null;
+    var meter = melodyMeterInfo(beats);
+    if (!check.ok || !melodyHasKeyClues(degrees) || !meter.ok) return null;
+    var pcs = melodyPcs(tonic, quality, degrees);
     return {
       kind: "keyFromMelody",
       level: level.id,
       tonic: tonic,
       quality: quality,
       degrees: degrees.slice(),
-      pcs: melodyPcs(tonic, quality, degrees),
+      beats: beats,
+      totalBeats: meter.totalBeats,
+      lastDegree: degrees[degrees.length - 1],
+      pcs: pcs,
       choices: choices,
       answer: { name: tonic, quality: quality },
       prompt: {
         kicker: "先聽這段旋律",
         title: quality === "minor" ? "這是哪個小調？" : "這是哪個大調？",
-        ask: "旋律會停在主音上。請選一個" + (quality === "minor" ? "小調" : "大調") + "。"
+        ask: "仔細聽旋律的調性。請選一個" + (quality === "minor" ? "小調" : "大調") + "。"
       },
       jam: {
         kind: "melody",
         tonic: tonic,
         quality: quality,
         degrees: degrees.slice(),
-        pcs: melodyPcs(tonic, quality, degrees),
+        beats: beats,
+        totalBeats: meter.totalBeats,
+        pcs: pcs.slice(),
         chords: diatonicChords(tonic, quality)
       }
     };
@@ -1002,6 +1182,10 @@
     keysMatchingPcs: keysMatchingPcs, lastIsTonic: lastIsTonic,
     assertUnambiguousProgression: assertUnambiguousProgression,
     assertUnambiguousMelody: assertUnambiguousMelody, melodyPcs: melodyPcs,
+    melodyHasKeyClues: melodyHasKeyClues, pickMelodyEnding: pickMelodyEnding,
+    melodyMeterInfo: melodyMeterInfo, makeMelodyRhythm: makeMelodyRhythm,
+    makeMelodyDegrees: makeMelodyDegrees, makePracticeMelody: makePracticeMelody,
+    MELODY_END_WEIGHTS: MELODY_END_WEIGHTS,
     makeChoices: makeChoices,
     makeKeyFromChordsQuestion: makeKeyFromChordsQuestion,
     makeKeyFromMelodyQuestion: makeKeyFromMelodyQuestion,

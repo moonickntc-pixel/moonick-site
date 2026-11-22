@@ -38,13 +38,27 @@
   };
   var kbHeld = {};
 
-  var transport = { timer: null, next: 0, step: 0, playing: false, plan: null, bpm: 96, loop: false };
+  var transport = { timer: null, next: 0, step: 0, playing: false, plan: null, bpm: 96, loop: false, token: 0 };
   var drumGain = null;
+  var schedLog = [];
 
   function ctx() { return C.ensureCtx(); }
+  function recordSched(kind, when, extra) {
+    schedLog.push({ kind: kind, when: when, step: transport.step, t: (ctx() && ctx().currentTime) || 0, extra: extra || null });
+    if (schedLog.length > 600) schedLog = schedLog.slice(-400);
+  }
+  function resumeAudio() {
+    if (C.unlock) C.unlock();
+    if (C.resumeCtx) return C.resumeCtx();
+    var audio = ctx();
+    if (audio && audio.state !== "running" && audio.resume) {
+      return audio.resume().then(function () { return audio; }).catch(function () { return audio; });
+    }
+    return Promise.resolve(audio);
+  }
   function dest() {
     var audio = ctx();
-    if (!drumGain) {
+    if (!drumGain || drumGain.context !== audio) {
       drumGain = audio.createGain();
       drumGain.gain.value = 0.7;
       var mast = C.getMaster && C.getMaster();
@@ -62,7 +76,7 @@
     g.gain.setValueAtTime(0.9, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
     osc.connect(g); g.connect(d);
-    osc.start(t); osc.stop(t + 0.24);
+    try { osc.start(t); osc.stop(t + 0.24); recordSched("kick", t); } catch (err) {}
   }
   function playSnare(when) {
     var audio = ctx(), t = Math.max(audio.currentTime, when || 0), d = dest();
@@ -84,8 +98,7 @@
     og.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
     n.connect(bp); bp.connect(g); g.connect(d);
     osc.connect(og); og.connect(d);
-    n.start(t); n.stop(t + 0.2);
-    osc.start(t); osc.stop(t + 0.12);
+    try { n.start(t); n.stop(t + 0.2); osc.start(t); osc.stop(t + 0.12); recordSched("snare", t); } catch (err) {}
   }
   function playHat(when, open) {
     var audio = ctx(), t = Math.max(audio.currentTime, when || 0), d = dest();
@@ -102,7 +115,7 @@
     g.gain.setValueAtTime(open ? 0.18 : 0.12, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
     n.connect(hp); hp.connect(g); g.connect(d);
-    n.start(t); n.stop(t + dur + 0.02);
+    try { n.start(t); n.stop(t + dur + 0.02); recordSched("hat", t); } catch (err) {}
   }
 
   function chordMidisFor(ch) {
@@ -160,11 +173,12 @@
     var chordIdx = at.index;
     if (plan.autoChords && at.chord && at.atAttack) {
       var midis = chordMidisFor(at.chord);
-      if (C.playChord) C.playChord(midis, t, plan.playScore ? { keepMelody: true } : undefined);
+      if (C.playChord) { C.playChord(midis, t, plan.playScore ? { keepMelody: true } : undefined); recordSched("chord", t, at.chord && at.chord.name); }
     }
     if (plan.melodyMidis && plan.melodyMidis.length) {
       var mi = step % plan.melodyMidis.length;
       C.playMidi(plan.melodyMidis[mi], t);
+      recordSched("melody", t);
       if (C.flash && plan.melodyPcs) C.flash(plan.melodyPcs[mi]);
     }
     if (plan.heldChord && at.atAttack) {
@@ -201,20 +215,34 @@
     }
   }
 
+  function armTransportClock(token) {
+    if (transport.token !== token || !transport.playing) return;
+    var audio = ctx();
+    if (!audio) return;
+    if (transport.next < audio.currentTime) {
+      transport.next = audio.currentTime + 0.06;
+      transport.loopStart = transport.next;
+      transport.scoreAt = transport.next;
+    }
+    if (transport.timer) { clearInterval(transport.timer); transport.timer = null; }
+    tick();
+    if (transport.token !== token || !transport.playing) return;
+    transport.timer = setInterval(tick, 25);
+  }
+
   function startProgression(chords, opts) {
     opts = opts || {};
-    if (C.unlock) C.unlock();
-    ctx();
-    if (ctx().state === "suspended") ctx().resume();
     stopTransport();
+    var token = transport.token;
     transport.bpm = opts.bpm || state.bpm || 96;
     transport.loop = !!opts.loop;
     var rhythm = opts.rhythm || "";
     var r = rhythm ? P.freeJamRhythmById(rhythm) : null;
+    var hasChords = !!(chords && chords.length);
     transport.plan = {
       kind: "chords",
-      autoChords: true,
-      chords: chords,
+      autoChords: opts.autoChords != null ? !!opts.autoChords : hasChords,
+      chords: chords || [],
       beatsPerChord: opts.beatsPerChord || 2,
       chordBeats: opts.chordBeats || null,
       rhythm: rhythm || null,
@@ -227,48 +255,69 @@
       scoreLoopBeats: opts.scoreLoopBeats || 0
     };
     transport.step = 0;
-    transport.next = ctx().currentTime + 0.06;
-    transport.loopStart = transport.next;
-    transport.scoreAt = transport.next;
+    transport.next = 0;
+    transport.loopStart = 0;
+    transport.scoreAt = 0;
     transport.playing = true;
-    C.loadInst(C.state.inst).then(function () {
-      if (!transport.playing) return;
-      tick();
-      transport.timer = setInterval(tick, 25);
+    resumeAudio().then(function (audio) {
+      if (transport.token !== token || !transport.playing) return;
+      if (C.kickUnlockBuffer) C.kickUnlockBuffer();
+      if (!audio) audio = ctx();
+      transport.next = audio.currentTime + 0.06;
+      transport.loopStart = transport.next;
+      transport.scoreAt = transport.next;
+      return C.loadInst(C.state.inst).then(function () { armTransportClock(token); });
     });
     renderPractice();
   }
 
   function stopTransport() {
     transport.playing = false;
+    transport.token = (transport.token || 0) + 1;
     if (transport.timer) { clearInterval(transport.timer); transport.timer = null; }
+    transport.next = 0;
+    transport.scoreAt = null;
+    if (C.chokeVoices) {
+      try { C.chokeVoices(function () { return true; }); } catch (err) {}
+    }
     document.querySelectorAll("#circle .note.jam-now").forEach(function (el) { el.classList.remove("jam-now"); });
     if (state.freejam) state.freejam.chordIndex = -1;
     renderPractice();
   }
 
-  function playMelody(q) {
-    if (C.unlock) C.unlock();
-    stopTransport();
-    var pcs = q.pcs;
-    var base = 60;
-    // 讓旋律從主音附近往上走，不往下掉太低
-    var midis = [];
-    var last = base + pcs[0];
-    midis.push(last);
-    for (var i = 1; i < pcs.length; i++) {
-      var m = base + pcs[i];
-      while (m < last - 6) m += 12;
-      while (m > last + 8) m -= 12;
-      midis.push(m);
-      last = m;
+  function melodyEventsFrom(q) {
+    var pcs = (q && (q.pcs || (q.jam && q.jam.pcs))) || [];
+    var beats = (q && (q.beats || (q.jam && q.jam.beats))) || [];
+    var midis = melodyMidisOf(pcs);
+    var evs = [], t = 0, i, b;
+    for (i = 0; i < midis.length; i++) {
+      b = beats[i] != null ? +beats[i] : 0.5;
+      if (!(b > 0)) b = 0.5;
+      evs.push({ startBeat: t, beats: b, midi: midis[i], pc: pcs[i] });
+      t += b;
     }
-    C.loadInst(C.state.inst).then(function () {
-      var t0 = ctx().currentTime + 0.05;
-      midis.forEach(function (m, i) {
-        C.playMidi(m, t0 + i * 0.32);
-        setTimeout(function () { if (C.flash) C.flash(pcs[i]); }, 50 + i * 320);
-      });
+    if (P.melodyMeterInfo) {
+      var info = P.melodyMeterInfo(evs.map(function (e) { return e.beats; }));
+      if (info && info.ok) t = info.totalBeats;
+    } else if (t > 0 && t % 4) {
+      evs[evs.length - 1].beats += 4 - (t % 4);
+      t += 4 - (t % 4);
+    }
+    return { events: evs, totalBeats: t };
+  }
+
+  function playMelody(q) {
+    var ev = melodyEventsFrom(q);
+    startProgression([], {
+      bpm: state.bpm || 92,
+      drums: true,
+      loop: false,
+      rhythm: "8beat",
+      autoChords: false,
+      chordBeats: [Math.max(ev.totalBeats, 4)],
+      playScore: true,
+      scoreEvents: ev.events,
+      scoreLoopBeats: ev.totalBeats
     });
   }
 
@@ -331,31 +380,25 @@
 
   function startMelodyJam(jam, opts) {
     opts = opts || {};
-    if (C.unlock) C.unlock();
-    ctx();
-    if (ctx().state === "suspended") ctx().resume();
-    stopTransport();
-    transport.bpm = opts.bpm || state.bpm || 96;
-    transport.loop = true;
-    transport.plan = {
-      kind: "melody",
-      autoChords: false,
+    var ev = melodyEventsFrom(jam);
+    startProgression([], {
+      bpm: opts.bpm || state.bpm || 96,
       drums: opts.drums !== false,
-      beatsPerChord: 2,
-      melodyPcs: (jam.pcs || []).slice(),
-      melodyMidis: melodyMidisOf(jam.pcs || []),
-      heldChord: null,
-      jamChords: jam.chords || []
-    };
-    transport.step = 0;
-    transport.next = ctx().currentTime + 0.06;
-    transport.playing = true;
-    C.loadInst(C.state.inst).then(function () {
-      if (!transport.playing) return;
-      tick();
-      transport.timer = setInterval(tick, 25);
+      loop: true,
+      rhythm: "8beat",
+      autoChords: false,
+      chordBeats: [Math.max(ev.totalBeats, 4)],
+      playScore: true,
+      scoreEvents: ev.events,
+      scoreLoopBeats: ev.totalBeats
     });
-    renderPractice();
+  }
+
+  function restartPracticeJam() {
+    var q = state.question;
+    if (!state.jam || !q || !q.jam) return;
+    if (state.jamKind === "melody") startMelodyJam(q.jam, { bpm: state.bpm, drums: true });
+    else startProgression(q.jam.chords, { bpm: state.bpm, drums: true, loop: true, beatsPerChord: 2 });
   }
 
   function tapJamChord(ch) {
@@ -669,6 +712,14 @@
     jamBtn.hidden = !(on && q && q.jam && state.grade && state.grade.perfect && !state.jam && (q.kind === "keyFromChords" || q.kind === "keyFromMelody"));
     upBtn.hidden = !(on && state.pendingLevelUp && !state.jam);
     jamBar.hidden = !(on && state.jam);
+    var jamPlay = document.getElementById("jamPlay");
+    var jamStop = document.getElementById("jamStop");
+    if (jamPlay) {
+      jamPlay.hidden = !(on && state.jam);
+      jamPlay.classList.toggle("on", !!(on && state.jam && transport.playing));
+      jamPlay.textContent = (on && state.jam && transport.playing) ? "▶ 播放中" : "▶ 播放";
+    }
+    if (jamStop) jamStop.disabled = !(on && state.jam && transport.playing);
     document.getElementById("tempoVal").textContent = String(transport.bpm || state.bpm);
     document.getElementById("tempoRange").value = String(state.bpm);
     var cap = document.getElementById("jamCaption");
@@ -973,6 +1024,7 @@
         if (when + 1e-6 >= fromTime && when < toTime) {
           if (C.playMidiImmediate) C.playMidiImmediate(ev.midi, { melody: true, when: when, chokeSame: true });
           else if (C.playMidi) C.playMidi(ev.midi, when);
+          recordSched("score", when, ev.label || ev.pc);
           if (C.flash && ev.pc != null) C.flash(ev.pc);
         }
       }
@@ -1638,6 +1690,12 @@
       state.pendingLevelUp = false;
       newQuestion();
     });
+    var jamPlayBtn = document.getElementById("jamPlay");
+    if (jamPlayBtn) jamPlayBtn.addEventListener("click", function () {
+      if (!state.jam) return;
+      if (transport.playing) { stopTransport(); return; }
+      restartPracticeJam();
+    });
     document.getElementById("jamStop").addEventListener("click", function () { stopTransport(); });
     document.getElementById("tempoRange").addEventListener("input", function () {
       state.bpm = Math.max(60, Math.min(140, +this.value || 96));
@@ -1669,7 +1727,22 @@
     addFreeJamDegree: addFreeJamDegree,
     setFreeJamRhythm: setFreeJamRhythm,
     startFreeJam: startFreeJam,
+    restartPracticeJam: restartPracticeJam,
     playFreeJamKey: playFreeJamKey,
+    getSchedLog: function () { return schedLog.slice(); },
+    clearSchedLog: function () { schedLog = []; },
+    getTransportSnapshot: function () {
+      var audio = C.ensureCtx ? C.ensureCtx() : null;
+      return {
+        playing: !!transport.playing,
+        step: transport.step,
+        timer: !!transport.timer,
+        next: transport.next,
+        token: transport.token,
+        ctxState: audio ? audio.state : "",
+        currentTime: audio ? audio.currentTime : 0
+      };
+    },
     setKbOn: setKbOn,
     currentGlowChord: currentGlowChord,
     appendJianpu: appendJianpu, appendJianpuRest: appendJianpuRest, appendJianpuTie: appendJianpuTie,

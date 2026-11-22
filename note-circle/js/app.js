@@ -236,14 +236,28 @@
     }
     return ctx;
   }
-  // iOS：第一次觸碰時解鎖音訊
+  // iOS：每次手勢都再 resume，並播一個極短靜音，避免停止後 context 被掛起就不能再播。
   var unlocked = false;
-  function unlock() {
-    if (unlocked) return;
+  function resumeCtx() {
     ensureCtx();
-    if (ctx.state === "suspended") ctx.resume();
-    var b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource();
-    s.buffer = b; s.connect(ctx.destination); s.start(0);
+    if (ctx.state !== "running" && ctx.resume) {
+      return ctx.resume().then(function () { return ctx; }).catch(function () { return ctx; });
+    }
+    return Promise.resolve(ctx);
+  }
+  function kickUnlockBuffer() {
+    if (!ctx) return;
+    try {
+      var b = ctx.createBuffer(1, 1, ctx.sampleRate || 22050), s = ctx.createBufferSource();
+      s.buffer = b;
+      s.connect(ctx.destination);
+      s.start(0);
+    } catch (err) {}
+  }
+  function unlock() {
+    ensureCtx();
+    if (ctx.state !== "running" && ctx.resume) ctx.resume();
+    kickUnlockBuffer();
     unlocked = true;
   }
   ["pointerdown", "touchstart", "keydown", "mousedown"].forEach(function (ev) {
@@ -343,7 +357,7 @@
     opts = opts || {};
     var id = state.inst;
     ensureCtx();
-    if (ctx.state === "suspended") ctx.resume();
+    if (ctx.state !== "running" && ctx.resume) ctx.resume();
     var bufs = buffers[id];
     if (!bufs || !Object.keys(bufs).length) {
       return loadInst(id).then(function () { return playMidiImmediate(midi, opts); });
@@ -386,7 +400,7 @@
   function playMidi(midi, when) {
     var id = state.inst;
     ensureCtx();
-    if (ctx.state === "suspended") ctx.resume();
+    if (ctx.state !== "running" && ctx.resume) ctx.resume();
     return loadInst(id).then(function () {
       var t = Math.max(ctx.currentTime, when || 0);
       chokeVoices(function (v) { return v.midi === midi; }, t);
@@ -403,7 +417,7 @@
     opts = opts || {};
     var id = state.inst;
     ensureCtx();
-    if (ctx.state === "suspended") ctx.resume();
+    if (ctx.state !== "running" && ctx.resume) ctx.resume();
     var strum = (id === "acoustic" || id === "electric") ? 0.025 : 0;
     var level = chordLevel(midis.length);
     return loadInst(id).then(function () {
@@ -730,7 +744,7 @@
     state: state, spellMajor: spellMajor, relativeMinorName: relativeMinorName, keyMenuLabel: keyMenuLabel,
     chordInfo: chordInfo, chordMidis: chordMidis, currentChord: currentChord, CHORDS: CHORDS, DIATONIC: DIATONIC,
     render: render, loadInst: loadInst, playMidi: playMidi, playMidiImmediate: playMidiImmediate, releaseMidi: releaseMidi, instBuffersReady: instBuffersReady, playChord: playChord, soundingMidi: soundingMidi, renderOffline: renderOffline,
-    ensureCtx: ensureCtx, unlock: unlock, chokeVoices: chokeVoices, flash: flash,
+    ensureCtx: ensureCtx, unlock: unlock, resumeCtx: resumeCtx, kickUnlockBuffer: kickUnlockBuffer, chokeVoices: chokeVoices, flash: flash,
     buildOutputChain: buildOutputChain, chordLevel: chordLevel, dbToLin: dbToLin,
     INSTRUMENTS: INSTRUMENTS, INST_ORDER: INST_ORDER, KEYS: KEYS, MASTER_GAIN: MASTER_GAIN, LIMITER: LIMITER,
     getMaster: function () { return master; }, getLimiter: function () { return limiter; }, getInstGain: function () { return instGain; }, getClip: function () { return clip; },

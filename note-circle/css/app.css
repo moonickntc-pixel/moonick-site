@@ -101,7 +101,8 @@ html:not(.has-chord) .chord-only{display:none!important}
 .prac-choices button.is-bad{background:#a33;color:#fff;border-color:#a33}
 .prac-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
 .prac-actions button,.jam-bar button{border:2px solid var(--accent);background:transparent;border-radius:12px;padding:9px 14px;font:inherit;font-weight:700;cursor:pointer;min-height:46px}
-.prac-actions #pracSubmit,.prac-actions #pracNext,#jamStop{background:var(--accent);color:var(--accent-text);flex:1}
+.prac-actions #pracSubmit,.prac-actions #pracNext,#jamPlay{background:var(--accent);color:var(--accent-text);flex:1}
+#jamPlay,#jamStop{flex:1;min-width:120px}
 #pracJam{flex:1 0 100%}
 #pracResult.shown{margin-top:8px;padding:10px 12px;border-radius:12px;background:var(--bg);font-weight:800;font-size:18px}
 .jam-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin:8px 0}

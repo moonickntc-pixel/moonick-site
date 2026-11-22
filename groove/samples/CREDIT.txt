@@ -26,3 +26,17 @@ A buzz is three quick quiet-to-normal snare hits. A flam is a ghost grace note p
 Hits are not replaced with a drum machine and are not cut down to a click.
 The cowbell is a separate CC0 agogo from Virtuosity Drums auxiliary percussion
 (Versilian Studios and Karoryfer Samples); it is not part of the main kit.
+
+小江老師真鼓（測試版）
+Recorded by 小江老師 on 2026-11-22 with an iPhone, then cut into one-shots
+for this tool (onset detection, short pre-roll, fade-out, loudness matched
+to the Rock kit). Original takes are kept separately and were not overwritten.
+
+Cowbell, Stacker, and Click were not recorded in this session. Those three
+voices still use the Rock kit samples from DRSKit (CC BY 4.0) and the
+cowbell's CC0 agogo source, as described above. The rest of the kit is
+小江老師's recording.
+
+Hi-hat half-open, hi-hat accent, and 「開完後閉合」 use dedicated takes
+from this session (hatHalf, hatAccent, hatClose). A buzz plays the recorded
+buzz roll once, instead of the seven-bounce ghost pattern used by the other kits.

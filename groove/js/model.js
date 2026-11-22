@@ -1894,7 +1894,9 @@ const MIDI = {
   tom3: 43,
   hat: 42,
   hatOpen: 46,
+  hatHalf: 46,
   hatAccent: 42,
+  hatClose: 42,
   crash: 49,
   ride: 51,
   rideBell: 53,
@@ -1967,16 +1969,16 @@ function addHat(kind, push) {
       push("hatOpen", 100);
       break;
     case "half":
-      push("hatOpen", 84);
+      push("hatHalf", 84);
       break;
     case "closed_plus":
-      push("hat", 96);
+      push("hatClose", 96);
       break;
     case "foot_only":
       push("foot", 90);
       break;
     case "accent":
-      push("hat", 122);
+      push("hatAccent", 122);
       break;
     case "crash":
     case "crash_tie":

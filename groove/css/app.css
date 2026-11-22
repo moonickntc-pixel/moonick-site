@@ -159,6 +159,14 @@ button:disabled { opacity: 0.4; cursor: default; }
   font-size: 15px;
 }
 .kit-switch button.on { background: #ffe08a; color: #1b3a2c; }
+.kit-label {
+  margin: 0;
+  flex: none;
+  color: #ffe08a;
+  font-weight: 800;
+  font-size: 15px;
+  white-space: nowrap;
+}
 .sample-status { margin: 0; color: #fffdf8; font-size: 14px; font-weight: 800; white-space: nowrap; }
 
 #stage {
@@ -846,6 +854,13 @@ body.viewing #viewBtn { display: flex; }
     border-radius: 999px;
     font-size: 12px;
     white-space: nowrap;
+  }
+  .kit-label {
+    grid-area: kits;
+    min-width: 0;
+    font-size: 13px;
+    line-height: 1.3;
+    white-space: normal;
   }
   .sliders {
     grid-area: sliders;

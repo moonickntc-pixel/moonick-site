@@ -48,12 +48,11 @@ const ARTICULATION_GAIN = {
 };
 
 export const KITS = [
-  { id: "rock", label: "Rock 搖滾" },
-  { id: "funk", label: "Funk 放克" },
-  { id: "jazz", label: "Jazz 爵士" },
+  { id: "xjiang", label: "小江老師真鼓", recordedBuzz: true },
 ];
 
 const KIT_KEY = "drumgrid-kit";
+const EXTRA_VOICES = ["hatHalf", "hatAccent", "hatClose"];
 
 export function createKit() {
   let ctx = null;
@@ -106,13 +105,21 @@ export function createKit() {
   }
 
   function load(id) {
-    const kit = KITS.some((item) => item.id === id) ? id : "jazz";
+    const kit = KITS.some((item) => item.id === id) ? id : "xjiang";
     if (buffers[kit]) return Promise.resolve(buffers[kit]);
     if (pending[kit]) return pending[kit];
     statusFn("loading", kit);
-    pending[kit] = Promise.all(VOICES.map(async (voice) => [voice, await fetchBuffer(kit, voice)]))
+    const required = VOICES.map(async (voice) => [voice, await fetchBuffer(kit, voice)]);
+    const optional = EXTRA_VOICES.map(async (voice) => {
+      try {
+        return [voice, await fetchBuffer(kit, voice)];
+      } catch {
+        return [voice, null];
+      }
+    });
+    pending[kit] = Promise.all([...required, ...optional])
       .then((pairs) => {
-        buffers[kit] = Object.fromEntries(pairs);
+        buffers[kit] = Object.fromEntries(pairs.filter(([, buffer]) => buffer));
         if (current === kit) statusFn("ready", kit);
         return buffers[kit];
       })
@@ -125,7 +132,7 @@ export function createKit() {
   }
 
   function select(id) {
-    const kit = KITS.some((item) => item.id === id) ? id : "jazz";
+    const kit = KITS.some((item) => item.id === id) ? id : "xjiang";
     current = kit;
     try {
       localStorage.setItem(KIT_KEY, kit);
@@ -137,7 +144,7 @@ export function createKit() {
 
   const roundRobin = {};
 
-  function voiceFor(inst, vel) {
+  function voiceFor(inst, vel, map = {}) {
     if (inst === "snare") {
       if (vel < 55) return "ghost";
       if (vel >= 126) return "snareRim";
@@ -145,8 +152,12 @@ export function createKit() {
       return "snare";
     }
     if (inst === "clickSoft") return "click";
+    if (inst === "hatHalf") return map.hatHalf ? "hatHalf" : "hatOpen";
+    if (inst === "hatAccent") return map.hatAccent ? "hatAccent" : "hat";
+    if (inst === "hatClose") return map.hatClose ? "hatClose" : "hat";
+    if (inst === "buzz") return map.buzz ? "buzz" : "snare";
     if (inst === "buzzBounce") return "ghost";
-    if (LAYER_POOLS[inst] || VOICES.includes(inst)) return inst;
+    if (LAYER_POOLS[inst] || VOICES.includes(inst) || map[inst]) return inst;
     return "snare";
   }
 
@@ -188,19 +199,29 @@ export function createKit() {
     if (master) master.gain.setValueAtTime(0.8, now + 0.03);
   }
 
+  let lastRecordedBuzzAt = null;
+
   function play(inst, vel = 100, when = 0) {
     const map = buffers[current];
     if (!map) return;
     unmute();
     const at = Math.max(ensure().currentTime, when);
-    const voice = pickSample(map, voiceFor(inst, vel));
+    const meta = KITS.find((item) => item.id === current) || {};
+    if (inst === "buzzBounce" && meta.recordedBuzz && map.buzz) {
+      // The model still emits the 7-bounce ghost pattern; play the recorded
+      // roll once and ignore the following bounces in the same stroke.
+      if (lastRecordedBuzzAt != null && Math.abs(at - lastRecordedBuzzAt) < 0.15) return;
+      lastRecordedBuzzAt = at;
+      inst = "buzz";
+    }
+    const voice = pickSample(map, voiceFor(inst, vel, map));
     const buffer = map[voice];
     if (!buffer) return;
     const src = ctx.createBufferSource();
     src.buffer = buffer;
     const gain = ctx.createGain();
     const amount = Math.max(0.05, Math.min(1, vel / 127));
-    const shaped = ARTICULATION_GAIN[voiceFor(inst, vel)];
+    const shaped = ARTICULATION_GAIN[voiceFor(inst, vel, map)];
     const peak = inst === "buzzBounce" ? 0.85 * amount : shaped != null ? shaped * (0.92 + 0.08 * amount) : inst === "clickSoft" ? 0.45 * amount : 0.42 + 0.58 * amount;
     gain.gain.setValueAtTime(peak, at);
     src.connect(gain);
@@ -254,7 +275,7 @@ export function rememberedKit() {
   } catch {
     /* ignore */
   }
-  return "jazz";
+  return "xjiang";
 }
 
 export function createTransport(kit) {

@@ -315,6 +315,21 @@
     renderPractice();
   }
 
+  function resetLegend() {
+    document.querySelectorAll("#legend li").forEach(function (li) {
+      var sw = li.querySelector(".sw");
+      if (li.querySelector(".sw-scale")) {
+        li.textContent = "";
+        if (sw) li.appendChild(sw);
+        li.appendChild(document.createTextNode("這個調的自然音階"));
+      } else if (li.querySelector(".sw-tonic")) {
+        li.textContent = "";
+        if (sw) li.appendChild(sw);
+        li.appendChild(document.createTextNode("主音（1 / Do）"));
+      }
+    });
+  }
+
   function fillJamScales() {
     var box = document.getElementById("jamScales");
     if (!box) return;
@@ -404,8 +419,12 @@
         sub.textContent = (sp && sp.name ? sp.name + "　" : "") + "主音是 " + tonicNum;
       }
       document.querySelectorAll("#legend li").forEach(function (li) {
-        if (li.textContent.indexOf("主音") >= 0) {
-          var sw = li.querySelector(".sw");
+        var sw = li.querySelector(".sw");
+        if (li.querySelector(".sw-scale") || (li.textContent.indexOf("音階") >= 0 && li.textContent.indexOf("主音") < 0)) {
+          li.textContent = "";
+          if (sw) li.appendChild(sw);
+          li.appendChild(document.createTextNode(P.jamLegendText(q.jam.tonic, state.jamScale)));
+        } else if (li.querySelector(".sw-tonic") || li.textContent.indexOf("主音") >= 0) {
           li.textContent = "";
           if (sw) li.appendChild(sw);
           li.appendChild(document.createTextNode(q.jam.quality === "minor" ? "主音（6 / La）" : "主音（1 / Do）"));
@@ -413,6 +432,7 @@
       });
       return;
     }
+    resetLegend();
     if (q && q.kind === "chordTones") {
       Object.keys(state.picked).forEach(function (k) {
         var el = document.querySelector('#circle .note[data-pc="' + k + '"]');

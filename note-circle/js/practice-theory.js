@@ -451,6 +451,20 @@
     });
     return { tonicPc: tonicPc, tonicName: tonicName, scaleId: sc.id, quality: sc.quality, name: sc.name, byPc: byPc };
   }
+  function jamLegendText(tonicName, scaleId) {
+    var sc = jamScaleById(scaleId);
+    if (!sc) sc = jamScaleById(defaultJamScale("major"));
+    var typ = {
+      major: "自然", majPent: "五聲", majBlues: "藍調",
+      natMinor: "自然", minPent: "五聲", blues: "藍調",
+      harMinor: "和聲", melMinor: "旋律"
+    }[sc.id] || "";
+    if (sc.id === "natMinor" || sc.id === "harMinor" || sc.id === "melMinor") {
+      return tonicName + " " + typ + "小調音階";
+    }
+    return keyLabel(tonicName, sc.quality) + typ + "音階";
+  }
+
 
   var api = {
     LEVELS: LEVELS, MAJOR_KEYS: MAJOR_KEYS, MINOR_KEYS: MINOR_KEYS,
@@ -473,7 +487,8 @@
     gradeDegreeChord: gradeDegreeChord, gradePracticeQuestion: gradePracticeQuestion,
     isDiatonicPcs: isDiatonicPcs,
     JAM_SCALES: JAM_SCALES, jamScaleById: jamScaleById, defaultJamScale: defaultJamScale,
-    jamScalesFor: jamScalesFor, isJamScaleFor: isJamScaleFor, spellJamScale: spellJamScale
+    jamScalesFor: jamScalesFor, isJamScaleFor: isJamScaleFor, spellJamScale: spellJamScale,
+    jamLegendText: jamLegendText
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;

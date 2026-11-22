@@ -53,7 +53,7 @@
     guitar: { id: "guitar", name: "吉他", stringCount: 6, openMidi: [40, 45, 50, 55, 59, 64], openName: ["E", "A", "D", "G", "B", "E"], frets: 16 },
     bass: { id: "bass", name: "Bass", stringCount: 4, openMidi: [28, 33, 38, 43], openName: ["E", "A", "D", "G"], frets: 16 }
   };
-  var BOX_SPAN = 4; // 從錨點起算 5 格（含）：a .. a+4
+  var BOX_SPAN = 4; // 預設窗寬 5 格（含兩端）。各指型相對錨點的偏移見 boxOffset。
 
   function parseTonic(name) {
     var letter = name[0];
@@ -209,8 +209,8 @@
     var openPc = 4; // 最低弦都是 E
     var a = (namesakePc - openPc + 12) % 12;
     var out = [];
-    if (a + BOX_SPAN <= maxFret) out.push(a);
-    if (a + 12 + BOX_SPAN <= maxFret) out.push(a + 12);
+    if (boxFits(pat.id, a, maxFret)) out.push(a);
+    if (boxFits(pat.id, a + 12, maxFret)) out.push(a + 12);
     var lowSolfa = solfaOfDegree(rec.degree) || pat.solfa;
     return {
       namesakePc: namesakePc,
@@ -227,10 +227,36 @@
     };
   }
 
+  // 把位窗相對錨點（最低弦上的名字音）的偏移。
+  // Mi／La／Do／Re 暫為 [0, 4]；Sol 為 [-1, 3]（例如 C 大調錨點第 3 格，窗是第 2–6 格）。
+  // 若 anchor+lo < 0：夾到空弦（不把整個窗移高八度），開放把位仍保留。超過指板上限的把位不採用。
+  function boxOffset(patternId) {
+    if (Number(patternId) === 2) return { lo: -1, hi: 3 };
+    return { lo: 0, hi: 4 };
+  }
+
+  function boxWindow(patternId, anchor, maxFret) {
+    var off = boxOffset(patternId);
+    var lo = anchor + off.lo;
+    var hi = anchor + off.hi;
+    var clampedLow = false;
+    var clampedHigh = false;
+    if (lo < 0) { lo = 0; clampedLow = true; }
+    if (maxFret != null && hi > maxFret) { hi = maxFret; clampedHigh = true; }
+    return { lo: lo, hi: hi, anchor: anchor, clampedLow: clampedLow, clampedHigh: clampedHigh };
+  }
+
+  function boxFits(patternId, anchor, maxFret) {
+    if (anchor < 0) return false;
+    var off = boxOffset(patternId);
+    return anchor + off.hi <= maxFret;
+  }
+
   function patternNotes(board, tonicName, scaleId, patternId, anchor) {
     var tun = TUNINGS[board];
     var spelled = spellScale(tonicName, scaleId);
-    var lo = anchor, hi = anchor + BOX_SPAN;
+    var box = boxWindow(patternId, anchor, tun.frets);
+    var lo = box.lo, hi = box.hi;
     var notes = [];
     for (var s = 0; s < tun.stringCount; s++) {
       for (var f = lo; f <= hi && f <= tun.frets; f++) {
@@ -576,7 +602,9 @@
 
   function boxRangeText(question, usedAnchor) {
     var a = usedAnchor != null ? usedAnchor : question.statedAnchor;
-    return "第 " + a + " 到 " + (a + BOX_SPAN) + " 格";
+    var maxFret = question.board && TUNINGS[question.board] ? TUNINGS[question.board].frets : 16;
+    var box = boxWindow(question.pattern, a, maxFret);
+    return "第 " + box.lo + " 到 " + box.hi + " 格";
   }
 
   function explainGrade(grade, question) {
@@ -684,6 +712,7 @@
     solfaDisplay: solfaDisplay, solfaOfDegree: solfaOfDegree, solfaFamily: solfaFamily,
     isMinorSystem: isMinorSystem, allPatternAnchors: allPatternAnchors,
     namesakeInScale: namesakeInScale, quizDegreeChoices: quizDegreeChoices,
+    boxOffset: boxOffset, boxWindow: boxWindow, boxFits: boxFits,
     anchorFrets: anchorFrets, patternNotes: patternNotes, dedupeUnisonPitches: dedupeUnisonPitches,
     keyTitle: keyTitle, patternLabel: patternLabel, questionPrompt: questionPrompt,
     makeQuestion: makeQuestion, gradeQuiz: gradeQuiz, randomQuestion: randomQuestion,

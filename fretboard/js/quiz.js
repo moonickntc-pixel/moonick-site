@@ -235,7 +235,7 @@
         pattern: pattern,
         anchors: an.anchors.slice(),
         statedAnchor: anchor,
-        box: { lo: anchor, hi: anchor + T.BOX_SPAN },
+        box: T.boxWindow(pattern, anchor, T.TUNINGS[board].frets),
         targets: circled.map(function (n) {
           return { string: n.string, fret: n.fret, degree: n.degree, name: n.name, midi: n.midi, tonic: n.tonic, key: n.string + "-" + n.fret };
         }),
@@ -305,7 +305,7 @@
         pattern: pattern,
         anchors: an.anchors.slice(),
         statedAnchor: anchor,
-        box: { lo: anchor, hi: anchor + T.BOX_SPAN },
+        box: T.boxWindow(pattern, anchor, T.TUNINGS[board].frets),
         targetDegrees: frag.slice(),
         progression: fixedProgressionFor(pair.tonic, pair.scale, progKind),
         boxNotes: notes.map(function (n) {

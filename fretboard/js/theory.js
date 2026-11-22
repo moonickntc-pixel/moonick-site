@@ -228,10 +228,12 @@
   }
 
   // 把位窗相對錨點（最低弦上的名字音）的偏移。
-  // Mi／La／Do／Re 暫為 [0, 4]；Sol 為 [-1, 3]（例如 C 大調錨點第 3 格，窗是第 2–6 格）。
+  // Mi／Do／Re 暫為 [0, 4]；Sol 為 [-1, 3]；La 為 [-1, 2]（例如 C 大調錨點第 5 格，窗是第 4–7 格，共 4 格）。
   // 若 anchor+lo < 0：夾到空弦（不把整個窗移高八度），開放把位仍保留。超過指板上限的把位不採用。
   function boxOffset(patternId) {
-    if (Number(patternId) === 2) return { lo: -1, hi: 3 };
+    var id = Number(patternId);
+    if (id === 2) return { lo: -1, hi: 3 };
+    if (id === 3) return { lo: -1, hi: 2 };
     return { lo: 0, hi: 4 };
   }
 

@@ -58,7 +58,6 @@ export const KICK_ARTICULATIONS = [
   ["off", "Off"],
   ["normal", "Kick Normal"],
   ["splash", "Hi-hat foot"],
-  ["foot_open", "腳踩打開"],
   ["both", "Kick & Hi-hat foot"],
 ];
 

@@ -170,6 +170,28 @@ export function createKit() {
   }
 
   const active = new Set();
+  // Open and half-open hats ring; a later closed hat, pedal, accent,
+  // close-after-open, or any other hat hit must choke them quickly.
+  const OPEN_HAT_VOICES = new Set(["hatOpen", "hatHalf"]);
+  const HAT_CHOKE_VOICES = new Set(["hat", "hatOpen", "hatHalf", "hatAccent", "hatClose", "foot"]);
+  const HAT_CHOKE_FADE = 0.02;
+  const openHats = new Set();
+
+  function chokeOpenHats(at) {
+    const until = at + HAT_CHOKE_FADE;
+    for (const item of [...openHats]) {
+      try {
+        const g = item.gain.gain;
+        g.cancelScheduledValues(at);
+        g.setValueAtTime(item.peak, at);
+        g.linearRampToValueAtTime(0, until);
+        item.src.stop(until);
+      } catch {
+        /* already stopped */
+      }
+      openHats.delete(item);
+    }
+  }
 
   function unmute() {
     if (!ctx || !master) return;
@@ -181,6 +203,7 @@ export function createKit() {
   function silence() {
     if (!ctx) {
       active.clear();
+      openHats.clear();
       return;
     }
     const now = ctx.currentTime;
@@ -196,6 +219,7 @@ export function createKit() {
       }
     }
     active.clear();
+    openHats.clear();
     if (master) master.gain.setValueAtTime(0.8, now + 0.03);
   }
 
@@ -217,6 +241,7 @@ export function createKit() {
     const voice = pickSample(map, voiceFor(inst, vel, map));
     const buffer = map[voice];
     if (!buffer) return;
+    if (HAT_CHOKE_VOICES.has(voice) || HAT_CHOKE_VOICES.has(inst)) chokeOpenHats(at);
     const src = ctx.createBufferSource();
     src.buffer = buffer;
     const gain = ctx.createGain();
@@ -229,7 +254,12 @@ export function createKit() {
     src.start(at);
     src.startAt = at;
     active.add(src);
-    src.onended = () => active.delete(src);
+    const openItem = OPEN_HAT_VOICES.has(voice) ? { src, gain, peak, startAt: at } : null;
+    if (openItem) openHats.add(openItem);
+    src.onended = () => {
+      active.delete(src);
+      if (openItem) openHats.delete(openItem);
+    };
   }
 
   // Drop hits scheduled at or after a time, so a tempo change can
@@ -243,6 +273,10 @@ export function createKit() {
         /* already ended */
       }
       active.delete(src);
+    }
+    for (const item of [...openHats]) {
+      if (item.startAt == null || item.startAt < time) continue;
+      openHats.delete(item);
     }
   }
 

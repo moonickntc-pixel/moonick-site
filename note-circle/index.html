@@ -20,7 +20,7 @@
 <meta name="twitter:title" id="twitter-title" content="十二音圓形音階｜慕尼克">
 <meta name="twitter:description" id="twitter-description" content="點圓上的 12 個音就能聽到音高，可換鋼琴、木吉他、電吉他、Bass、人聲，選調後自然音階會換顏色。">
 <meta name="twitter:image" id="twitter-image" content="https://moonickmusic.com/note-circle/og-moonick.png">
-<link rel="stylesheet" href="css/app.css?v=20261122l">
+<link rel="stylesheet" href="css/app.css?v=20261122m">
 <script>
   (function () {
     var h = location.hostname.toLowerCase().replace(/\.$/, "");
@@ -228,8 +228,39 @@
         <p class="hint" id="fjKbHint">電腦可直接按這些字母。手機請按「用鍵盤彈」叫出鍵盤，並切到英文輸入。</p>
         <input id="fjKbInput" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="text" lang="en" aria-label="用鍵盤彈">
         <div class="label fj-jp-lab">簡譜</div>
-        <div id="fjJianpu" class="fj-jianpu" aria-live="polite"></div>
-        <button type="button" id="fjJpClear" class="small">清空簡譜</button>
+        <label class="fj-title-lab">標題
+          <input id="fjJpTitle" type="text" maxlength="40" placeholder="曲名（選填）" autocomplete="off">
+        </label>
+        <div class="label fj-sublab">時值</div>
+        <div class="seg" id="fjJpDurs" role="radiogroup" aria-label="時值">
+          <button type="button" data-dur="whole">全</button>
+          <button type="button" data-dur="half">二分</button>
+          <button type="button" data-dur="quarter" class="on">四分</button>
+          <button type="button" data-dur="eighth">八分</button>
+          <button type="button" data-dur="sixteenth">十六分</button>
+          <button type="button" id="fjJpDot">附點</button>
+        </div>
+        <div class="fj-jp-edit">
+          <button type="button" id="fjJpRest">休止 0</button>
+          <button type="button" id="fjJpTie">延長 −</button>
+          <button type="button" id="fjJpBack">退格</button>
+          <button type="button" id="fjJpClear">清除</button>
+        </div>
+        <label class="fj-check"><input type="checkbox" id="fjJpChords" checked> 小節上方標和弦級數</label>
+        <label class="fj-check"><input type="checkbox" id="fjJpPlayMel"> 播放我寫的旋律</label>
+        <div id="fjScorePaper" class="fj-score-paper" aria-live="polite">
+          <div class="fj-score-head">
+            <div class="fj-score-title" id="fjScoreTitle"></div>
+            <div class="fj-score-meta"><span id="fjScoreKey">1=C</span><span id="fjScoreMeter">4/4</span><span id="fjScoreTempo">♩=96</span></div>
+          </div>
+          <div class="fj-score-body" id="fjScoreBody"></div>
+        </div>
+        <div class="fj-jp-export">
+          <button type="button" id="fjJpJpg">輸出 JPG</button>
+          <button type="button" id="fjJpShare">分享</button>
+          <button type="button" id="fjJpPrint">列印</button>
+        </div>
+        <canvas id="fjScoreCanvas" hidden></canvas>
       </div>
     </div>
 
@@ -241,8 +272,8 @@
   <p>音色取樣：FluidR3 GM SoundFont（Frank Wen），依 <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a> 授權使用，轉檔版本來自 <a href="https://github.com/gleitz/midi-js-soundfonts" target="_blank" rel="noopener">gleitz/midi-js-soundfonts</a>。</p>
 </footer>
 
-<script src="js/app.js?v=20261122l"></script>
-<script src="js/practice-theory.js?v=20261122l"></script>
-<script src="js/practice.js?v=20261122l"></script>
+<script src="js/app.js?v=20261122m"></script>
+<script src="js/practice-theory.js?v=20261122m"></script>
+<script src="js/practice.js?v=20261122m"></script>
 </body>
 </html>

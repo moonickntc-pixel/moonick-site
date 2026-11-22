@@ -28,6 +28,11 @@
       bpm: 96,
       chordIndex: -1,
       jianpu: [],
+      jpDur: "quarter",
+      jpDotted: false,
+      jpTitle: "",
+      jpShowChords: true,
+      jpPlayMelody: false,
       kbOn: false
     }
   };
@@ -155,7 +160,7 @@
     var chordIdx = at.index;
     if (plan.autoChords && at.chord && at.atAttack) {
       var midis = chordMidisFor(at.chord);
-      if (C.playChord) C.playChord(midis, t);
+      if (C.playChord) C.playChord(midis, t, plan.playScore ? { keepMelody: true } : undefined);
     }
     if (plan.melodyMidis && plan.melodyMidis.length) {
       var mi = step % plan.melodyMidis.length;
@@ -182,6 +187,9 @@
     var audio = ctx();
     if (!transport.playing || !audio) return;
     var horizon = audio.currentTime + 0.14;
+    if (transport.scoreAt == null) transport.scoreAt = transport.loopStart || audio.currentTime;
+    scheduleScoreNotes(transport.plan, transport.scoreAt, horizon);
+    transport.scoreAt = horizon;
     while (transport.next < horizon) {
       scheduleStep(transport.step, transport.next, transport.plan);
       transport.next += stepAdvance(transport.plan, transport.step);
@@ -213,10 +221,15 @@
       subdiv: r ? r.subdiv : 2,
       swing: !!(r && r.swing),
       drums: opts.drums !== false,
-      onBeat: opts.onBeat || null
+      onBeat: opts.onBeat || null,
+      playScore: !!opts.playScore,
+      scoreEvents: opts.scoreEvents || null,
+      scoreLoopBeats: opts.scoreLoopBeats || 0
     };
     transport.step = 0;
     transport.next = ctx().currentTime + 0.06;
+    transport.loopStart = transport.next;
+    transport.scoreAt = transport.next;
     transport.playing = true;
     C.loadInst(C.state.inst).then(function () {
       if (!transport.playing) return;
@@ -788,7 +801,7 @@
     if (C.playMidiImmediate) C.playMidiImmediate(midi, { hold: !!opts.hold });
     else if (C.playMidi) C.playMidi(midi);
     if (C.flash) C.flash(pitch.pc);
-    if (opts.record !== false) appendJianpu(pitch.label, pitch.oct);
+    if (opts.record !== false) appendJianpu(pitch.label, pitch.oct, pitch.pc);
     return { pitch: pitch, midi: midi };
   }
   function releaseFreeJamKey(letter) {
@@ -798,23 +811,349 @@
     if (!pitch) return;
     C.releaseMidi(jamNoteMidi(pitch.pc, pitch.oct));
   }
-  function appendJianpu(label, oct) {
+  function currentJpDur() { return state.freejam.jpDur || "quarter"; }
+  function currentJpDotted() { return !!state.freejam.jpDotted; }
+  function appendJianpu(label, oct, pc) {
     var f = state.freejam;
-    f.jianpu = f.jianpu.concat([P.jianpuToken(label, oct)]);
-    if (f.jianpu.length > 64) f.jianpu = f.jianpu.slice(-64);
+    f.jianpu = P.addJianpuNote(f.jianpu, label, oct, currentJpDur(), currentJpDotted(), pc);
+    if (f.jianpu.length > 256) f.jianpu = f.jianpu.slice(-256);
     renderJianpu();
   }
-  function renderJianpu() {
-    var box = document.getElementById("fjJianpu");
-    if (!box) return;
-    box.innerHTML = "";
-    state.freejam.jianpu.forEach(function (tok) {
-      var s = document.createElement("span");
-      s.className = "jp" + (tok.oct > 0 ? " hi" : tok.oct < 0 ? " lo" : "");
-      s.textContent = tok.text;
-      box.appendChild(s);
+  function appendJianpuRest() {
+    state.freejam.jianpu = P.addJianpuRest(state.freejam.jianpu, currentJpDur(), currentJpDotted());
+    renderJianpu();
+  }
+  function appendJianpuTie() {
+    state.freejam.jianpu = P.addJianpuTie(state.freejam.jianpu, currentJpDur(), currentJpDotted());
+    renderJianpu();
+  }
+  function backspaceJianpu() {
+    state.freejam.jianpu = P.backspaceJianpu(state.freejam.jianpu);
+    renderJianpu();
+  }
+  function clearJianpu() {
+    state.freejam.jianpu = P.clearJianpuTokens();
+    renderJianpu();
+  }
+  function currentScoreLayout() {
+    var f = state.freejam;
+    return P.jianpuLayout(f.jianpu, {
+      meter: P.jianpuMeterBeats(f.rhythm),
+      rhythmId: f.rhythm,
+      tonic: f.tonic,
+      quality: f.quality,
+      bpm: f.bpm,
+      title: f.jpTitle || "",
+      showChords: !!f.jpShowChords,
+      slots: f.slots
     });
   }
+  function makeGlyphEl(g) {
+    var s = document.createElement("span");
+    s.className = "fj-glyph" + (g.type === "dash" ? " dash" : "") + (g.type === "rest" ? " rest" : "") + (g.tieStart ? " tie-end" : "");
+    var hi = document.createElement("span");
+    hi.className = "oct" + (g.oct > 0 ? " hi" : "");
+    var sym = document.createElement("span");
+    sym.className = "sym";
+    if (g.acc) {
+      var acc = document.createElement("span");
+      acc.className = "acc";
+      acc.textContent = g.acc;
+      sym.appendChild(acc);
+    }
+    var num = document.createElement("span");
+    num.className = "num";
+    num.textContent = g.text;
+    sym.appendChild(num);
+    var lo = document.createElement("span");
+    lo.className = "oct" + (g.oct < 0 ? " lo" : "");
+    s.appendChild(hi);
+    s.appendChild(sym);
+    if (g.dotted) {
+      var d = document.createElement("span");
+      d.className = "durdot";
+      s.appendChild(d);
+    }
+    s.appendChild(lo);
+    return s;
+  }
+  function appendBeamed(parent, items, beam) {
+    var wrap = document.createElement("span");
+    var ul = beam.underlines || 1;
+    wrap.className = "fj-beam ul" + (ul >= 2 ? "2" : "1");
+    var dest = wrap;
+    if (ul >= 2) {
+      dest = document.createElement("span");
+      dest.className = "fj-beam-inner";
+      wrap.appendChild(dest);
+    }
+    beam.indices.forEach(function (i) { dest.appendChild(makeGlyphEl(items[i])); });
+    parent.appendChild(wrap);
+  }
+  function renderJianpu() {
+    var titleEl = document.getElementById("fjScoreTitle");
+    var keyEl = document.getElementById("fjScoreKey");
+    var meterEl = document.getElementById("fjScoreMeter");
+    var tempoEl = document.getElementById("fjScoreTempo");
+    var body = document.getElementById("fjScoreBody");
+    if (!body) return;
+    var layout = currentScoreLayout();
+    if (titleEl) titleEl.textContent = layout.title || "";
+    if (keyEl) keyEl.textContent = layout.keyMark;
+    if (meterEl) meterEl.textContent = layout.meterLabel;
+    if (tempoEl) tempoEl.textContent = "速度=" + layout.bpm;
+    body.innerHTML = "";
+    if (!layout.measures.length) {
+      var empty = document.createElement("p");
+      empty.className = "fj-score-empty";
+      empty.textContent = "選好時值後，用鍵盤或上面的按鍵把旋律記下來。休止按 0，延長按 −。";
+      body.appendChild(empty);
+      return;
+    }
+    layout.measures.forEach(function (m) {
+      var meas = document.createElement("div");
+      meas.className = "fj-measure";
+      var chords = document.createElement("div");
+      chords.className = "fj-chords";
+      (m.chords || []).forEach(function (c) {
+        var ch = document.createElement("span");
+        ch.className = "ch";
+        ch.textContent = c.label;
+        ch.style.left = Math.max(0, Math.min(85, (c.beat / (m.meter || 4)) * 100)) + "%";
+        chords.appendChild(ch);
+      });
+      meas.appendChild(chords);
+      var line = document.createElement("div");
+      line.className = "fj-notes-line";
+      var notes = document.createElement("div");
+      notes.className = "fj-notes";
+      var beamOf = {};
+      (m.beams || []).forEach(function (b) {
+        b.indices.forEach(function (i) { beamOf[i] = b; });
+      });
+      var i = 0;
+      while (i < m.items.length) {
+        var b = beamOf[i];
+        if (b && b.indices[0] === i) {
+          appendBeamed(notes, m.items, b);
+          i = b.indices[b.indices.length - 1] + 1;
+        } else {
+          notes.appendChild(makeGlyphEl(m.items[i]));
+          i += 1;
+        }
+      }
+      var bar = document.createElement("span");
+      bar.className = "fj-bar";
+      bar.textContent = "|";
+      line.appendChild(notes);
+      line.appendChild(bar);
+      meas.appendChild(line);
+      body.appendChild(meas);
+    });
+  }
+  function scheduleScoreNotes(plan, fromTime, toTime) {
+    if (!plan || !plan.playScore || !plan.scoreEvents || !plan.scoreEvents.length) return;
+    var beat = beatDur();
+    var loopBeats = plan.scoreLoopBeats || 0;
+    if (loopBeats <= 0 || beat <= 0) return;
+    var t0 = transport.loopStart;
+    var startRel = fromTime - t0;
+    var endRel = toTime - t0;
+    var loopDur = loopBeats * beat;
+    if (loopDur <= 0) return;
+    var firstCycle = Math.floor((startRel + 1e-9) / loopDur);
+    var lastCycle = Math.floor((endRel - 1e-6) / loopDur);
+    var c, j, ev, when;
+    if (firstCycle < 0) firstCycle = 0;
+    for (c = firstCycle; c <= lastCycle; c++) {
+      for (j = 0; j < plan.scoreEvents.length; j++) {
+        ev = plan.scoreEvents[j];
+        if (ev.midi == null) continue;
+        when = t0 + (c * loopBeats + ev.startBeat) * beat;
+        if (when + 1e-6 >= fromTime && when < toTime) {
+          if (C.playMidiImmediate) C.playMidiImmediate(ev.midi, { melody: true, when: when, chokeSame: true });
+          else if (C.playMidi) C.playMidi(ev.midi, when);
+          if (C.flash && ev.pc != null) C.flash(ev.pc);
+        }
+      }
+    }
+  }
+  function scoreFileName() {
+    var t = (state.freejam.jpTitle || "簡譜").replace(/[\\/:*?"<>|]+/g, "").trim();
+    return (t || "簡譜") + ".jpg";
+  }
+  function drawJianpuCanvas(layout, canvas) {
+    var cols = 4;
+    var W = 1400;
+    var pad = 72;
+    var measureW = (W - pad * 2) / cols;
+    var rowH = 200;
+    var titleH = layout.title ? 80 : 24;
+    var rows = Math.max(1, Math.ceil((layout.measures.length || 1) / cols));
+    var H = pad + titleH + 56 + rows * rowH + pad;
+    canvas.width = W;
+    canvas.height = H;
+    var ctxc = canvas.getContext("2d");
+    ctxc.fillStyle = "#ffffff";
+    ctxc.fillRect(0, 0, W, H);
+    ctxc.fillStyle = "#111111";
+    ctxc.textBaseline = "alphabetic";
+    var y = pad + 10;
+    if (layout.title) {
+      ctxc.font = "800 42px 'Noto Sans TC','PingFang TC','Microsoft JhengHei',sans-serif";
+      ctxc.textAlign = "center";
+      ctxc.fillText(layout.title, W / 2, y + 36);
+      y += titleH;
+    } else {
+      y += 16;
+    }
+    ctxc.textAlign = "left";
+    ctxc.font = "700 28px 'Noto Sans TC','PingFang TC','Microsoft JhengHei',sans-serif";
+    ctxc.fillText(layout.keyMark, pad, y + 28);
+    ctxc.fillText(layout.meterLabel, pad + 140, y + 28);
+    ctxc.fillText("速度=" + layout.bpm, pad + 230, y + 28);
+    y += 64;
+    function drawGlyph(g, gx, gy) {
+      ctxc.save();
+      ctxc.textAlign = "center";
+      if (g.oct > 0) {
+        ctxc.beginPath();
+        ctxc.arc(gx, gy - 44, 4, 0, Math.PI * 2);
+        ctxc.fill();
+      }
+      var num = g.text;
+      var accW = g.acc ? 14 : 0;
+      if (g.acc) {
+        ctxc.font = "700 20px 'Noto Sans TC','PingFang TC','Microsoft JhengHei',sans-serif";
+        ctxc.fillText(g.acc, gx - 16, gy);
+      }
+      ctxc.font = (g.type === "dash" ? "700 32px " : "800 40px ") + "'Noto Sans TC','PingFang TC','Microsoft JhengHei',sans-serif";
+      ctxc.fillText(num, gx, gy);
+      if (g.dotted) {
+        ctxc.beginPath();
+        ctxc.arc(gx + 18, gy - 4, 4, 0, Math.PI * 2);
+        ctxc.fill();
+      }
+      if (g.oct < 0) {
+        ctxc.beginPath();
+        ctxc.arc(gx, gy + 14, 4, 0, Math.PI * 2);
+        ctxc.fill();
+      }
+      if (g.tieStart) {
+        ctxc.beginPath();
+        ctxc.strokeStyle = "#111";
+        ctxc.lineWidth = 2;
+        ctxc.arc(gx - 16, gy - 28, 12, Math.PI * 1.1, Math.PI * 1.9);
+        ctxc.stroke();
+        ctxc.strokeStyle = "#111";
+      }
+      ctxc.restore();
+    }
+    layout.measures.forEach(function (m, mi) {
+      var col = mi % cols;
+      var row = Math.floor(mi / cols);
+      var x0 = pad + col * measureW;
+      var y0 = y + row * rowH + 8;
+      var cx = x0;
+      (m.chords || []).forEach(function (c, ci) {
+        ctxc.font = "700 20px 'Noto Sans TC','PingFang TC','Microsoft JhengHei',sans-serif";
+        ctxc.fillStyle = "#8a4b12";
+        ctxc.textAlign = "left";
+        ctxc.fillText(c.label, x0 + c.beat * ((measureW - 28) / m.meter) + 4, y0 + 18);
+        ctxc.fillStyle = "#111";
+      });
+      var positions = [];
+      m.items.forEach(function (g, gi) {
+        var gw = Math.max(36, (g.beats || 0.5) * 36);
+        var gx = x0 + 16 + g.startBeat * ((measureW - 36) / m.meter);
+        positions.push({ x: gx, y: y0 + 78, w: gw, g: g });
+        drawGlyph(g, gx, y0 + 78);
+      });
+      (m.beams || []).forEach(function (beam) {
+        var first = positions[beam.indices[0]];
+        var last = positions[beam.indices[beam.indices.length - 1]];
+        if (!first || !last) return;
+        var x1 = first.x - 12, x2 = last.x + 12, by = first.y + 16;
+        ctxc.strokeStyle = "#111";
+        ctxc.lineWidth = 3;
+        ctxc.beginPath();
+        ctxc.moveTo(x1, by);
+        ctxc.lineTo(x2, by);
+        ctxc.stroke();
+        if (beam.underlines >= 2) {
+          ctxc.beginPath();
+          ctxc.moveTo(x1, by + 7);
+          ctxc.lineTo(x2, by + 7);
+          ctxc.stroke();
+        }
+      });
+      ctxc.font = "400 36px serif";
+      ctxc.textAlign = "left";
+      ctxc.fillText("|", x0 + measureW - 20, y0 + 78);
+    });
+    return canvas;
+  }
+  function buildScoreCanvas() {
+    var canvas = document.getElementById("fjScoreCanvas") || document.createElement("canvas");
+    return drawJianpuCanvas(currentScoreLayout(), canvas);
+  }
+  function canvasToJpgBlob(canvas) {
+    return new Promise(function (resolve) {
+      if (canvas.toBlob) {
+        canvas.toBlob(function (b) { resolve(b); }, "image/jpeg", 0.92);
+      } else {
+        var data = canvas.toDataURL("image/jpeg", 0.92);
+        var bin = atob(data.split(",")[1]);
+        var arr = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        resolve(new Blob([arr], { type: "image/jpeg" }));
+      }
+    });
+  }
+  function downloadBlob(blob, name) {
+    var a = document.createElement("a");
+    var url = URL.createObjectURL(blob);
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  }
+  function exportJianpuJpg() {
+    var canvas = buildScoreCanvas();
+    return canvasToJpgBlob(canvas).then(function (blob) {
+      downloadBlob(blob, scoreFileName());
+      return blob;
+    });
+  }
+  function shareJianpuJpg() {
+    var canvas = buildScoreCanvas();
+    var name = scoreFileName();
+    return canvasToJpgBlob(canvas).then(function (blob) {
+      var file = new File([blob], name, { type: "image/jpeg" });
+      var payload = { files: [file], title: state.freejam.jpTitle || "簡譜", text: (state.freejam.jpTitle || "簡譜") };
+      if (navigator.share && (!navigator.canShare || navigator.canShare(payload))) {
+        return navigator.share(payload).catch(function () { downloadBlob(blob, name); return blob; });
+      }
+      downloadBlob(blob, name);
+      return blob;
+    });
+  }
+  function printJianpu() {
+    renderJianpu();
+    window.print();
+  }
+  function scoreEventsForPlay() {
+    var f = state.freejam;
+    var inst = C.INSTRUMENTS[C.state.inst] || {};
+    return P.jianpuPlaybackEvents(f.jianpu, {
+      tonicPc: P.pcOf(f.tonic),
+      octave: C.state.octave,
+      instOctShift: inst.octShift || 0
+    });
+  }
+
   function setKbOn(on) {
     state.freejam.kbOn = !!on;
     var inp = document.getElementById("fjKbInput");
@@ -836,6 +1175,21 @@
     if (state.mode !== "freejam") return;
     if (e.repeat) return;
     if (isTypingTarget(e.target)) return;
+    if (e.key === "Backspace") {
+      e.preventDefault();
+      backspaceJianpu();
+      return;
+    }
+    if (e.key === "0") {
+      e.preventDefault();
+      appendJianpuRest();
+      return;
+    }
+    if (e.key === "-" || e.key === "_") {
+      e.preventDefault();
+      appendJianpuTie();
+      return;
+    }
     var k = e.key && e.key.length === 1 ? e.key.toUpperCase() : "";
     if (!P.freeJamKeySpec(k)) return;
     e.preventDefault();
@@ -914,12 +1268,16 @@
     var f = state.freejam;
     if (!f.slots.length) return;
     if (C.unlock) C.unlock();
+    var score = scoreEventsForPlay();
     startProgression(f.slots, {
       bpm: f.bpm,
       drums: true,
       loop: true,
       rhythm: f.rhythm,
       chordBeats: f.slots.map(function (s) { return s.beats; }),
+      playScore: !!(f.jpPlayMelody && score.events.length),
+      scoreEvents: score.events,
+      scoreLoopBeats: Math.max(score.totalBeats, P.freeJamTotalBeats(f.slots) || 0, 1),
       onBeat: function (step, t, idx) {
         if (state.mode !== "freejam") return;
         var changed = state.freejam.chordIndex !== idx;
@@ -1023,10 +1381,20 @@
       (P.FREE_JAM_KEY_ROWS[row] || []).forEach(function (ch, i) {
         var deg = String(i + 1);
         var pitch = P.freeJamPitchForKey(f.tonic, f.scale, ch);
-        var b = document.createElement("div");
+        var b = document.createElement("button");
+        b.type = "button";
         b.className = "fj-kb-key" + (pitch ? "" : " off");
         b.setAttribute("data-key", ch);
+        if (!pitch) b.disabled = true;
         b.innerHTML = "<span class=\"ch\">" + ch + "</span><span class=\"deg\">" + (pitch ? pitch.label : deg) + "</span>";
+        if (pitch) {
+          b.addEventListener("pointerdown", function (ev) {
+            ev.preventDefault();
+            playFreeJamKey(ch, { hold: true, record: true });
+          });
+          b.addEventListener("pointerup", function () { releaseFreeJamKey(ch); });
+          b.addEventListener("pointercancel", function () { releaseFreeJamKey(ch); });
+        }
         el.appendChild(b);
       });
     });
@@ -1043,6 +1411,17 @@
     fillFreeJamScales();
     fillKbGuide();
     renderJianpu();
+    document.querySelectorAll("#fjJpDurs button[data-dur]").forEach(function (b) {
+      b.classList.toggle("on", b.getAttribute("data-dur") === (f.jpDur || "quarter"));
+    });
+    var dotBtn = document.getElementById("fjJpDot");
+    if (dotBtn) dotBtn.classList.toggle("on", !!f.jpDotted);
+    var titleIn = document.getElementById("fjJpTitle");
+    if (titleIn && document.activeElement !== titleIn) titleIn.value = f.jpTitle || "";
+    var chb = document.getElementById("fjJpChords");
+    if (chb) chb.checked = !!f.jpShowChords;
+    var pmb = document.getElementById("fjJpPlayMel");
+    if (pmb) pmb.checked = !!f.jpPlayMelody;
     var play = document.getElementById("fjPlay");
     var stop = document.getElementById("fjStop");
     if (play) {
@@ -1154,11 +1533,50 @@
         }, 300);
       });
     }
+    var durs = document.getElementById("fjJpDurs");
+    if (durs) durs.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-dur]");
+      if (!b) return;
+      state.freejam.jpDur = b.getAttribute("data-dur");
+      renderFreeJam();
+    });
+    var dotBtn = document.getElementById("fjJpDot");
+    if (dotBtn) dotBtn.addEventListener("click", function () {
+      state.freejam.jpDotted = !state.freejam.jpDotted;
+      renderFreeJam();
+    });
+    var rest = document.getElementById("fjJpRest");
+    if (rest) rest.addEventListener("click", function () { appendJianpuRest(); });
+    var tie = document.getElementById("fjJpTie");
+    if (tie) tie.addEventListener("click", function () { appendJianpuTie(); });
+    var back = document.getElementById("fjJpBack");
+    if (back) back.addEventListener("click", function () { backspaceJianpu(); });
     var jpClr = document.getElementById("fjJpClear");
-    if (jpClr) jpClr.addEventListener("click", function () {
-      state.freejam.jianpu = [];
+    if (jpClr) jpClr.addEventListener("click", function () { clearJianpu(); });
+    var titleIn = document.getElementById("fjJpTitle");
+    if (titleIn) titleIn.addEventListener("input", function () {
+      state.freejam.jpTitle = titleIn.value;
+      var el = document.getElementById("fjScoreTitle");
+      if (el) el.textContent = titleIn.value;
+    });
+    var chb = document.getElementById("fjJpChords");
+    if (chb) chb.addEventListener("change", function () {
+      state.freejam.jpShowChords = !!chb.checked;
       renderJianpu();
     });
+    var pmb = document.getElementById("fjJpPlayMel");
+    if (pmb) pmb.addEventListener("change", function () {
+      state.freejam.jpPlayMelody = !!pmb.checked;
+      if (transport.playing && state.mode === "freejam" && state.freejam.slots.length) startFreeJam();
+    });
+    var jpg = document.getElementById("fjJpJpg");
+    if (jpg) jpg.addEventListener("click", function () { exportJianpuJpg(); });
+    var shr = document.getElementById("fjJpShare");
+    if (shr) shr.addEventListener("click", function () { shareJianpuJpg(); });
+    var prn = document.getElementById("fjJpPrint");
+    if (prn) prn.addEventListener("click", function () { printJianpu(); });
+    var tempo = document.getElementById("fjTempoRange");
+    if (tempo) tempo.addEventListener("input", function () { renderJianpu(); });
     window.addEventListener("keydown", onFjKeydown);
     window.addEventListener("keyup", onFjKeyup);
     window.addEventListener("blur", releaseAllKb);
@@ -1253,7 +1671,12 @@
     startFreeJam: startFreeJam,
     playFreeJamKey: playFreeJamKey,
     setKbOn: setKbOn,
-    currentGlowChord: currentGlowChord
+    currentGlowChord: currentGlowChord,
+    appendJianpu: appendJianpu, appendJianpuRest: appendJianpuRest, appendJianpuTie: appendJianpuTie,
+    backspaceJianpu: backspaceJianpu, clearJianpu: clearJianpu,
+    currentScoreLayout: currentScoreLayout, renderJianpu: renderJianpu,
+    exportJianpuJpg: exportJianpuJpg, shareJianpuJpg: shareJianpuJpg,
+    buildScoreCanvas: buildScoreCanvas, scoreEventsForPlay: scoreEventsForPlay
   };
 
   init();

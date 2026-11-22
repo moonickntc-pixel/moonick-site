@@ -683,8 +683,58 @@
     var sp = spellJamScale(tonicName, scaleId);
     return !!(sp && sp.byPc[(pc % 12 + 12) % 12]);
   }
-  function jianpuToken(degreeLabel, oct) {
-    return { text: String(degreeLabel), oct: oct || 0 };
+  var JIANPU_DURS = [
+    { id: "whole", name: "全", beats: 4, units: 32, underlines: 0 },
+    { id: "half", name: "二分", beats: 2, units: 16, underlines: 0 },
+    { id: "quarter", name: "四分", beats: 1, units: 8, underlines: 0 },
+    { id: "eighth", name: "八分", beats: 0.5, units: 4, underlines: 1 },
+    { id: "sixteenth", name: "十六分", beats: 0.25, units: 2, underlines: 2 }
+  ];
+  function jianpuDurById(id) {
+    for (var i = 0; i < JIANPU_DURS.length; i++) if (JIANPU_DURS[i].id === id) return JIANPU_DURS[i];
+    return JIANPU_DURS[2];
+  }
+  function jianpuUnits(dur, dotted, kind) {
+    var u;
+    if (kind === "tie") {
+      u = jianpuDurById(dur || "quarter").units;
+      return dotted ? Math.round(u * 1.5) : u;
+    }
+    u = jianpuDurById(dur || "quarter").units;
+    return dotted ? Math.round(u * 1.5) : u;
+  }
+  function jianpuBeats(dur, dotted, kind) {
+    return jianpuUnits(dur, dotted, kind) / 8;
+  }
+  function parseJianpuLabel(degreeLabel) {
+    var raw = String(degreeLabel == null ? "1" : degreeLabel);
+    var acc = "";
+    if (raw.charAt(0) === "#" || raw.charAt(0) === "b") {
+      acc = raw.charAt(0);
+      raw = raw.slice(1);
+    }
+    return { acc: acc, degree: raw, text: acc + raw };
+  }
+  function jianpuToken(degreeLabel, oct, opts) {
+    opts = opts || {};
+    var kind = opts.kind || "note";
+    var dur = opts.dur || "quarter";
+    var dotted = !!opts.dotted;
+    var parsed = parseJianpuLabel(degreeLabel);
+    if (kind === "rest") { parsed = { acc: "", degree: "0", text: "0" }; oct = 0; }
+    if (kind === "tie") { parsed = { acc: "", degree: "-", text: "-" }; oct = 0; }
+    return {
+      kind: kind,
+      text: parsed.text,
+      acc: parsed.acc,
+      degree: parsed.degree,
+      oct: oct || 0,
+      dur: dur,
+      dotted: dotted,
+      beats: jianpuBeats(dur, dotted, kind),
+      units: jianpuUnits(dur, dotted, kind),
+      pc: opts.pc != null ? opts.pc : null
+    };
   }
   function jianpuToString(tokens) {
     return (tokens || []).map(function (t) {
@@ -694,6 +744,251 @@
       return s;
     }).join(" ");
   }
+  function addJianpuNote(tokens, label, oct, dur, dotted, pc) {
+    return (tokens || []).concat([jianpuToken(label, oct, { kind: "note", dur: dur, dotted: dotted, pc: pc })]);
+  }
+  function addJianpuRest(tokens, dur, dotted) {
+    return (tokens || []).concat([jianpuToken("0", 0, { kind: "rest", dur: dur, dotted: dotted })]);
+  }
+  function addJianpuTie(tokens, dur, dotted) {
+    return (tokens || []).concat([jianpuToken("-", 0, { kind: "tie", dur: dur || "quarter", dotted: !!dotted })]);
+  }
+  function backspaceJianpu(tokens) {
+    return (tokens || []).slice(0, Math.max(0, (tokens || []).length - 1));
+  }
+  function clearJianpuTokens() { return []; }
+  function relativeMajorName(tonicName, quality) {
+    if (quality !== "minor") return tonicName;
+    var ch = diatonicChords(tonicName, "minor")[2];
+    return ch && ch.name ? ch.name : tonicName;
+  }
+  function jianpuKeyMark(tonicName, quality) {
+    return "1=" + relativeMajorName(tonicName, quality);
+  }
+  function jianpuMeterBeats(rhythmId) {
+    return freeJamRhythmById(rhythmId).meter;
+  }
+  function jianpuUnderlines(tok) {
+    if (!tok || tok.kind === "tie") return 0;
+    return jianpuDurById(tok.dur).underlines;
+  }
+  function expandJianpuGlyphs(tok) {
+    var beats = tok.beats;
+    var ul = jianpuUnderlines(tok);
+    var head = {
+      type: tok.kind === "tie" ? "dash" : (tok.kind === "rest" ? "rest" : "head"),
+      text: tok.kind === "tie" ? "-" : (tok.kind === "rest" ? "0" : tok.degree),
+      acc: tok.kind === "note" ? (tok.acc || "") : "",
+      oct: tok.kind === "note" ? (tok.oct || 0) : 0,
+      underlines: ul,
+      dotted: false,
+      tied: false,
+      beats: beats,
+      units: tok.units,
+      src: tok
+    };
+    if (beats < 1) {
+      head.dotted = !!tok.dotted || Math.abs(beats - 0.75) < 1e-6 || Math.abs(beats - 0.375) < 1e-6;
+      return [head];
+    }
+    var intBeats = Math.floor(beats + 1e-9);
+    var frac = beats - intBeats;
+    if (intBeats === 1 && frac >= 0.49) {
+      head.dotted = true;
+      head.beats = beats;
+      head.units = tok.units;
+      return [head];
+    }
+    head.beats = 1;
+    head.units = 8;
+    head.dotted = false;
+    var glyphs = [head];
+    var remain = intBeats - 1;
+    var i;
+    for (i = 0; i < remain; i++) {
+      glyphs.push({
+        type: "dash", text: "-", acc: "", oct: 0, underlines: 0,
+        dotted: false, tied: false, beats: 1, units: 8, src: tok
+      });
+    }
+    if (frac >= 0.49 && glyphs.length > 1) {
+      glyphs[glyphs.length - 1].dotted = true;
+    }
+    return glyphs;
+  }
+
+  function jianpuChordsInMeasure(slots, measureIndex, meter, measureStartBeat) {
+    var out = [], total, cycleStart, t, i, guard, slot, c0, c1, local;
+    if (!slots || !slots.length) return out;
+    total = freeJamTotalBeats(slots);
+    if (total <= 0) return out;
+    var start = measureStartBeat;
+    var end = measureStartBeat + meter;
+    cycleStart = Math.floor((start + 1e-9) / total) * total;
+    t = cycleStart;
+    i = 0;
+    guard = 0;
+    while (t < end - 1e-9 && guard++ < 1000) {
+      slot = slots[i];
+      c0 = t;
+      c1 = t + slot.beats;
+      if (c1 > start + 1e-9 && c0 < end - 1e-9) {
+        local = Math.max(0, c0 - start);
+        if (c0 >= start - 1e-9 || local === 0) {
+          out.push({ beat: local, label: slot.shouLabel, name: slot.name, slot: slot });
+        }
+      }
+      t = c1;
+      i = (i + 1) % slots.length;
+    }
+    return out;
+  }
+
+  function jianpuLayout(tokens, opts) {
+    opts = opts || {};
+    var meter = opts.meter || jianpuMeterBeats(opts.rhythmId);
+    var meterUnits = meter * 8;
+    var list = tokens || [];
+    var measures = [];
+    var curItems = [];
+    var used = 0;
+    var measureStartBeat = 0;
+
+    function finishMeasure(partial) {
+      if (!curItems.length && !partial) {
+        used = 0;
+        return;
+      }
+      var m = {
+        items: curItems,
+        units: used,
+        beats: used / 8,
+        meter: meter,
+        startBeat: measureStartBeat,
+        chords: []
+      };
+      measures.push(m);
+      measureStartBeat += meter;
+      curItems = [];
+      used = 0;
+    }
+
+    function pushItem(item, units) {
+      var room = meterUnits - used;
+      if (units <= room + 0) {
+        item.startUnits = used;
+        item.startBeat = used / 8;
+        item.units = units;
+        item.beats = units / 8;
+        curItems.push(item);
+        used += units;
+        if (used >= meterUnits) finishMeasure(false);
+        return;
+      }
+      if (room > 0) {
+        var first = {};
+        var k;
+        for (k in item) if (Object.prototype.hasOwnProperty.call(item, k)) first[k] = item[k];
+        first.tied = true;
+        first.split = true;
+        pushItem(first, room);
+        var rest = {};
+        for (k in item) if (Object.prototype.hasOwnProperty.call(item, k)) rest[k] = item[k];
+        rest.tieStart = true;
+        rest.split = true;
+        pushItem(rest, units - room);
+        return;
+      }
+      finishMeasure(false);
+      pushItem(item, units);
+    }
+
+    list.forEach(function (tok) {
+      var glyphs = expandJianpuGlyphs(tok);
+      glyphs.forEach(function (g) {
+        var u = g.units || Math.round((g.beats || 0) * 8);
+        if (u <= 0) u = tok.units;
+        pushItem(g, u);
+      });
+    });
+    if (curItems.length) finishMeasure(true);
+
+    measures.forEach(function (m, mi) {
+      var i, g, beat, group = null;
+      for (i = 0; i < m.items.length; i++) {
+        g = m.items[i];
+        beat = Math.floor(g.startBeat + 1e-9);
+        if (g.underlines > 0 && g.type !== "dash") {
+          if (group && group.beat === beat) {
+            group.indices.push(i);
+            if (g.underlines > group.underlines) group.underlines = g.underlines;
+          } else {
+            group = { beat: beat, indices: [i], underlines: g.underlines };
+            if (!m.beams) m.beams = [];
+            m.beams.push(group);
+          }
+        } else {
+          group = null;
+        }
+      }
+      if (opts.showChords) {
+        m.chords = jianpuChordsInMeasure(opts.slots || [], mi, meter, m.startBeat);
+      }
+    });
+
+    return {
+      title: opts.title || "",
+      keyMark: jianpuKeyMark(opts.tonic || "C", opts.quality || "major"),
+      meter: meter,
+      meterLabel: meter + "/4",
+      bpm: opts.bpm || 96,
+      tonic: opts.tonic || "C",
+      quality: opts.quality || "major",
+      measures: measures
+    };
+  }
+  function jianpuLayoutToString(layout) {
+    return (layout.measures || []).map(function (m) {
+      var body = m.items.map(function (g) {
+        var s = (g.acc || "") + (g.text || "");
+        if (g.oct > 0) s += "˙";
+        if (g.oct < 0) s += ".";
+        if (g.dotted) s += ".";
+        if (g.tied) s += "~";
+        return s;
+      }).join(" ");
+      return body + " |";
+    }).join(" ");
+  }
+  function jianpuPlaybackEvents(tokens, ctx) {
+    ctx = ctx || {};
+    var events = [], t = 0, i, tok, midi, instShift;
+    instShift = ctx.instOctShift || 0;
+    for (i = 0; i < (tokens || []).length; i++) {
+      tok = tokens[i];
+      if (tok.kind === "rest") { t += tok.beats; continue; }
+      if (tok.kind === "tie") {
+        if (events.length) events[events.length - 1].beats += tok.beats;
+        t += tok.beats;
+        continue;
+      }
+      midi = null;
+      if (tok.pc != null && ctx.tonicPc != null) {
+        midi = freeJamMidi(tok.pc, ctx.tonicPc, ctx.octave, tok.oct, instShift);
+      }
+      events.push({
+        startBeat: t,
+        beats: tok.beats,
+        midi: midi,
+        pc: tok.pc,
+        oct: tok.oct,
+        label: tok.text
+      });
+      t += tok.beats;
+    }
+    return { events: events, totalBeats: t };
+  }
+
 
 
   var api = {
@@ -728,7 +1023,15 @@
     freeJamStepDurationBeats: freeJamStepDurationBeats, freeJamElapsedBeats: freeJamElapsedBeats,
     freeJamBarStep: freeJamBarStep, freeJamDrumHits: freeJamDrumHits,
     degFamily: degFamily, scaleNotesAscending: scaleNotesAscending, freeJamKeySpec: freeJamKeySpec, freeJamKeysForDegree: freeJamKeysForDegree, freeJamKeysForPc: freeJamKeysForPc, freeJamPitchForKey: freeJamPitchForKey,
-    freeJamMidi: freeJamMidi, isJamScalePc: isJamScalePc, jianpuToken: jianpuToken, jianpuToString: jianpuToString
+    freeJamMidi: freeJamMidi, isJamScalePc: isJamScalePc, JIANPU_DURS: JIANPU_DURS, jianpuDurById: jianpuDurById,
+    jianpuUnits: jianpuUnits, jianpuBeats: jianpuBeats, parseJianpuLabel: parseJianpuLabel,
+    jianpuToken: jianpuToken, jianpuToString: jianpuToString,
+    addJianpuNote: addJianpuNote, addJianpuRest: addJianpuRest, addJianpuTie: addJianpuTie,
+    backspaceJianpu: backspaceJianpu, clearJianpuTokens: clearJianpuTokens,
+    relativeMajorName: relativeMajorName, jianpuKeyMark: jianpuKeyMark, jianpuMeterBeats: jianpuMeterBeats,
+    jianpuUnderlines: jianpuUnderlines, expandJianpuGlyphs: expandJianpuGlyphs,
+    jianpuChordsInMeasure: jianpuChordsInMeasure, jianpuLayout: jianpuLayout,
+    jianpuLayoutToString: jianpuLayoutToString, jianpuPlaybackEvents: jianpuPlaybackEvents
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;

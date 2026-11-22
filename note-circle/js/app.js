@@ -352,9 +352,10 @@
     if (opts.chokeSame !== false) chokeVoices(function (v) { return v.midi === midi; }, t);
     var v = startNote(ctx, instGain[id], bufs, midi, t, opts.level, { hold: !!opts.hold });
     if (!v) return null;
+    v.melody = !!opts.melody;
     voices.push(v);
     var freq = 440 * Math.pow(2, (midi - 69) / 12);
-    window.__noteLog.push({ inst: id, midi: midi, freq: +freq.toFixed(2), sample: v.sample, rate: +v.rate.toFixed(4), t: v.start, dur: v.dur, fadeAt: v.fadeAt, held: !!v.held });
+    window.__noteLog.push({ inst: id, midi: midi, freq: +freq.toFixed(2), sample: v.sample, rate: +v.rate.toFixed(4), t: v.start, dur: v.dur, fadeAt: v.fadeAt, held: !!v.held, melody: !!v.melody });
     return v;
   }
   function releaseMidi(midi, when) {
@@ -407,7 +408,7 @@
     var level = chordLevel(midis.length);
     return loadInst(id).then(function () {
       var t = Math.max(ctx.currentTime, when || 0);
-      if (opts.choke !== false) chokeVoices(function () { return true; }, t);
+      if (opts.choke !== false) chokeVoices(function (v) { return opts.keepMelody ? !v.melody : true; }, t);
       midis.forEach(function (midi, i) {
         var v = startNote(ctx, instGain[id], buffers[id], midi, t + i * strum, level);
         if (!v) return;

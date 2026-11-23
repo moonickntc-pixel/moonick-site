@@ -1,0 +1,2155 @@
+import * as M from "./model.js?v=20261123t";
+import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261123t";
+
+const kit = createKit();
+const transport = createTransport(kit);
+
+const DRAFT_KEY = "drumgrid-draft";
+
+function readDraft() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    return M.fromQuery(raw.startsWith("?") ? raw : `?${raw}`);
+  } catch {
+    return null;
+  }
+}
+
+function loadInitialGroove() {
+  const search = location.search || "";
+  if (M.queryHasGroove(search)) return M.fromQuery(search);
+  return readDraft() || M.fromQuery(search);
+}
+
+function saveDraft(query) {
+  try {
+    localStorage.setItem(DRAFT_KEY, query);
+  } catch {
+    /* private mode or a full disk; the page still works */
+  }
+}
+
+function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+const state = {
+  groove: loadInitialGroove(),
+  past: [],
+  future: [],
+  abcDirty: false,
+  abcOpen: false,
+  permOpen: false,
+  perm: {
+    kind: "none",
+    sections: new Set([0, 1, 2, 3, 4]),
+    simplify: false,
+    accent: false,
+    diddles: false,
+  },
+  advanced: false,
+  speed: { on: false, bpm: 5, minutes: 2, keep: true, base: null, anchor: 0, applied: null },
+  rotate: "1",
+  mixedWarned: {},
+  suppressClick: false,
+};
+
+const $ = (id) => document.getElementById(id);
+const menu = $("menu");
+const popover = $("popover");
+const modal = $("modal");
+
+function toast(text) {
+  const el = $("toast");
+  el.textContent = text;
+  el.hidden = false;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => {
+    el.hidden = true;
+  }, 2400);
+}
+
+function commit(next, { history = true } = {}) {
+  if (history) {
+    state.past.push(M.cloneGroove(state.groove));
+    if (state.past.length > 80) state.past.shift();
+    state.future = [];
+  }
+  state.groove = next;
+  state.abcDirty = false;
+  paint();
+  writeUrl();
+}
+
+function undo() {
+  if (!state.past.length) return;
+  state.future.push(M.cloneGroove(state.groove));
+  state.groove = state.past.pop();
+  state.perm.kind = "none";
+  state.abcDirty = false;
+  paint();
+  writeUrl();
+  retimeSoon();
+}
+
+function redo() {
+  if (!state.future.length) return;
+  state.past.push(M.cloneGroove(state.groove));
+  state.groove = state.future.pop();
+  state.abcDirty = false;
+  paint();
+  writeUrl();
+  retimeSoon();
+}
+
+function writeUrl() {
+  const q = toQuery();
+  history.replaceState(null, "", `${location.pathname}?${q}`);
+  saveDraft(q);
+}
+
+let urlTimer = 0;
+function scheduleUrl() {
+  clearTimeout(urlTimer);
+  urlTimer = setTimeout(writeUrl, 180);
+}
+
+function toQuery() {
+  return M.toQuery(state.groove, { viewMode: document.body.classList.contains("viewing") });
+}
+
+function sourceGroove() {
+  if (state.perm.kind === "none") return state.groove;
+  return M.buildPermutation(state.groove, {
+    kind: state.perm.kind,
+    sections: [...state.perm.sections],
+    simplify: state.perm.simplify,
+    accentGrid: state.perm.accent,
+    diddles: state.perm.diddles,
+  });
+}
+
+function paint() {
+  document.body.classList.toggle("viewing", state.groove.viewMode);
+  paintChrome();
+  paintGrid();
+  paintBanner();
+  scheduleNotation();
+}
+
+function paintChrome() {
+  const g = state.groove;
+  $("timeFrac").innerHTML = `<sup>${g.top}</sup>/<sub>${g.bottom}</sub>`;
+  document.querySelectorAll("#divisionBtns .rail-btn").forEach((btn) => {
+    btn.classList.toggle("on", Number(btn.dataset.div) === g.division);
+  });
+  document.querySelectorAll(".metro button[data-metro]").forEach((btn) => {
+    btn.classList.toggle("on", Number(btn.dataset.metro) === g.metronome);
+  });
+  $("advancedBtn").classList.toggle("on", state.advanced);
+  $("viewBtn").innerHTML = g.viewMode ? "回到<br>編輯" : "只看<br>樂譜";
+  $("undoBtn").disabled = state.past.length === 0;
+  $("redoBtn").disabled = state.future.length === 0;
+  if (document.activeElement !== $("tempo") && document.activeElement !== $("tempoNum")) {
+    $("tempo").value = g.tempo;
+    $("tempoNum").value = g.tempo;
+  }
+  if (document.activeElement !== $("swing")) $("swing").value = g.swing;
+  $("swingOut").textContent = `${g.swing}%`;
+  if (document.activeElement !== $("title")) $("title").value = g.title;
+  if (document.activeElement !== $("author")) $("author").value = g.author;
+  if (document.activeElement !== $("comments")) $("comments").value = g.comments;
+  $("legendBtn").classList.toggle("on", g.showLegend);
+  $("legend").hidden = !g.showLegend;
+  if (g.showLegend) $("legend").innerHTML = legendHtml();
+  const dots = "●".repeat(g.showToms) + "○".repeat(3 - g.showToms);
+  $("tomDots").textContent = dots;
+  const quarters = g.measures * g.top * (4 / g.bottom);
+  const seconds = (quarters * 60) / g.tempo;
+  $("playMeta").textContent = `${g.measures} bar${g.measures > 1 ? "s" : ""} · ${seconds.toFixed(1)}s`;
+  document.querySelectorAll("[data-kit]").forEach((btn) => btn.classList.toggle("on", btn.dataset.kit === kit.current));
+  $("loopBtn").classList.toggle("on", transport.looping);
+  paintPlayButton(transport.playing);
+  document.querySelectorAll("[data-eighths]").forEach((btn) => {
+    btn.classList.toggle("on", M.hasEighths(g, btn.dataset.eighths));
+  });
+}
+
+// Only swap the play/stop icon when it really changes. Rewriting it on every
+// frame (or on the blur that a click causes) replaced the element under the
+// pointer between press and release, so the browser dropped the click.
+let shownPlaying = null;
+function paintPlayButton(playing) {
+  if (shownPlaying === playing) return;
+  shownPlaying = playing;
+  $("playBtn").classList.toggle("playing", playing);
+  $("playIcon").innerHTML = playing
+    ? '<rect x="6" y="5" width="4" height="14" fill="currentColor"/><rect x="14" y="5" width="4" height="14" fill="currentColor"/>'
+    : '<path d="M8 5v14l11-7z" fill="currentColor"/>';
+}
+
+function legendHtml() {
+  const items = [
+    ["×", "Closed hi-hat"],
+    ["×o", "開"],
+    [">×", "Accent"],
+    ["◉", "Ride"],
+    ["◆", "Ride bell"],
+    ["✱", "Crash"],
+    ["⌂", "Cowbell"],
+    ["●", "Snare / kick / tom"],
+    [">", "Snare accent"],
+    ["( )", "幽靈音"],
+    ["○", "Rim-shot"],
+    ["×", "Cross-stick"],
+    ["z", "Buzz"],
+    ["ø", "半開"],
+    ["o", "開"],
+    ["+", "開完後閉合 / 只關沒打到"],
+    ["♫", "Flam"],
+    ["××", "Drag"],
+    ["x", "Hi-hat foot"],
+  ];
+  return items.map(([mark, name]) => `<div><b>${mark}</b> ${name}</div>`).join("");
+}
+
+function paintBanner() {
+  const banner = $("banner");
+  if (state.perm.kind === "none") {
+    banner.hidden = true;
+    return;
+  }
+  const exercise = sourceGroove();
+  banner.hidden = false;
+  banner.textContent =
+    exercise.measures > M.MAX_MEASURES
+      ? `This ${state.perm.kind} permutation is ${exercise.measures} measures, so the chart and playback use the full exercise while the grid keeps your groove. Turn sections off or choose Edit this exercise after it fits in ${M.MAX_MEASURES} bars.`
+      : `Playback and the chart are the ${state.perm.kind} permutation (${exercise.measures} bars from your first measure). The grid is still your groove until you choose Edit this exercise.`;
+}
+
+function paintGrid() {
+  const g = state.groove;
+  const npm = M.notesPerMeasureOf(g);
+  const perBeat = M.storedTicksPerBeat(g);
+  const defaultCells = M.defaultCellsPerBeat(g);
+  const group = M.hasBeatDivs(g) ? perBeat : M.groupSize(g.division, g.top, g.bottom);
+  const showStick = g.showStickings;
+  const rows = [
+    ["hh", "Hi-hat", true],
+    ["tom1", "通鼓 1", g.showToms >= 1],
+    ["tom2", "通鼓 2", g.showToms >= 2],
+    ["snare", "Snare", true],
+    ["tom3", "落地通鼓", g.showToms >= 3],
+    ["kick", "Kick", true],
+  ].filter((row) => row[2]);
+  let densest = defaultCells;
+  if (M.hasBeatDivs(g)) {
+    for (let i = 0; i < g.top * g.measures; i++) densest = Math.max(densest, M.cellsPerBeatAt(g, i));
+  }
+  $("grid").dataset.density = String(densest);
+  $("grid").classList.toggle("has-beat-divs", M.hasBeatDivs(g));
+  const mixNote =
+    M.hasBeatDivs(g) ? ""
+    : defaultCells === 12
+      ? "混合 12：每拍 12 點。藍線是 16 分音符（每 3 點），金線是 8 分三連音（每 4 點）。"
+      : defaultCells === 24
+        ? "混合 24：每拍 24 點。藍線是六連音（每 4 點），金線是八連音（每 3 點）。16 分音符每 6 點，8 分三連音每 8 點。"
+        : "";
+  let html = mixNote ? `<p class="mix-key">${mixNote}</p>` : "";
+  html += '<div class="editor-row"><div class="measures">';
+  for (let m = 0; m < g.measures; m++) {
+    const labels = [`<div class="lyric-spacer">歌詞</div>`, `<div class="beat-spacer"></div>`];
+    if (showStick) labels.push(`<button type="button" class="stick-label" data-label="sticking" data-m="${m}">Stickings</button>`);
+    for (const [inst, name, shown] of rows) {
+      const muted = g.mute[inst][m] ? " muted" : "";
+      const hidden = shown ? "" : " slot-hidden";
+      if (inst === "hh") {
+        const title = "左鍵、右鍵或長按：打開同一個選單，可選音色並填入常見節奏（含 Down-up 重輕重輕）。";
+        labels.push(`<button type="button" class="cymbal-label${hidden}${muted}" data-label="hh" data-m="${m}" data-cymbal-menu="1" title="${title}">Hi-hat<span class="cymbal-hint" aria-hidden="true">⋯</span></button>`);
+      } else {
+        labels.push(`<button type="button" class="${hidden}${muted}" data-label="${inst}" data-m="${m}">${name}</button>`);
+      }
+    }
+    let cols = "";
+    for (let b = 0; b < g.top; b++) {
+      const beatCells = M.cellsPerBeat(g, m, b);
+      const custom = M.hasBeatDivs(g) && g.beatDivs[m * g.top + b] != null;
+      for (let c = 0; c < beatCells; c++) {
+        const i = M.tickIndex(g, m, b, c);
+        const pip = custom ? (c === 0 ? "pip-beat" : "") : pipClass(defaultCells, c);
+        const lyric = escapeAttr((g.lyrics && g.lyrics[i]) || "");
+        let cells = `<input class="lyric" data-i="${i}" value="${lyric}" maxlength="12" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Lyric ${i + 1}" />`;
+        if (c === 0) {
+          const tag = custom ? `<abbr class="sub-tag" title="這一拍是 ${beatCells === 3 ? "3連音" : beatCells === 6 ? "6連音" : beatCells === 8 ? "8連音" : beatCells === 2 ? "8分" : "16分"}">${beatCells === 3 ? "3" : beatCells === 6 ? "6" : beatCells === 8 ? "8" : beatCells === 2 ? "8分" : "16分"}</abbr>` : "";
+          cells += `<button type="button" class="beat-no beat-subdiv${custom ? " custom" : ""}" data-action="beat-subdiv-menu" data-m="${m}" data-b="${b}" title="點這裡可把這一拍改成 3、6 或 8 連音" aria-label="第 ${b + 1} 拍的格子${custom ? "，目前是自訂連音" : ""}">${b + 1}${tag}</button>`;
+        } else {
+          cells += `<div class="beat-no"></div>`;
+        }
+        if (showStick) cells += cellHtml("sticking", i, g.sticking[i], true);
+        for (const [inst, , shown] of rows) {
+          cells += cellHtml(inst, i, g[inst][i], shown);
+        }
+        cols += `<div class="col ${pip}" data-col="${i}" style="flex: ${1} 1 0;">${cells}</div>`;
+      }
+      if (b !== g.top - 1) cols += '<div class="group-gap"></div>';
+    }
+    const lineTop = 48 + 28 + (showStick ? 40 : 0);
+    const cellH = densest >= 24 ? 40 : densest >= 12 ? 48 : 58;
+    const tracks = rows
+      .map((_, index) => `<i class="track" style="top:${lineTop + index * cellH + cellH / 2}px"></i>`)
+      .join("");
+    html += `<section class="measure">
+      <span class="measure-no">${m + 1}</span>
+      ${g.measures > 1 ? `<button type="button" class="close-measure" data-action="close-measure" data-m="${m}" aria-label="Remove measure ${m + 1}">×</button>` : ""}
+      <div class="staff-row">
+        <div class="labels">${labels.join("")}</div>
+        <div class="columns">
+          ${tracks}
+          ${cols}
+        </div>
+      </div>
+    </section>`;
+  }
+  html += `</div>`;
+  if (g.measures < M.MAX_MEASURES) {
+    html += '<button type="button" class="add-measure" data-action="add-measure" aria-label="Add measure">+</button>';
+  }
+  html += `</div><p class="hint">點格子寫音符。點每一拍上方的數字，可以把「這一拍」改成 8 分、16 分、3 連音、6 連音或 8 連音，其他拍維持原來的格子。在 Hi-hat 名字上按左鍵、右鍵或長按，都會打開同一個選單：可選音色並填入 4 分／8 分／16 分（對得到的拍才會填；3／6 連音拍只填得上的位置，填不上就略過）。每一格上方的空格可以打歌詞。混合 12、混合 24 還是整首共用的密格子。</p>`;
+  $("grid").innerHTML = html;
+  requestAnimationFrame(fitWritingArea);
+}
+
+function wrapOptions() {
+  const narrow = window.innerWidth <= 520;
+  return {
+    narrow,
+    plusWidth: narrow ? 36 : 40,
+    labelWidth: narrow ? 64 : 72,
+    gap: narrow ? 8 : 6,
+  };
+}
+
+/** Decide how many measures share a row, and set CSS so they wrap instead of shrinking to unusable dots. */
+function applyGridWrap() {
+  const grid = $("grid");
+  const g = state.groove;
+  if (!grid || !g) return 1;
+  const opts = wrapOptions();
+  const plus = grid.querySelector(".add-measure");
+  const plusW = plus ? Math.ceil(plus.getBoundingClientRect().width) + 8 : opts.plusWidth;
+  const available = grid.clientWidth || Math.max(0, window.innerWidth - (opts.narrow ? 0 : 74));
+  const layout = M.wrapLayout(g, available, { ...opts, plusWidth: plusW });
+  state.mpr = layout.mpr;
+  grid.dataset.mpr = String(layout.mpr);
+  grid.style.setProperty("--mpr", String(layout.mpr));
+  grid.style.setProperty("--grid-plus", `${plusW}px`);
+  grid.style.setProperty("--measure-min", `${layout.measure}px`);
+  grid.style.setProperty("--cell-min", `${layout.cell}px`);
+  grid.style.setProperty("--group-gap", `${layout.gap}px`);
+  return layout.mpr;
+}
+
+function fitWritingArea() {
+  const grid = $("grid");
+  const toolbar = $("toolbar");
+  const col = grid && grid.querySelector(".col");
+  if (!grid || !toolbar || !col || document.body.classList.contains("viewing")) return;
+  const density = Number(grid.dataset.density || 4);
+  const narrow = window.innerWidth <= 520;
+  const base = narrow ? (density >= 24 ? 36 : density >= 12 ? 42 : 46) : 24;
+  grid.style.setProperty("--cell-h", `${base}px`);
+  const mpr = applyGridWrap();
+  // On desktop, #meta sits above the grid, so only the toolbar needs room below.
+  const bottomNeed = narrow ? 8 : toolbar.offsetHeight + 8;
+  const gridTop = grid.getBoundingClientRect().top;
+  const maxH = Math.floor(window.innerHeight - gridTop - bottomNeed);
+  const capGrid = (height) => {
+    if (!narrow && height >= 40 && grid.scrollHeight > height + 1) {
+      grid.style.maxHeight = `${height}px`;
+      grid.style.overflowY = "auto";
+    } else {
+      grid.style.maxHeight = "";
+      grid.style.overflowY = "";
+    }
+  };
+  capGrid(maxH);
+  if (!narrow) {
+    // 電腦版：小節少、下面有空位時，把格子放大到用滿畫面（最大 60px）
+    const rowsPerMeasure = [...col.children].filter((el) => el.classList.contains("cell") && !el.classList.contains("slot-hidden") && !el.classList.contains("sticking")).length;
+    const visualRows = Math.ceil(Math.max(1, state.groove.measures) / Math.max(1, mpr));
+    const totalRows = rowsPerMeasure * Math.max(1, visualRows);
+    const cap = maxH > 140 ? maxH : window.innerHeight - gridTop - bottomNeed;
+    const free = cap - grid.scrollHeight;
+    if (totalRows > 0 && free > 8) {
+      // 圓點不能比一格寬，不然會擠爆、蓋到加小節的「＋」
+      const colW = col.getBoundingClientRect().width;
+      const widthCap = Math.floor((colW * 0.8) / 0.6);
+      const grown = Math.min(60, widthCap, base + Math.floor(free / totalRows));
+      if (grown > base) grid.style.setProperty("--cell-h", `${grown}px`);
+    }
+    capGrid(maxH);
+  }
+  const rowCells = [...col.children].filter((el) => el.classList.contains("cell") && !el.classList.contains("slot-hidden"));
+  if (!rowCells.length) return;
+  grid.querySelectorAll(".columns").forEach((columns) => {
+    const sample = columns.querySelector(".cell:not(.slot-hidden):not(.sticking)");
+    if (!sample) return;
+    const h = sample.getBoundingClientRect().height;
+    columns.querySelectorAll(".track").forEach((track, index) => {
+      track.style.top = `${sample.offsetTop + index * h + h / 2}px`;
+    });
+  });
+}
+
+function escapeAttr(value) {
+  return String(value).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+}
+
+function pipClass(perBeat, pos) {
+  if (perBeat === 12) {
+    const sixteenth = pos % 3 === 0;
+    const triplet = pos % 4 === 0;
+    if (sixteenth && triplet) return "pip-both";
+    if (sixteenth) return "pip-16";
+    if (triplet) return "pip-3";
+  }
+  if (perBeat === 24) {
+    const sextuplet = pos % 4 === 0;
+    const octuplet = pos % 3 === 0;
+    if (sextuplet && octuplet) return "pip-both";
+    if (sextuplet) return "pip-6";
+    if (octuplet) return "pip-8";
+  }
+  return "";
+}
+
+function cellHtml(inst, index, value, shown) {
+  const on = value ? `on ${value}` : "off";
+  const hidden = shown ? "" : " slot-hidden";
+  return `<button type="button" class="cell ${inst} ${on}${hidden}" data-inst="${inst}" data-i="${index}" aria-label="${inst} ${value || "off"}">${markHtml(inst, value, index)}</button>`;
+}
+
+function markHtml(inst, value, index) {
+  if (inst === "sticking") {
+    if (!value) return "·";
+    if (value === "C") return M.countSyllable(state.groove, index);
+    if (value === "RL") return "R/L";
+    return value;
+  }
+  if (inst === "hh") {
+    const glyph = {
+      null: "×",
+      normal: "×",
+      half: "×",
+      open: "×",
+      closed_plus: "×",
+      foot_only: "+",
+      accent: "›",
+      crash: "✱",
+      crash_tie: "✱",
+      crash_roll: "✱",
+      ride: "◉",
+      ride_accent: "◉",
+      ride_bell: "◆",
+      ride_bell_accent: "◆",
+      cow_bell: "⌂",
+      cow_bell_accent: "⌂",
+      stacker: "≡",
+      stacker_accent: "≡",
+      crash_accent: "✱",
+      crash_tie_accent: "✱",
+      crash_roll_accent: "✱",
+      click: "○",
+      click_accent: "●",
+    }[value || null];
+    const mod = { half: "ø", open: "o", closed_plus: "+", crash_tie: "—", crash_tie_accent: "—", crash_roll: "∿", crash_roll_accent: "∿", ride_accent: "›", ride_bell_accent: "›", cow_bell_accent: "›", stacker_accent: "›", crash_accent: "›" }[value] || "";
+    return `<span class="mark">${glyph || "×"}</span>${mod ? `<i class="hat-mod">${mod}</i>` : ""}`;
+  }
+  if (inst === "snare") {
+    const glyph = { xstick: "×", buzz: "z", flam: "♫", drag: "××", accent: "›" }[value] || "";
+    const paren = value === "ghost" ? `<i class="ghost-paren left">(</i><i class="ghost-paren right">)</i>` : "";
+    return `<span class="head"></span><span class="mark">${glyph}</span>${paren}`;
+  }
+  if (inst === "kick") {
+    const splash = value === "splash" || value === "both" || value === "foot_open";
+    const mod = value === "foot_open" ? `<i class="hat-mod">o</i>` : "";
+    return `<span class="head"></span><span class="mark">${splash ? "×" : ""}</span>${mod}`;
+  }
+  return `<span class="head"></span><span class="mark"></span>`;
+}
+
+let noteTimer = 0;
+function scheduleNotation() {
+  clearTimeout(noteTimer);
+  noteTimer = setTimeout(renderNotation, 30);
+}
+
+function renderNotation() {
+  if ($("grid") && state.groove) applyGridWrap();
+  const g = sourceGroove();
+  const text = state.abcDirty ? $("abc").value : M.toAbc(g);
+  if (!state.abcDirty) $("abc").value = text;
+  const host = $("sheet");
+  host.classList.add("wide");
+  const hostWidth = Math.max(280, $("sheetWrap").clientWidth - 16);
+  const roomy = g.division <= 16;
+  const narrow = window.innerWidth <= 520;
+  const compactType = window.innerWidth <= 600;
+  const hasAnnot =
+    (g.lyrics && g.lyrics.some((word) => String(word || "").trim())) ||
+    (g.showStickings && g.sticking && g.sticking.some(Boolean));
+  // abcjs default is 12pt, drawn as 16 units (then ~29px after the desktop fit).
+  // 18pt is 1.5×. 20pt already lifted a four-letter word into a second lane at 1280.
+  // Phones keep the default so the tighter systems do not get more crowded.
+  const annotSize = compactType ? 12 : 18;
+  const staffSep = !compactType && hasAnnot ? 16 : 8;
+  const scale = narrow
+    ? roomy ? 1.18 : g.division >= 48 ? 0.92 : 1.02
+    : 1;
+  // abcjs draws the 5 lines at a fixed size inside `staffwidth`, then we fit
+  // that line to the card. A full-width engraving stays about 40px tall.
+  // Engraving narrower, then fitting, brings the lines and noteheads up to
+  // about 75px — the size a teacher can read from a laptop.
+  const width = narrow ? hostWidth : Math.round(Math.min(hostWidth, hostWidth * 0.56));
+  const sheetText = text
+    .replace(/%%staffsep \d+/, `%%staffsep ${staffSep}`)
+    .replace(/%%sysstaffsep \d+/, `%%sysstaffsep ${staffSep}`)
+    .replace(/\nK:C perc/, `\n%%annotationfont * ${annotSize}\nK:C perc`);
+  try {
+    const tunes = window.ABCJS.renderAbc("sheet", sheetText, {
+      add_classes: true,
+      accentAbove: true,
+      staffwidth: width,
+      paddingleft: 0,
+      paddingright: 0,
+      scale,
+      format: {
+        annotationfont: `* ${annotSize}`,
+      },
+      wrap: {
+        minSpacing: narrow ? (roomy ? 1.5 : 1.1) : g.division >= 24 ? 0.3 : roomy ? 0.8 : 0.5,
+        maxSpacing: narrow ? (roomy ? 6 : 2.8) : g.division >= 24 ? 4 : roomy ? 8 : 6,
+        // Phone: one bar per system. Desktop 16th: pack as many as fit (existing).
+        // Dense 12/24 grids used to force one bar per system, which for 6 bars
+        // of 混合 24 ate the viewport and left the wrapping grid with no room.
+        // Prefer at most about two systems so the grid can sit underneath.
+        preferredMeasuresPerLine: narrow ? 1 : (g.division >= 24 ? Math.max(2, Math.ceil(g.measures / 2)) : g.measures),
+      },
+      selectionColor: "#bdebdd",
+    });
+    const warnings = (tunes || [])
+      .flatMap((t) => t.warnings || [])
+      .map((w) => String(w).replace(/<[^>]+>/g, ""));
+    $("warnings").hidden = warnings.length === 0;
+    $("warnings").textContent = warnings.join("\n");
+  } catch (error) {
+    $("warnings").hidden = false;
+    $("warnings").textContent = `The chart could not be drawn. ${error.message || error}`;
+  }
+  enlargeNoteheads();
+  if (!state.abcDirty) paintRockschoolMarks(sourceGroove());
+  requestAnimationFrame(fitWritingArea);
+}
+
+function enlargeNoteheads() {
+  const svg = document.querySelector("#sheet svg");
+  if (!svg) return;
+  svg.querySelectorAll(".abcjs-notehead").forEach((path) => {
+    const box = path.getBBox();
+    if (!box.width || !box.height) return;
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    const drawn = path.getAttribute("d") || "";
+    const cross = drawn.includes("l ");
+    const scale = cross ? 1.28 : 1.08;
+    if (cross) path.classList.add("is-cross");
+    path.setAttribute("transform", `translate(${cx} ${cy}) scale(${scale}) translate(${-cx} ${-cy})`);
+  });
+  revealStaffTop(svg);
+}
+
+function paintRockschoolMarks(groove) {
+  const svg = document.querySelector("#sheet svg");
+  if (!svg) return;
+  const marks = M.staffMarks(groove);
+  const notes = [...svg.querySelectorAll("g.abcjs-note")].filter(
+    (note) => !note.classList.contains("abcjs-grace") && !note.closest(".abcjs-grace")
+  );
+  if (marks.length !== notes.length) return;
+  notes.forEach((note, index) => paintNoteMarks(note, marks[index]));
+  revealStaffTop(svg);
+}
+
+function paintNoteMarks(note, mark) {
+  const heads = [...note.querySelectorAll(".abcjs-notehead")];
+  heads.forEach((head) => {
+    const name = head.getAttribute("data-name");
+    const spec = name && mark.heads[name];
+    if (!spec) return;
+    const box = headBox(head);
+    if (spec.hide) {
+      head.style.display = "none";
+      if (heads.length === 1) {
+        [...note.children].forEach((el) => {
+          if (!el.classList.contains("rs-mark")) el.style.display = "none";
+        });
+      }
+    }
+    if (spec.ghost) parenthesis(note, box);
+    if (spec.rim) ring(note, box.x, box.y, box.rx * 1.15, box.ry * 1.2);
+    if (spec.buzz) buzzMark(note, box);
+    if (spec.footOpen || spec.open) circleAbove(note, box, false);
+    if (spec.half) circleAbove(note, box, true);
+    if (spec.plus) plusMark(note, box.x - (spec.hide ? 0 : 0.3), spec.hide ? box.y : box.top - 3.6, spec.hide ? 2.7 : 2.35);
+    if (spec.tie) tieMark(note, box);
+    if (spec.roll) rollMark(note, box);
+  });
+  if (mark.floatPlus) {
+    const anchor = heads[0] ? headBox(heads[0]) : null;
+    const y = staffHatY(note);
+    if (anchor && y != null) plusMark(note, anchor.x, y, 2.4);
+  }
+}
+
+function headBox(head) {
+  const box = head.getBBox();
+  const scale = head.classList.contains("is-cross") ? 1.28 : 1.08;
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  return {
+    x,
+    y,
+    rx: (box.width / 2) * scale,
+    ry: (box.height / 2) * scale,
+    top: y - (box.height / 2) * scale,
+  };
+}
+
+function staffHatY(note) {
+  const wrap = note.closest(".abcjs-staff-wrapper");
+  const staff = wrap && wrap.querySelector(".abcjs-staff");
+  if (!staff) return null;
+  const ys = [...staff.querySelectorAll("path")].map((path) => path.getBBox().y).sort((a, b) => a - b);
+  if (ys.length < 2) return null;
+  const space = (ys[ys.length - 1] - ys[0]) / (ys.length - 1);
+  return ys[0] - space * 0.46;
+}
+
+function svgEl(parent, name, attrs) {
+  const el = document.createElementNS("http://www.w3.org/2000/svg", name);
+  el.setAttribute("class", "rs-mark");
+  for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, value);
+  parent.appendChild(el);
+  return el;
+}
+
+function parenthesis(parent, box) {
+  const gap = box.rx + 2.5;
+  const ry = Math.max(box.ry + 2.1, 5.2);
+  const bow = 3.5;
+  svgEl(parent, "path", {
+    d: `M ${box.x - gap} ${box.y - ry} C ${box.x - gap - bow} ${box.y - ry * 0.2} ${box.x - gap - bow} ${box.y + ry * 0.2} ${box.x - gap} ${box.y + ry}`,
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": "1.05",
+    "stroke-linecap": "round",
+  });
+  svgEl(parent, "path", {
+    d: `M ${box.x + gap} ${box.y - ry} C ${box.x + gap + bow} ${box.y - ry * 0.2} ${box.x + gap + bow} ${box.y + ry * 0.2} ${box.x + gap} ${box.y + ry}`,
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": "1.05",
+    "stroke-linecap": "round",
+  });
+}
+
+function ring(parent, cx, cy, rx, ry) {
+  svgEl(parent, "ellipse", {
+    cx,
+    cy,
+    rx,
+    ry,
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": "0.9",
+  });
+}
+
+function circleAbove(parent, box, slash) {
+  const r = 3.05;
+  const cx = box.x - 0.35;
+  const cy = box.top - r - 0.45;
+  ring(parent, cx, cy, r, r);
+  if (!slash) return;
+  svgEl(parent, "line", {
+    x1: cx - r * 0.92,
+    y1: cy + r * 0.92,
+    x2: cx + r * 0.92,
+    y2: cy - r * 0.92,
+    stroke: "currentColor",
+    "stroke-width": "1.15",
+    "stroke-linecap": "round",
+  });
+}
+
+function plusMark(parent, x, y, arm) {
+  svgEl(parent, "line", {
+    x1: x - arm,
+    y1: y,
+    x2: x + arm,
+    y2: y,
+    stroke: "currentColor",
+    "stroke-width": "0.95",
+    "stroke-linecap": "round",
+  });
+  svgEl(parent, "line", {
+    x1: x,
+    y1: y - arm,
+    x2: x,
+    y2: y + arm,
+    stroke: "currentColor",
+    "stroke-width": "0.95",
+    "stroke-linecap": "round",
+  });
+}
+
+function buzzMark(parent, box) {
+  const stem = parent.querySelector(".abcjs-stem");
+  let x = box.x + box.rx + 1;
+  let y = box.y;
+  if (stem) {
+    const b = stem.getBBox();
+    x = b.x + b.width + 0.4;
+    y = b.y + b.height * 0.62;
+  }
+  const text = svgEl(parent, "text", {
+    x,
+    y,
+    fill: "currentColor",
+    "font-size": "8.5",
+    "font-family": "Times New Roman, serif",
+    "font-style": "italic",
+  });
+  text.textContent = "z";
+}
+
+function tieMark(parent, box) {
+  const x = box.x + box.rx + 0.4;
+  const y = box.y;
+  svgEl(parent, "path", {
+    d: `M ${x} ${y} C ${x + 5} ${y - 3.4} ${x + 12} ${y - 3.4} ${x + 16} ${y - 0.4}`,
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": "0.85",
+    "stroke-linecap": "round",
+  });
+}
+
+function rollMark(parent, box) {
+  const x = box.x + box.rx + 1.2;
+  const y = box.y - 0.4;
+  let d = `M ${x} ${y}`;
+  for (let i = 0; i < 3; i++) d += ` q 1.7 -2.3 3.4 0 q 1.7 2.3 3.4 0`;
+  svgEl(parent, "path", {
+    d,
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": "0.9",
+    "stroke-linecap": "round",
+  });
+}
+
+function revealStaffTop(svg) {
+  const sheet = svg.closest("#sheet");
+  if (!sheet) return;
+  // abcjs `scale` is a CSS transform, so the ink draws outside the layout
+  // box and the card below stays empty. Drop the transform and size the
+  // svg from the ink instead.
+  // paintRockschoolMarks calls this again after the transform is gone, so
+  // remember the engraving zoom (phone uses 1.18) on the svg.
+  let zoom = parseFloat(svg.dataset.staffZoom || "");
+  if (!zoom) {
+    zoom = parseFloat((String(svg.style.transform || "").match(/scale\(\s*([\d.]+)/) || [])[1] || "1") || 1;
+    svg.dataset.staffZoom = String(zoom);
+  }
+  svg.style.transform = "none";
+  const layoutW = parseFloat(svg.getAttribute("width")) || sheet.clientWidth || 1;
+  const layoutH = parseFloat(svg.getAttribute("height")) || layoutW;
+  if (!svg.getAttribute("viewBox")) svg.setAttribute("viewBox", `0 0 ${layoutW} ${layoutH}`);
+  const view = svg.viewBox.baseVal;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  svg.querySelectorAll(".abcjs-staff, .abcjs-note, .abcjs-clef, .abcjs-time-signature, .abcjs-tempo, .abcjs-beam, .abcjs-ledger, .abcjs-decoration, .rs-mark, text").forEach((el) => {
+    let box;
+    try { box = el.getBBox(); } catch { return; }
+    if (!box || (!box.width && !box.height)) return;
+    minY = Math.min(minY, box.y);
+    maxY = Math.max(maxY, box.y + box.height);
+  });
+  if (!(minY < maxY) || !view.width) return;
+  const padTop = window.innerWidth <= 600 ? 3 : 4;
+  const padBottom = window.innerWidth <= 600 ? 5 : 6;
+  const nextY = minY - padTop;
+  const nextH = maxY - minY + padTop + padBottom;
+  const nextW = view.width;
+  svg.setAttribute("viewBox", `${view.x} ${nextY} ${nextW} ${nextH}`);
+  svg.setAttribute("preserveAspectRatio", "xMinYMin meet");
+  const narrow = window.innerWidth <= 520;
+  // Phone keeps the engraving zoom and scrolls sideways. Desktop fits the
+  // line to the card so a shorter engraving becomes a readable staff.
+  const displayWidth = narrow ? nextW * zoom : Math.max(1, sheet.clientWidth || nextW);
+  const displayHeight = displayWidth * (nextH / nextW);
+  svg.setAttribute("width", String(displayWidth));
+  svg.setAttribute("height", String(displayHeight));
+  svg.style.width = narrow ? `${displayWidth}px` : "100%";
+  svg.style.height = `${displayHeight}px`;
+  svg.style.aspectRatio = `${nextW} / ${nextH}`;
+  sheet.style.minHeight = `${Math.ceil(displayHeight)}px`;
+}
+
+function buildLoop({ first, elapsed, retime = false, countIn: keepCountIn = false }) {
+  let tempo = state.groove.tempo;
+  if (state.speed.on) {
+    const speed = state.speed;
+    // A tempo set by hand while playing (slider, number box, arrow keys,
+    // undo) or new speed settings start a fresh interval from that tempo,
+    // instead of jumping at once or being snapped back.
+    if (speed.base == null || speed.applied !== state.groove.tempo) {
+      speed.base = state.groove.tempo;
+      speed.anchor = elapsed;
+    }
+    const windowSec = Math.max(1, speed.minutes) * 60;
+    const since = Math.max(0, elapsed - speed.anchor) + 1e-6;
+    const steps = speed.keep ? Math.floor(since / windowSec) : since >= windowSec ? 1 : 0;
+    tempo = Math.min(M.MAX_TEMPO, speed.base + steps * speed.bpm);
+    speed.applied = tempo;
+    if (tempo !== state.groove.tempo) {
+      state.groove.tempo = tempo;
+      $("tempo").value = tempo;
+      $("tempoNum").value = tempo;
+      $("playMeta").textContent = `${state.groove.measures} bar${state.groove.measures > 1 ? "s" : ""} · ${((state.groove.measures * state.groove.top * (4 / state.groove.bottom) * 60) / tempo).toFixed(1)}s`;
+    }
+  }
+  const g = M.cloneGroove(sourceGroove());
+  g.tempo = tempo;
+  let offset = g.offset;
+  if (g.offset === "rotate") {
+    if (!first && !retime) state.rotate = M.nextRotateOffset(g.division, state.rotate);
+    offset = state.rotate;
+  } else state.rotate = "1";
+  const solo = g.metronomeSolo;
+  let hits = M.hitsForGroove(g, { solo });
+  const rate = g.metronome || (solo ? 4 : 0);
+  if (rate) hits = hits.concat(M.metronomeHits(g, { offset, rate }));
+  hits.sort((a, b) => a.time - b.time);
+  const spq = 60 / tempo;
+  const slotTimes = [];
+  for (let i = 0; i < g.hh.length; i++) {
+    slotTimes.push(M.slotTimeQuarters(g, i) * spq);
+  }
+  let duration = g.measures * g.top * (4 / g.bottom) * spq;
+  let countIn = 0;
+  if (retime ? keepCountIn : first && g.countIn) {
+    const intro = M.emptyGroove({ top: g.top, bottom: g.bottom, division: g.division, measures: 1, tempo, swing: 0 });
+    const introHits = M.metronomeHits(intro, { offset, rate: rate || 4 });
+    const introDur = g.top * (4 / g.bottom) * spq;
+    hits = [...introHits, ...hits.map((hit) => ({ ...hit, time: hit.time + introDur }))];
+    slotTimes.forEach((_, i) => {
+      slotTimes[i] += introDur;
+    });
+    countIn = introDur;
+    duration += introDur;
+  }
+  return { hits, duration, countIn, slotTimes };
+}
+
+function setSampleStatus(text) {
+  const el = $("sampleStatus");
+  if (!el) return;
+  el.hidden = !text;
+  el.textContent = text || "";
+}
+
+let playStarting = false;
+async function togglePlay() {
+  applyTempoBox();
+  if (transport.playing) {
+    transport.stop();
+    paintChrome();
+    return;
+  }
+  // A second press while samples load must not start a second transport.
+  if (playStarting) return;
+  playStarting = true;
+  kit.ensure();
+  if (!kit.has(kit.current)) setSampleStatus("載入音色中");
+  try {
+    await kit.load(kit.current);
+    state.speed.base = null;
+    state.speed.applied = null;
+    state.rotate = "1";
+    await transport.toggle(buildLoop);
+    setSampleStatus("");
+  } catch {
+    setSampleStatus("音色載入失敗");
+  } finally {
+    playStarting = false;
+  }
+  paintChrome();
+}
+
+async function chooseKit(id) {
+  if (kit.current === id && kit.has(id)) return;
+  if (!kit.has(id)) setSampleStatus("載入音色中");
+  paintChrome();
+  try {
+    await kit.select(id);
+    setSampleStatus("");
+  } catch {
+    setSampleStatus("音色載入失敗");
+  }
+  paintChrome();
+}
+
+transport.onFrame(({ playing, slot }) => {
+  paintPlayButton(playing);
+  document.querySelectorAll(".col.now").forEach((el) => el.classList.remove("now"));
+  const heard = sourceGroove();
+  const sameGrid = heard.division === state.groove.division && heard.hh.length === state.groove.hh.length;
+  if (slot >= 0 && sameGrid) {
+    const col = document.querySelector(`.col[data-col="${M.displayIndex(heard, slot)}"]`);
+    if (col) {
+      col.classList.add("now");
+      const grid = $("grid");
+      if (grid && grid.scrollHeight > grid.clientHeight + 4) {
+        const target = col.closest(".measure") || col;
+        const tr = target.getBoundingClientRect();
+        const gr = grid.getBoundingClientRect();
+        if (tr.bottom > gr.bottom - 4 || tr.top < gr.top + 4) {
+          target.scrollIntoView({ block: "nearest", inline: "nearest" });
+        }
+      }
+    }
+  }
+});
+
+async function preview(inst, value) {
+  if (!value || inst === "sticking") return;
+  kit.ensure();
+  if (!kit.has(kit.current)) setSampleStatus("載入音色中");
+  try {
+    await kit.load(kit.current);
+    setSampleStatus("");
+  } catch {
+    setSampleStatus("音色載入失敗");
+    return;
+  }
+  const g = M.emptyGroove({ division: 16, measures: 1 });
+  g.showToms = 3;
+  g[inst][0] = value;
+  const when = kit.ensure().currentTime + 0.04;
+  for (const hit of M.hitsForGroove(g)) kit.play(hit.inst, hit.vel, when + hit.time);
+}
+
+function setCell(inst, index, mode) {
+  const g = state.groove;
+  let value = g[inst][index];
+  if (mode === "off") value = null;
+  else if (mode === "on") value = defaultOn(inst);
+  else if (inst === "sticking") value = M.cycleSticking(value);
+  else value = value ? null : defaultOn(inst);
+  const next = M.cloneGroove(g);
+  next[inst][index] = value;
+  if (value && inst === "sticking") next.showStickings = true;
+  if (state.perm.kind !== "none") state.perm.kind = "none";
+  commit(next);
+  preview(inst, value);
+}
+
+function defaultOn(inst) {
+  if (inst === "snare") return "accent";
+  if (inst === "sticking") return "R";
+  if (inst === "hh" || inst === "kick" || inst === "tom1" || inst === "tom2" || inst === "tom3") return "normal";
+  return "normal";
+}
+
+function cymbalMenuHtml(measure) {
+  if (!state.cymbalSound) state.cymbalSound = "normal";
+  const sound = state.cymbalSound;
+  const chips = (items, extra) =>
+    items
+      .map(([id, label]) => {
+        const on = extra === "sound" && id === sound ? " on" : "";
+        if (extra === "sound") {
+          return `<button type="button" class="${on}" data-action="cymbal-sound" data-sound="${id}" data-m="${measure}">${label}</button>`;
+        }
+        return `<button type="button" data-action="cymbal-fill" data-pattern="${id}" data-scope="${extra}" data-m="${measure}">${label}</button>`;
+      })
+      .join("");
+  const comboChips = (scope) =>
+    M.CYMBAL_FILL_COMBOS.map(
+      ([id, label]) => `<button type="button" data-action="cymbal-combo" data-combo="${id}" data-scope="${scope}" data-m="${measure}">${label}</button>`,
+    ).join("");
+  const downupChips = (scope) =>
+    M.CYMBAL_FILL_DYNAMICS.map(
+      ([id, label]) => `<button type="button" data-action="cymbal-downup" data-pattern="${id}" data-scope="${scope}" data-m="${measure}">${label}</button>`,
+    ).join("");
+  const muteBtn = (scope) =>
+    `<button type="button" data-action="cymbal-mute" data-scope="${scope}" data-m="${measure}">靜音</button>`;
+  return `
+    <div class="group-label">音色</div>
+    <div class="chip-row">${chips(M.CYMBAL_FILL_SOUNDS, "sound")}</div>
+    <div class="group-label">這個小節</div>
+    <div class="chip-row">${chips(M.CYMBAL_FILL_PATTERNS, "measure")}${muteBtn("measure")}</div>
+    <div class="chip-row">${downupChips("measure")}</div>
+    <div class="chip-row">${comboChips("measure")}</div>
+    <div class="group-label">全部小節</div>
+    <div class="chip-row">${chips(M.CYMBAL_FILL_PATTERNS, "all")}${muteBtn("all")}</div>
+    <div class="chip-row">${downupChips("all")}</div>
+    <div class="chip-row">${comboChips("all")}</div>
+    <button type="button" data-action="close-float">cancel</button>`;
+}
+
+function openCymbalMenu(button, event) {
+  const x = event.clientX || (button.getBoundingClientRect().right);
+  const y = event.clientY || (button.getBoundingClientRect().bottom);
+  menu.classList.add("cymbal-menu");
+  openMenu(cymbalMenuHtml(button.dataset.m), x, y);
+}
+
+function cymbalSoundName(id) {
+  return (M.CYMBAL_FILL_SOUNDS.find(([value]) => value === id) || [id, id])[1];
+}
+
+function cymbalPatternName(id) {
+  return (M.CYMBAL_FILL_PATTERNS.find(([value]) => value === id) || [id, id])[1];
+}
+
+function applyCymbalFill(el) {
+  const sound = state.cymbalSound || "normal";
+  const pattern = el.dataset.pattern;
+  const scope = el.dataset.scope;
+  const result = M.fillCymbal(state.groove, { sound, pattern, scope, measureIndex: Number(el.dataset.m) });
+  if (result.error) {
+    toast(result.error);
+    return;
+  }
+  commit(result.groove);
+  closeFloaters();
+  const where = scope === "measure" ? "這個小節" : "全部小節";
+  if (pattern === "all_off") toast(`已清除鈸排（${where}）`);
+  else if (pattern === "all_on") toast(`已全開 ${cymbalSoundName(sound)}（${where}）`);
+  else toast(`已填入 ${cymbalPatternName(pattern)} ${cymbalSoundName(sound)}（${where}，其他位置保留）`);
+}
+
+function applyCymbalCombo(el) {
+  const result = M.fillCymbalCombo(state.groove, {
+    combo: el.dataset.combo,
+    scope: el.dataset.scope,
+    measureIndex: Number(el.dataset.m),
+  });
+  if (result.error) {
+    toast(result.error);
+    return;
+  }
+  commit(result.groove);
+  closeFloaters();
+  const where = el.dataset.scope === "measure" ? "這個小節" : "全部小節";
+  const name = (M.CYMBAL_FILL_COMBOS.find(([id]) => id === el.dataset.combo) || [0, "組合"])[1];
+  toast(`已填入 ${name}（${where}，其他位置保留）`);
+}
+
+function applyCymbalDownUp(el) {
+  const sound = state.cymbalSound || "normal";
+  const pattern = el.dataset.pattern;
+  const scope = el.dataset.scope;
+  const result = M.fillCymbalDownUp(state.groove, { sound, pattern, scope, measureIndex: Number(el.dataset.m) });
+  if (result.error) {
+    toast(result.error);
+    return;
+  }
+  commit(result.groove);
+  closeFloaters();
+  const where = scope === "measure" ? "這個小節" : "全部小節";
+  const name = (M.CYMBAL_FILL_DYNAMICS.find(([id]) => id === pattern) || [0, "Down-up 重輕重輕"])[1];
+  toast(`已填入 ${name}（${where}，其他位置保留）`);
+}
+
+function openMenu(html, x, y) {
+  popover.hidden = true;
+  menu.innerHTML = html;
+  menu.hidden = false;
+  const pad = 8;
+  menu.style.left = `${Math.min(x, window.innerWidth - menu.offsetWidth - pad)}px`;
+  menu.style.top = `${Math.min(y, window.innerHeight - menu.offsetHeight - pad)}px`;
+}
+
+function openCellMenu(cell, event) {
+  const inst = cell.dataset.inst;
+  const index = Number(cell.dataset.i);
+  const lists = {
+    hh: M.HH_ARTICULATIONS,
+    snare: M.SNARE_ARTICULATIONS,
+    kick: M.KICK_ARTICULATIONS,
+    tom1: M.TOM_ARTICULATIONS,
+    tom2: M.TOM_ARTICULATIONS,
+    tom3: M.TOM_ARTICULATIONS,
+    sticking: M.STICK_ARTICULATIONS,
+  };
+  const html = (lists[inst] || [])
+    .map(([id, label]) => `<button type="button" data-action="articulate" data-inst="${inst}" data-i="${index}" data-value="${id}">${label}</button>`)
+    .join("");
+  openMenu(html, event.clientX, event.clientY);
+}
+
+function openLabelMenu(button, event) {
+  const inst = button.dataset.label;
+  const measure = button.dataset.m;
+  const menus = {
+    sticking: [
+      ["all_off", "all Off"],
+      ["alternate", "alternate R/L"],
+      ["all_right", "all Rs"],
+      ["all_left", "all Ls"],
+      ["all_count", "Counts"],
+      ...M.stickingFillOptions(state.groove),
+    ],
+    snare: [
+      ["all_off", "all Snares Off"],
+      ["all_on", "all Accented"],
+      ["all_normal", "all Normal"],
+      ["all_ghost", "all Ghosts"],
+      ["mute", "mute snare sound"],
+    ],
+    kick: [
+      ["all_off", "all Kicks Off"],
+      ["all_on", "all Kicks On"],
+      ["foot_nums", "HH foot #'s On"],
+      ["foot_ands", "HH foot &'s On"],
+      ["mute", "mute kick sound"],
+    ],
+    tom1: [
+      ["all_off", "通鼓 1 全關"],
+      ["all_on", "通鼓 1 全開"],
+      ["mute", "靜音"],
+    ],
+    tom2: [
+      ["all_off", "通鼓 2 全關"],
+      ["all_on", "通鼓 2 全開"],
+      ["mute", "靜音"],
+    ],
+    tom3: [
+      ["all_off", "通鼓全關"],
+      ["all_on", "通鼓全開"],
+      ["mute", "靜音"],
+    ],
+  };
+  const items = menus[inst] || [];
+  const html =
+    items.map(([id, label]) => `<button type="button" data-action="batch" data-inst="${inst}" data-m="${measure}" data-value="${id}">${label}</button>`).join("") +
+    `<button type="button" data-action="close-float">cancel</button>`;
+  openMenu(html, event.clientX, event.clientY);
+}
+
+function closeFloaters() {
+  menu.hidden = true;
+  menu.classList.remove("cymbal-menu", "beat-menu");
+  popover.hidden = true;
+}
+
+function openBeatSubdivMenu(button, event) {
+  const m = Number(button.dataset.m);
+  const b = Number(button.dataset.b);
+  const current = M.cellsPerBeat(state.groove, m, b);
+  const isCustom = M.hasBeatDivs(state.groove) && state.groove.beatDivs[m * state.groove.top + b] != null;
+  const items = M.BEAT_SUBDIV_OPTIONS.map(([cells, label]) => {
+    const on = current === cells ? " on" : "";
+    return `<button type="button" class="${on}" data-action="beat-subdiv" data-m="${m}" data-b="${b}" data-cells="${cells}">${label}</button>`;
+  }).join("");
+  const html = `<p class="beat-menu-title">第 ${b + 1} 拍的格子</p>${items}<button type="button" data-action="beat-subdiv" data-m="${m}" data-b="${b}" data-cells="default"${isCustom ? "" : " class=\"on\""}>還原</button><button type="button" data-action="close-float">cancel</button>`;
+  menu.classList.remove("cymbal-menu");
+  menu.classList.add("beat-menu");
+  openMenu(html, event.clientX, event.clientY);
+}
+
+function openModal(html) {
+  $("modalBody").innerHTML = html;
+  modal.hidden = false;
+}
+
+function closeModal() {
+  modal.hidden = true;
+}
+
+function changeDivision(division) {
+  const familyChanged = M.isTripletDivision(division) !== M.isTripletDivision(state.groove.division);
+  const result = M.setDivision(state.groove, division);
+  if (result.error) {
+    toast(result.error);
+    return;
+  }
+  commit(result.groove);
+  if (result.resetBeatDivs) toast("已還原各拍的連音設定，改回整首共用的格子。");
+  if ((division === 48 || division === 96) && !state.mixedWarned[division]) {
+    state.mixedWarned[division] = true;
+    const help =
+      division === 48
+        ? "混合 12：每拍 12 點。16 分音符在每 3 點，8 分三連音在每 4 點。"
+        : "混合 24：每拍 24 點。六連音在每 4 點，八連音在每 3 點，16 分音符每 6 點，8 分三連音每 8 點。";
+    toast(help + (familyChanged ? " 直向和混合格子對不齊，這一小節已重設。" : ""));
+  } else if (familyChanged) {
+    toast("換成另一種節奏家族時，格子對不齊，這一小節已重設。");
+  }
+}
+
+function renderDivisions() {
+  $("divisionBtns").innerHTML = M.DIVISIONS.map((div) => {
+    const label = div.mix
+      ? `混合<br>${div.mix}`
+      : `<span class="frac"><sup>${div.num}</sup>/<sub>${div.den}</sub></span>${div.name === "NOTES" ? "音符" : "三連音"}`;
+    const title = div.mix ? `每拍 ${div.mix} 點` : "";
+    return `<button type="button" class="rail-btn edit-only" data-action="division" data-div="${div.id}" title="${title}">${label}</button>`;
+  }).join("");
+}
+
+function renderPerm() {
+  const panel = $("permPanel");
+  if (!state.permOpen) {
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  const groups = [];
+  for (const section of M.PERM_SECTIONS) {
+    if (!groups.length || groups[groups.length - 1].name !== section.group) groups.push({ name: section.group, ids: [] });
+    groups[groups.length - 1].ids.push(section.id);
+  }
+  panel.innerHTML = `
+    <h2>Permutations</h2>
+    <div class="perm-kind">
+      ${["none", "kick", "snare"].map((kind) => `<button type="button" data-action="perm-kind" data-kind="${kind}" class="${state.perm.kind === kind ? "on" : ""}">${kind === "none" ? "None" : kind === "kick" ? "Kick permutation" : "Snare permutation"}</button>`).join("")}
+    </div>
+    <div class="perm-row">
+      ${groups
+        .map((group) => {
+          const on = group.ids.every((id) => state.perm.sections.has(id));
+          return `<label><input type="checkbox" data-action="perm-group" data-ids="${group.ids.join(",")}" ${on ? "checked" : ""}/> ${group.name}</label>`;
+        })
+        .join("")}
+    </div>
+    <div class="perm-row">
+      <label><input type="checkbox" data-action="perm-flag" data-flag="simplify" ${state.perm.simplify ? "checked" : ""}/> Simplify repeated kicks</label>
+      <label><input type="checkbox" data-action="perm-flag" data-flag="accent" ${state.perm.accent ? "checked" : ""}/> Use accent grid</label>
+      <label><input type="checkbox" data-action="perm-flag" data-flag="diddles" ${state.perm.diddles ? "checked" : ""}/> Buzz those accents</label>
+      <label><input type="checkbox" data-action="perm-count" ${state.groove.countIn ? "checked" : ""}/> Count in 1 measure</label>
+      <button type="button" data-action="perm-apply">Edit this exercise</button>
+    </div>
+    <p class="hint">Built from the first measure. Kick permutations move the bass drum under your hi-hat and snare. Snare permutations move the snare under your hi-hat and kick. Accent grid ghosts every 16th and accents the pattern.</p>`;
+}
+
+function applyExercise() {
+  const exercise = sourceGroove();
+  if (state.perm.kind === "none") return;
+  if (exercise.measures > M.MAX_MEASURES) {
+    toast(`That exercise is ${exercise.measures} bars. The grid holds ${M.MAX_MEASURES}. Turn a section off first.`);
+    return;
+  }
+  exercise.showLegend = state.groove.showLegend;
+  exercise.metronome = state.groove.metronome;
+  exercise.countIn = state.groove.countIn;
+  exercise.offset = state.groove.offset;
+  exercise.metronomeSolo = state.groove.metronomeSolo;
+  exercise.viewMode = state.groove.viewMode;
+  state.perm.kind = "none";
+  commit(exercise);
+  renderPerm();
+  toast("The exercise is on the grid now.");
+}
+
+function openMetroOptions(event) {
+  const g = state.groove;
+  const offsets = M.offsetChoices(g.division);
+  popover.innerHTML = `
+    <button type="button" class="menu-item" data-action="solo">${g.metronomeSolo ? "✓ " : ""}Solo metronome</button>
+    <button type="button" class="menu-item" data-action="speed-open">${state.speed.on ? "✓ " : ""}Auto speed up</button>
+    <button type="button" class="menu-item" data-action="count-toggle">${g.countIn ? "✓ " : ""}Count it in</button>
+    <div class="group-label">Offset click</div>
+    ${offsets
+      .map((offset) => {
+        const label = { 1: 'Start on "1"', e: 'Start on "E"', "&": 'Start on "&"', a: 'Start on "A"', rotate: "Rotate through" }[offset];
+        return `<button type="button" class="menu-item" data-action="offset" data-offset="${offset}">${g.offset === offset ? "✓ " : ""}${label}</button>`;
+      })
+      .join("")}`;
+  menu.hidden = true;
+  popover.hidden = false;
+  popover.style.left = `${Math.min(event.clientX, window.innerWidth - 240)}px`;
+  popover.style.top = `${event.clientY + 8}px`;
+}
+
+function openSpeed() {
+  const s = state.speed;
+  openModal(`
+    <h2>Auto speed up</h2>
+    <p>Increase <b id="bpmOut">${s.bpm}</b> bpm every <b id="minOut">${s.minutes}</b> min, starting from the tempo you press play at.</p>
+    <label>Amount in BPM <input id="bpmRange" type="range" min="1" max="40" value="${s.bpm}"/></label>
+    <label>Interval in minutes <input id="minRange" type="range" min="1" max="20" value="${s.minutes}"/></label>
+    <label class="checkline"><input id="keepGoing" type="checkbox" ${s.keep ? "checked" : ""}/> Keep increasing after the first interval</label>
+    <div class="modal-actions">
+      <button type="button" class="ghost" data-action="speed-off">Turn off</button>
+      <button type="button" class="primary" data-action="speed-done">Done</button>
+    </div>`);
+  $("bpmRange").addEventListener("input", () => {
+    $("bpmOut").textContent = $("bpmRange").value;
+  });
+  $("minRange").addEventListener("input", () => {
+    $("minOut").textContent = $("minRange").value;
+  });
+}
+
+function openGrooves(event) {
+  const html = M.PRESETS.map(
+    (group) =>
+      `<div class="group-label">${group.group}</div>` +
+      group.items.map(([name], index) => `<button type="button" class="groove-item" data-action="preset" data-group="${group.group}" data-index="${index}">${name}</button>`).join("")
+  ).join("");
+  openMenu(html, Math.min(event.clientX, window.innerWidth - 280), event.clientY + 8);
+}
+
+function openHelp(which) {
+  if (which === "about") {
+    openModal(`
+      <h2>About Drumgrid</h2>
+      <p>Drumgrid is an independent drum-groove editor. Create a pattern on the grid, read it as standard drum notation, hear it, print it, and share a link.</p>
+      <p>It is not affiliated with Mike Johnston or Mike's Lessons, and it does not use their name, logo, or recordings.</p>
+      <p>鼓聲來自 DRSKit（CC BY 4.0）：DrumGizmo 團隊與 Jes Eiler（DRSDrums）錄音。Rock、Funk、Jazz 是同一套鼓的不同力道與麥克風平衡，保留鼓腔、小鼓鋼絲和鈸的餘音。</p>
+      <p>Notation is drawn with <a href="https://abcjs.net/" target="_blank" rel="noreferrer">abcjs</a> (MIT). The ABC panel is the same text the chart is rendered from.</p>
+      <div class="modal-actions"><button type="button" class="primary" data-action="close-modal">Done</button></div>`);
+    return;
+  }
+  openModal(`
+    <h2>Help</h2>
+    <ul class="help-list">
+      <li><b>Space</b> starts and stops playback.</li>
+      <li><b>Ctrl-Z</b> undo, <b>Ctrl-Y</b> or <b>Ctrl-Shift-Z</b> redo.</li>
+      <li><b>Left / right arrows</b> change the tempo when you are not typing.</li>
+      <li><b>Click</b> a grid note to turn the usual voice on or off. Snare clicks land as accents, the way a backbeat is written.</li>
+      <li><b>Right-click</b> a note (or Advanced edit, then tap) for open hats, ghosts, cross-stick, buzz, flam, drag, ride, crash, cowbell, and hi-hat foot.</li>
+      <li><b>Ctrl and move</b> paints notes on. <b>Alt and move</b> turns them off.</li>
+      <li>The <b>Hi-hat</b>, <b>Snare</b>, <b>Kick</b>, and <b>Stickings</b> names open a menu for that whole measure: all on, all off, ghosts, mute, hi-hat foot on the numbers or the &amp;s. Left-click still does this.</li>
+      <li><b>Right-click</b> the <b>Hi-hat</b> name (long-press on a phone) for a fill menu: pick a cymbal-row sound (Hi-hat, Ride, Ride Bell, Crash, Cow Bell, Stacker, and the other voices in the cell menu) and a pattern (4ths, 8ths, 16ths, downbeats, upbeats, all on, clear), or a one-tap combo such as Ride on the beat and Bell on the &amp;s, for this bar or every bar. Pattern fills keep notes that are not in the pattern; only Clear wipes the row.</li>
+      <li><b>Beat numbers</b> above the grid (1, 2, 3, 4) open a small menu to set just that beat to 8ths, 16ths, 8th triplets (3連音), sextuplets (6連音), or 32nds (8連音). Other beats keep the global grid. 還原 puts that beat back. Changing the left-hand global grid (1/8, 1/16, triplets, MIX) clears all per-beat settings. Undo restores them.</li>
+      <li><b>MIX 12</b> is 12 dots per beat, so 16ths and 8th triplets can share a bar. <b>MIX 24</b> is 24 dots per beat, so sextuplets (六連音, every 4th dot) and octuplets (八連音, every 3rd dot) can share a bar. Prefer a normal 8th or 16th grid plus per-beat 連音 when only a fill needs them.</li>
+      <li><b>Words</b> sit on each timing point. Click the box and type English or Traditional Chinese. The syllable prints above that note and travels with the share link.</li>
+      <li><b>Stickings</b> can be Off, Right, Left, R/L, or Count. Count prints the syllable (1 e &amp; a). The measure menu also offers paradiddle, double paradiddle, and paradiddle-diddle when those patterns fit the grid.</li>
+      <li><b>Metronome</b> options: solo, count-in, auto speed up, and an offset click that moves the strong beat to the e, &amp;, or a, or rotates each loop.</li>
+      <li><b>Swing</b> delays the upbeats in playback only. 33% is a triplet shuffle. 50% is a dotted-eighth and sixteenth. The printed chart stays straight. Tuplet beats (3連音 / 6連音) are not swung.</li>
+      <li><b>Share</b> copies a link. Bookmark it, or paste the query string from another groove tool that uses TimeSig, Div, H, S, and K.</li>
+      <li>譜會自動留在這台電腦／手機的瀏覽器裡。</li>
+      <li><b>Print</b> sends the chart to the printer. Download saves SVG, PNG, or a MIDI file.</li>
+    </ul>
+    <div class="modal-actions">
+      <button type="button" class="ghost" data-action="about">About</button>
+      <button type="button" class="primary" data-action="close-modal">Done</button>
+    </div>`);
+}
+
+function downloadBlob(filename, blob) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function fileStem() {
+  return (state.groove.title || "drumgrid").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "drumgrid";
+}
+
+async function downloadPng() {
+  const svg = $("sheet").querySelector("svg");
+  if (!svg) return;
+  const clone = svg.cloneNode(true);
+  const box = svg.getBoundingClientRect();
+  clone.setAttribute("width", String(Math.ceil(box.width)));
+  clone.setAttribute("height", String(Math.ceil(box.height)));
+  const xml = new XMLSerializer().serializeToString(clone);
+  const img = new Image();
+  const loaded = new Promise((resolve, reject) => {
+    img.onload = resolve;
+    img.onerror = reject;
+  });
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(xml)}`;
+  await loaded;
+  const scale = 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = img.width * scale;
+  canvas.height = img.height * scale;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.scale(scale, scale);
+  ctx.drawImage(img, 0, 0);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  downloadBlob(`${fileStem()}.png`, blob);
+}
+
+function handleAction(el, event) {
+  const action = el.dataset.action;
+  if (action === "close-float") {
+    closeFloaters();
+    return;
+  }
+  if (action === "kit") chooseKit(el.dataset.kit);
+  else if (action === "division") changeDivision(Number(el.dataset.div));
+  else if (action === "time") {
+    const g = state.groove;
+    const tops = Array.from({ length: 14 }, (_, i) => i + 2)
+      .map((n) => `<option ${n === g.top ? "selected" : ""}>${n}</option>`)
+      .join("");
+    openModal(`<h2>選擇拍號</h2>
+      <div class="sig-row"><select id="sigTop">${tops}</select><b>/</b>
+      <select id="sigBottom">${[4, 8, 16].map((n) => `<option ${n === g.bottom ? "selected" : ""}>${n}</option>`).join("")}</select></div>
+      <div class="modal-actions"><button type="button" class="ghost" data-action="close-modal">Cancel</button><button type="button" class="primary" data-action="time-done">Done</button></div>`);
+  } else if (action === "time-done") {
+    const result = M.setTimeSignature(state.groove, Number($("sigTop").value), Number($("sigBottom").value));
+    closeModal();
+    if (result.error) toast(result.error);
+    else commit(result.groove);
+  } else if (action === "beat-subdiv-menu") {
+    openBeatSubdivMenu(el, event);
+  } else if (action === "beat-subdiv") {
+    const next = M.setBeatSubdiv(state.groove, Number(el.dataset.m), Number(el.dataset.b), el.dataset.cells === "default" ? null : Number(el.dataset.cells));
+    closeFloaters();
+    commit(next);
+  } else if (action === "advanced") {
+    state.advanced = !state.advanced;
+    paintChrome();
+  } else if (action === "view") {
+    state.groove = M.cloneGroove(state.groove);
+    state.groove.viewMode = !state.groove.viewMode;
+    paint();
+    writeUrl();
+  } else if (action === "undo") undo();
+  else if (action === "redo") redo();
+  else if (action === "play") togglePlay();
+  else if (action === "cymbal-sound") {
+    state.cymbalSound = el.dataset.sound;
+    menu.innerHTML = cymbalMenuHtml(el.dataset.m);
+  } else if (action === "cymbal-fill") applyCymbalFill(el);
+  else if (action === "cymbal-combo") applyCymbalCombo(el);
+  else if (action === "cymbal-downup") applyCymbalDownUp(el);
+  else if (action === "cymbal-mute") {
+    const scope = el.dataset.scope;
+    const measure = Number(el.dataset.m);
+    let next = M.cloneGroove(state.groove);
+    if (scope === "all") {
+      for (let m = 0; m < next.measures; m++) next = M.toggleMute(next, "hh", m);
+    } else next = M.toggleMute(state.groove, "hh", measure);
+    commit(next);
+    closeFloaters();
+    toast("已切換 Hi-hat 靜音");
+  }
+  else if (action === "loop") {
+    transport.looping = !transport.looping;
+    paintChrome();
+  } else if (action === "metro-options") openMetroOptions(event);
+  else if (action === "permutations") {
+    state.permOpen = !state.permOpen;
+    renderPerm();
+  } else if (action === "perm-kind") {
+    state.perm.kind = el.dataset.kind;
+    state.permOpen = true;
+    renderPerm();
+    paintBanner();
+    scheduleNotation();
+  } else if (action === "perm-group") {
+    const ids = el.dataset.ids.split(",").map(Number);
+    if (el.checked) ids.forEach((id) => state.perm.sections.add(id));
+    else ids.forEach((id) => state.perm.sections.delete(id));
+    if (state.perm.sections.size === 0) state.perm.sections.add(0);
+    paintBanner();
+    scheduleNotation();
+  } else if (action === "perm-flag") {
+    state.perm[el.dataset.flag] = el.checked;
+    paintBanner();
+    scheduleNotation();
+  } else if (action === "perm-count") {
+    const next = M.cloneGroove(state.groove);
+    next.countIn = el.checked;
+    commit(next, { history: false });
+  } else if (action === "perm-apply") applyExercise();
+  else if (action === "grooves") openGrooves(event);
+  else if (action === "preset") {
+    const group = M.PRESETS.find((item) => item.group === el.dataset.group);
+    const query = group.items[Number(el.dataset.index)][1];
+    const next = M.loadPreset(query);
+    next.metronome = state.groove.metronome;
+    state.perm.kind = "none";
+    closeFloaters();
+    commit(next);
+  } else if (action === "help") openHelp("help");
+  else if (action === "about") openHelp("about");
+  else if (action === "clear") {
+    clearDraft();
+    commit(M.clearNotes(state.groove));
+  }
+  else if (action === "toms") {
+    const next = M.cloneGroove(state.groove);
+    next.showToms = (next.showToms + 1) % 4;
+    commit(next);
+  } else if (action === "stickings-menu") {
+    openMenu(
+      `<button type="button" data-action="stick-toggle"><b>Show or hide stickings</b></button>
+       <button type="button" data-action="stick-reverse"><b>Reverse stickings R/L</b></button>`,
+      event.clientX - 40,
+      event.clientY - 20
+    );
+  } else if (action === "stick-toggle") {
+    const next = M.cloneGroove(state.groove);
+    next.showStickings = !next.showStickings;
+    closeFloaters();
+    commit(next);
+  } else if (action === "stick-reverse") {
+    closeFloaters();
+    commit(M.reverseStickings(state.groove));
+  } else if (action === "download-menu") {
+    openMenu(
+      `<button type="button" data-action="dl-svg">Download SVG image</button>
+       <button type="button" data-action="dl-png">Download PNG image</button>
+       <button type="button" data-action="dl-mid">Download MIDI file</button>`,
+      event.clientX - 40,
+      event.clientY - 20
+    );
+  } else if (action === "dl-svg") {
+    closeFloaters();
+    const svg = $("sheet").querySelector("svg");
+    if (!svg) return;
+    downloadBlob(`${fileStem()}.svg`, new Blob([new XMLSerializer().serializeToString(svg)], { type: "image/svg+xml" }));
+  } else if (action === "dl-png") {
+    closeFloaters();
+    downloadPng().catch(() => toast("Could not build a PNG from this chart."));
+  } else if (action === "dl-mid") {
+    closeFloaters();
+    const g = sourceGroove();
+    const hits = M.hitsForGroove(g).concat(g.metronome ? M.metronomeHits(g, { rate: g.metronome, offset: g.offset === "rotate" ? "1" : g.offset }) : []);
+    downloadBlob(`${fileStem()}.mid`, new Blob([M.encodeMidi(hits, g.tempo)], { type: "audio/midi" }));
+  } else if (action === "print") window.print();
+  else if (action === "share") openShare(false);
+  else if (action === "share-compact") openShare(true);
+  else if (action === "short-share") makeShortLink();
+  else if (action === "copy-share") {
+    const field = $("shareUrl");
+    field.select();
+    navigator.clipboard?.writeText(field.value).then(
+      () => toast("Link copied"),
+      () => document.execCommand("copy")
+    );
+  } else if (action === "legend") {
+    const next = M.cloneGroove(state.groove);
+    next.showLegend = !next.showLegend;
+    commit(next, { history: false });
+  } else if (action === "abc-toggle") {
+    state.abcOpen = !state.abcOpen;
+    $("abcBody").hidden = !state.abcOpen;
+    $("abcToggle").textContent = state.abcOpen ? "隱藏 ABC 記譜" : "顯示 ABC 記譜";
+  } else if (action === "rerender") {
+    state.abcDirty = true;
+    renderNotation();
+  } else if (action === "save-abc") {
+    downloadBlob(`${fileStem()}.abc`, new Blob([$("abc").value], { type: "text/plain" }));
+  } else if (action === "add-measure") commit(M.addMeasure(state.groove));
+  else if (action === "close-measure") commit(M.removeMeasure(state.groove, Number(el.dataset.m)));
+  else if (action === "close-modal") closeModal();
+  else if (action === "solo") {
+    const next = M.cloneGroove(state.groove);
+    next.metronomeSolo = !next.metronomeSolo;
+    if (next.metronomeSolo && !next.metronome) next.metronome = 4;
+    closeFloaters();
+    commit(next, { history: false });
+  } else if (action === "count-toggle") {
+    const next = M.cloneGroove(state.groove);
+    next.countIn = !next.countIn;
+    closeFloaters();
+    commit(next, { history: false });
+  } else if (action === "offset") {
+    const next = M.cloneGroove(state.groove);
+    next.offset = el.dataset.offset;
+    closeFloaters();
+    commit(next, { history: false });
+  } else if (action === "speed-open") {
+    closeFloaters();
+    openSpeed();
+  } else if (action === "speed-done") {
+    state.speed.on = true;
+    state.speed.bpm = Number($("bpmRange").value);
+    state.speed.minutes = Number($("minRange").value);
+    state.speed.keep = $("keepGoing").checked;
+    state.speed.base = null;
+    closeModal();
+    toast(`Speed will climb ${state.speed.bpm} bpm every ${state.speed.minutes} min.`);
+  } else if (action === "speed-off") {
+    state.speed.on = false;
+    state.speed.base = null;
+    closeModal();
+  } else if (action === "articulate") {
+    const inst = el.dataset.inst;
+    const index = Number(el.dataset.i);
+    const value = el.dataset.value === "off" ? null : el.dataset.value;
+    const next = M.cloneGroove(state.groove);
+    next[inst][index] = value;
+    if (value && inst === "sticking") next.showStickings = true;
+    if (state.perm.kind !== "none") state.perm.kind = "none";
+    closeFloaters();
+    commit(next);
+    preview(inst, value);
+  } else if (action === "batch") {
+    const inst = el.dataset.inst;
+    const measure = Number(el.dataset.m);
+    const value = el.dataset.value;
+    closeFloaters();
+    if (value === "mute") commit(M.toggleMute(state.groove, inst === "sticking" ? "snare" : inst, measure));
+    else commit(M.fillMeasure(state.groove, inst, measure, value));
+  }
+}
+
+function openShare(compact) {
+  const query = compact ? `c=${encodeURIComponent(M.toCompact(state.groove))}` : toQuery();
+  const url = `${location.origin}${location.pathname}?${query}`;
+  const embed = `<iframe src="${url}${url.includes("Mode=view") ? "" : "&Mode=view"}" width="100%" height="460" style="border:0" title="Drumgrid groove"></iframe>`;
+  openModal(`
+    <h2>Share this groove</h2>
+    <p>Use this URL to share or save the groove. You can also bookmark this page.</p>
+    <div class="checkline">
+      <label><input type="checkbox" id="compactBox" ${compact ? "checked" : ""}/> Compact link</label>
+      <label><input type="checkbox" id="embedBox"/> Embed code</label>
+    </div>
+    <input id="shareUrl" type="text" readonly value="${compact ? url : url}"/>
+    <div class="modal-actions">
+      <button type="button" data-action="short-share">產生短網址</button>
+      <button type="button" class="primary" data-action="copy-share">Copy</button>
+    </div>`);
+  const field = $("shareUrl");
+  const full = `${location.origin}${location.pathname}?${toQuery()}`;
+  const short = `${location.origin}${location.pathname}?c=${encodeURIComponent(M.toCompact(state.groove))}`;
+  const sync = () => {
+    const useShort = $("compactBox").checked;
+    const base = useShort ? short : full;
+    field.value = $("embedBox").checked ? embed.replace(url, base.includes("Mode=view") ? base : `${base}&Mode=view`) : base;
+  };
+  $("compactBox").addEventListener("change", sync);
+  $("embedBox").addEventListener("change", sync);
+  field.focus();
+  field.select();
+}
+
+function shortenUrl(longUrl) {
+  return new Promise((resolve, reject) => {
+    const cb = `__isgd${Date.now()}${Math.floor(Math.random() * 1e6)}`;
+    const script = document.createElement("script");
+    const done = () => {
+      clearTimeout(timer);
+      delete window[cb];
+      script.remove();
+    };
+    const timer = setTimeout(() => {
+      done();
+      reject(new Error("timeout"));
+    }, 8000);
+    window[cb] = (data) => {
+      done();
+      if (data && data.shorturl) resolve(data.shorturl);
+      else reject(new Error((data && data.errormessage) || "failed"));
+    };
+    script.onerror = () => {
+      done();
+      reject(new Error("network"));
+    };
+    script.src = `https://is.gd/create.php?format=json&callback=${cb}&url=${encodeURIComponent(longUrl)}`;
+    document.head.appendChild(script);
+  });
+}
+
+async function makeShortLink() {
+  const field = $("shareUrl");
+  if (!field) return;
+  const compact = `${location.origin}${location.pathname}?c=${encodeURIComponent(M.toCompact(state.groove))}`;
+  const btn = document.querySelector('[data-action="short-share"]');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "產生中…";
+  }
+  try {
+    const short = await shortenUrl(compact);
+    field.value = short;
+    if ($("compactBox")) $("compactBox").checked = true;
+    if ($("embedBox")) $("embedBox").checked = false;
+    field.focus();
+    field.select();
+    navigator.clipboard?.writeText(short).then(
+      () => toast("短網址已複製"),
+      () => toast("短網址已產生，請按 Copy")
+    );
+  } catch {
+    toast("短網址產生失敗，請改用上面的網址");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "產生短網址";
+    }
+  }
+}
+
+function onMetro(rate) {
+  const next = M.cloneGroove(state.groove);
+  next.metronome = rate;
+  commit(next, { history: false });
+}
+
+let pressTimer = 0;
+let eighthsHeld = false;
+let pressStartX = 0;
+let pressStartY = 0;
+let pressPointerId = null;
+let pressMoved = false;
+let touchCellPress = false;
+const LONG_PRESS_MS = 480;
+const MOVE_CANCEL_PX = 10;
+
+function clearPressTimer() {
+  clearTimeout(pressTimer);
+  pressTimer = 0;
+}
+
+function pressDistance(event) {
+  return Math.hypot(event.clientX - pressStartX, event.clientY - pressStartY);
+}
+
+function endPressWatch(event) {
+  if (pressPointerId != null && event && event.pointerId !== pressPointerId) return;
+  document.removeEventListener("pointermove", onPressMove);
+  document.removeEventListener("pointerup", onPressEnd);
+  document.removeEventListener("pointercancel", onPressEnd);
+  clearPressTimer();
+  pressPointerId = null;
+  if (eighthsHeld) {
+    setTimeout(() => { eighthsHeld = false; }, 400);
+  }
+}
+
+function onPressMove(event) {
+  if (pressPointerId != null && event.pointerId !== pressPointerId) return;
+  if (event.pointerType === "mouse") return;
+  if (pressDistance(event) > MOVE_CANCEL_PX) {
+    pressMoved = true;
+    clearPressTimer();
+  }
+}
+
+function onPressEnd(event) {
+  endPressWatch(event);
+}
+
+function startPressWatch(event) {
+  pressStartX = event.clientX;
+  pressStartY = event.clientY;
+  pressPointerId = event.pointerId;
+  pressMoved = false;
+  document.addEventListener("pointermove", onPressMove);
+  document.addEventListener("pointerup", onPressEnd);
+  document.addEventListener("pointercancel", onPressEnd);
+}
+const SCHOOLS = {
+  rhythm: {
+    name: "節奏感",
+    logo: "images/musicdance-logo.png",
+    home: "https://www.musicdance.com.tw/",
+    homeLabel: "← 回節奏感官網",
+    og: "og-rhythm.png",
+    color: "#2c4a3c",
+    alt: "節奏感鼓譜編寫工具：格子鼓譜與歌詞",
+  },
+  moonick: {
+    name: "慕尼克",
+    logo: "images/moonick-logo.png",
+    home: "https://moonickmusic.com/",
+    homeLabel: "← 回慕尼克官網",
+    og: "og-moonick.png",
+    color: "#111111",
+    alt: "慕尼克鼓譜編寫工具：格子鼓譜與歌詞",
+  },
+};
+
+function hostSchool() {
+  const host = location.hostname.toLowerCase().replace(/\.$/, "");
+  if (host === "musicdance.com.tw" || host.endsWith(".musicdance.com.tw")) return "rhythm";
+  if (host === "moonickmusic.com" || host.endsWith(".moonickmusic.com")) return "moonick";
+  return "";
+}
+
+function initialSchool() {
+  const locked = hostSchool();
+  if (locked) return locked;
+  const query = new URLSearchParams(location.search).get("school");
+  if (query === "rhythm" || query === "moonick") return query;
+  return "rhythm";
+}
+
+function setMeta(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.setAttribute("content", value);
+}
+
+function applySchool(school) {
+  const info = SCHOOLS[school] || SCHOOLS.rhythm;
+  document.documentElement.dataset.school = school in SCHOOLS ? school : "rhythm";
+  $("brandLogo").src = info.logo;
+  $("brandLogo").alt = info.name;
+  $("railLogo").src = info.logo;
+  $("railLogo").alt = "";
+  $("brandName").textContent = info.name;
+  $("brandHome").href = info.home;
+  $("homeBack").href = info.home;
+  $("homeBack").textContent = info.homeLabel;
+  const title = `鼓譜編寫工具｜${info.name}`;
+  document.title = title;
+  const image = new URL(info.og, location.href).href;
+  setMeta("og-image", image);
+  setMeta("twitter-image", image);
+  setMeta("og-title", title);
+  setMeta("twitter-title", title);
+  setMeta("og-url", location.href);
+  setMeta("og-image-alt", info.alt);
+  $("favicon").href = info.logo;
+  $("appleIcon").href = info.logo;
+  document.querySelector('meta[name="theme-color"]').setAttribute("content", info.color);
+}
+
+function boot() {
+  applySchool(initialSchool());
+  renderDivisions();
+  if (state.advanced) $("advancedBtn").classList.add("on");
+  paint();
+  renderPerm();
+  setSampleStatus("載入音色中");
+  kit.load(rememberedKit()).then(() => setSampleStatus("")).catch(() => setSampleStatus("音色載入失敗"));
+  window.addEventListener("resize", fitWritingArea);
+
+  let lyricBase = null;
+  $("grid").addEventListener("focusin", (event) => {
+    if (!event.target.classList || !event.target.classList.contains("lyric")) return;
+    if (!lyricBase) lyricBase = M.cloneGroove(state.groove);
+  });
+  $("grid").addEventListener("input", (event) => {
+    const input = event.target;
+    if (!input.classList || !input.classList.contains("lyric")) return;
+    const index = Number(input.dataset.i);
+    state.groove.lyrics[index] = input.value.slice(0, 12);
+    state.abcDirty = false;
+    scheduleNotation();
+    scheduleUrl();
+  });
+  $("grid").addEventListener("focusout", () => {
+    setTimeout(() => {
+      if (document.activeElement && document.activeElement.classList.contains("lyric")) return;
+      if (!lyricBase) return;
+      const changed = lyricBase.lyrics.some((text, index) => (text || "") !== (state.groove.lyrics[index] || ""));
+      if (changed) {
+        state.past.push(lyricBase);
+        if (state.past.length > 80) state.past.shift();
+        state.future = [];
+        paintChrome();
+      }
+      lyricBase = null;
+      writeUrl();
+    }, 0);
+  });
+
+  document.body.addEventListener("click", (event) => {
+    if (event.target.closest && event.target.closest(".lyric")) return;
+    const actionEl = event.target.closest("[data-action], [data-metro]");
+    if (actionEl?.dataset.metro != null && actionEl.closest(".metro")) {
+      onMetro(Number(actionEl.dataset.metro));
+      return;
+    }
+    if (actionEl?.dataset.action) {
+      handleAction(actionEl, event);
+      return;
+    }
+    const label = event.target.closest("[data-label]");
+    if (label) {
+      if (state.suppressClick) {
+        state.suppressClick = false;
+        return;
+      }
+      if (label.hasAttribute("data-cymbal-menu")) openCymbalMenu(label, event);
+      else openLabelMenu(label, event);
+      return;
+    }
+    const cell = event.target.closest(".cell");
+    if (cell) {
+      if (state.suppressClick) {
+        state.suppressClick = false;
+        touchCellPress = false;
+        return;
+      }
+      // Touch/pen: short press always toggles the default voice on or off.
+      // Mouse keeps the existing desktop behavior, including Advanced edit.
+      if (touchCellPress) {
+        touchCellPress = false;
+        setCell(cell.dataset.inst, Number(cell.dataset.i), "toggle");
+        return;
+      }
+      if (state.advanced) openCellMenu(cell, event);
+      else setCell(cell.dataset.inst, Number(cell.dataset.i), "toggle");
+      return;
+    }
+    if (!event.target.closest("#menu") && !event.target.closest("#popover") && !event.target.closest("#modal")) closeFloaters();
+  });
+
+  $("grid").addEventListener("contextmenu", (event) => {
+    const cymbalLabel = event.target.closest("[data-cymbal-menu]");
+    if (cymbalLabel) {
+      event.preventDefault();
+      clearTimeout(pressTimer);
+      if (eighthsHeld) {
+        eighthsHeld = false;
+        return;
+      }
+      state.suppressClick = true;
+      openCymbalMenu(cymbalLabel, event);
+      return;
+    }
+    const cell = event.target.closest(".cell");
+    if (!cell) return;
+    event.preventDefault();
+    clearPressTimer();
+    state.suppressClick = true;
+    openCellMenu(cell, event);
+  });
+
+  $("grid").addEventListener("pointerdown", (event) => {
+    const cymbalLabel = event.target.closest("[data-cymbal-menu]");
+    if (cymbalLabel && event.pointerType !== "mouse") {
+      state.suppressClick = false;
+      eighthsHeld = false;
+      clearPressTimer();
+      startPressWatch(event);
+      pressTimer = setTimeout(() => {
+        if (pressMoved) return;
+        state.suppressClick = true;
+        eighthsHeld = true;
+        openCymbalMenu(cymbalLabel, event);
+      }, 500);
+      return;
+    }
+    const cell = event.target.closest(".cell");
+    if (!cell || event.pointerType === "mouse") {
+      if (event.pointerType === "mouse") touchCellPress = false;
+      return;
+    }
+    state.suppressClick = false;
+    touchCellPress = true;
+    clearPressTimer();
+    startPressWatch(event);
+    pressTimer = setTimeout(() => {
+      if (pressMoved) return;
+      state.suppressClick = true;
+      openCellMenu(cell, { clientX: pressStartX, clientY: pressStartY });
+    }, LONG_PRESS_MS);
+  });
+  $("grid").addEventListener("contextmenu", (event) => {
+    if (event.target.closest(".cell") || event.target.closest("[data-cymbal-menu]")) {
+      event.preventDefault();
+    }
+  });
+  $("grid").addEventListener("selectstart", (event) => {
+    if (event.target.closest(".cell")) event.preventDefault();
+  });
+  $("grid").addEventListener("pointerover", (event) => {
+    const cell = event.target.closest(".cell");
+    if (!cell) return;
+    if (event.altKey) setCell(cell.dataset.inst, Number(cell.dataset.i), "off");
+    else if (event.ctrlKey || event.metaKey) setCell(cell.dataset.inst, Number(cell.dataset.i), "on");
+  });
+
+  $("tempo").addEventListener("input", () => {
+    setTempo(Number($("tempo").value));
+    $("tempoNum").value = state.groove.tempo;
+  });
+  // The BPM box used to change the tempo only on Enter or leaving the box, so
+  // a number typed and then played with Space (or left in the box) never
+  // reached the music. Now it applies shortly after typing stops, at once on
+  // Enter / leaving the box, and right before play.
+  $("tempoNum").addEventListener("input", () => {
+    clearTimeout(tempoBoxTimer);
+    tempoBoxTimer = setTimeout(() => applyTempoBox({ partial: true }), 350);
+  });
+  $("tempoNum").addEventListener("change", () => applyTempoBox());
+  $("tempoNum").addEventListener("blur", () => applyTempoBox());
+  $("tempoNum").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      applyTempoBox();
+      $("tempoNum").blur();
+    }
+  });
+  $("swing").addEventListener("input", () => {
+    state.groove.swing = Number($("swing").value);
+    state.abcDirty = false;
+    paintChrome();
+    writeUrl();
+    retimeSoon();
+  });
+  for (const id of ["title", "author", "comments"]) {
+    $(id).addEventListener("change", () => {
+      const next = M.cloneGroove(state.groove);
+      next[id] = $(id).value;
+      // Only the sheet shows these. Redrawing the grid here replaced the box
+      // you were tapping next (a lyric, a note), so that tap was lost.
+      state.groove = next;
+      state.abcDirty = false;
+      scheduleNotation();
+      writeUrl();
+    });
+  }
+  $("abc").addEventListener("input", () => {
+    state.abcDirty = true;
+  });
+
+  window.addEventListener("keydown", (event) => {
+    const typing = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+    if (event.key === "Enter" && event.target.classList && event.target.classList.contains("lyric") && !event.isComposing) {
+      event.preventDefault();
+      const inputs = [...document.querySelectorAll(".lyric")];
+      const next = inputs[inputs.indexOf(event.target) + 1];
+      if (next) next.focus();
+      else event.target.blur();
+      return;
+    }
+    if (isSpace(event)) {
+      // Handled in the capture listener below.
+    } else if (!typing && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+      event.preventDefault();
+      if (event.shiftKey) redo();
+      else undo();
+    } else if (!typing && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
+      event.preventDefault();
+      redo();
+    } else if (!typing && event.key === "ArrowLeft") {
+      const next = M.cloneGroove(state.groove);
+      next.tempo = Math.max(M.MIN_TEMPO, next.tempo - 1);
+      state.speed.base = null;
+      commit(next, { history: false });
+      retimeSoon();
+    } else if (!typing && event.key === "ArrowRight") {
+      const next = M.cloneGroove(state.groove);
+      next.tempo = Math.min(M.MAX_TEMPO, next.tempo + 1);
+      state.speed.base = null;
+      commit(next, { history: false });
+      retimeSoon();
+    } else if (event.key === "Escape") {
+      closeFloaters();
+      closeModal();
+    }
+  });
+
+  // Space plays and stops from anywhere except a field you type words in.
+  // Sliders, buttons, checkboxes, selects and the BPM box keep focus after a
+  // click, which used to swallow Space until the page was clicked.
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      if (!isSpace(event) || event.isComposing || spaceTypes(event.target)) return;
+      event.preventDefault();
+      if (!event.repeat) togglePlay();
+    },
+    true,
+  );
+  window.addEventListener(
+    "keyup",
+    (event) => {
+      // Stop a focused button from also firing a click when Space comes up.
+      if (isSpace(event) && !spaceTypes(event.target)) event.preventDefault();
+    },
+    true,
+  );
+  // Sliders and buttons let go of focus after a mouse or touch, so keys go
+  // back to the page.
+  document.addEventListener("pointerup", (event) => {
+    const el = event.target && event.target.closest && event.target.closest('button, input[type="range"], input[type="checkbox"]');
+    if (!el) return;
+    setTimeout(() => {
+      if (document.activeElement === el) el.blur();
+    }, 0);
+  });
+  document.addEventListener("change", (event) => {
+    const el = event.target;
+    if (el && el.matches && el.matches('input[type="range"]') && document.activeElement === el) el.blur();
+  });
+
+  window.addEventListener("resize", scheduleNotation);
+}
+
+let tempoBoxTimer = null;
+let retimeFrame = 0;
+
+// Play the new tempo from the current spot instead of waiting for the loop to
+// come round again (a long groove could take half a minute).
+function retimeSoon() {
+  if (!transport.playing || retimeFrame) return;
+  retimeFrame = requestAnimationFrame(() => {
+    retimeFrame = 0;
+    transport.retime();
+  });
+}
+
+function setTempo(value) {
+  const tempo = Math.round(Math.min(M.MAX_TEMPO, Math.max(M.MIN_TEMPO, value)));
+  if (tempo === state.groove.tempo) return;
+  state.groove.tempo = tempo;
+  state.speed.base = null;
+  state.abcDirty = false;
+  paintChrome();
+  scheduleNotation();
+  writeUrl();
+  retimeSoon();
+}
+
+// Read the BPM box. While typing (partial) only a finished, in-range number is
+// used, so "1" on the way to "120" is ignored; otherwise it is clamped.
+function applyTempoBox({ partial = false } = {}) {
+  clearTimeout(tempoBoxTimer);
+  const box = $("tempoNum");
+  if (!box) return;
+  const raw = String(box.value).trim();
+  const value = Number(raw);
+  if (partial) {
+    if (!raw || !Number.isFinite(value) || value < M.MIN_TEMPO || value > M.MAX_TEMPO) return;
+    setTempo(value);
+    $("tempo").value = state.groove.tempo;
+    return;
+  }
+  setTempo(raw && Number.isFinite(value) ? value : state.groove.tempo);
+  box.value = state.groove.tempo;
+  $("tempo").value = state.groove.tempo;
+}
+
+function isSpace(event) {
+  return event.code === "Space" || event.key === " ";
+}
+
+function spaceTypes(el) {
+  if (!el || el === document.body || el === document.documentElement) return false;
+  if (el.isContentEditable) return true;
+  if (el.tagName === "TEXTAREA") return true;
+  if (el.tagName !== "INPUT") return false;
+  const type = (el.getAttribute("type") || "text").toLowerCase();
+  return ["text", "search", "email", "url", "tel", "password"].includes(type);
+}
+
+boot();

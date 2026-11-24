@@ -52,13 +52,16 @@ footer .form{color:var(--gold);border-color:var(--gold)}
 .mobile-cta{display:none}
 @media(max-width:719px){
   body:not(.no-mobile-cta){padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))}
-  .mobile-cta{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:200;gap:8px;padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));background:#111;border-top:2px solid var(--gold,#B7804C);box-shadow:0 -4px 16px rgba(0,0,0,.25);}
+  body:not(.no-mobile-cta)>footer{box-shadow:0 calc(72px + env(safe-area-inset-bottom,0px)) 0 0 #111}
+  .mobile-cta{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:200;gap:8px;padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));background:#111;border-top:2px solid var(--gold,#B7804C);box-shadow:0 -4px 16px rgba(0,0,0,.25);transition:transform .25s ease,opacity .25s ease;}
+  .mobile-cta.is-hidden{transform:translateY(100%);opacity:0;pointer-events:none;}
   .mobile-cta a{flex:1;display:inline-flex;align-items:center;justify-content:center;min-height:44px;border-radius:999px;font-weight:700;text-decoration:none;font-size:1rem;line-height:1.2;box-sizing:border-box;border:0;}
   .mobile-cta a.mobile-cta-line{background:#06C755;color:#fff!important;}
   .mobile-cta a.mobile-cta-signup{background:#F2C14E;color:#111!important;}
   .top nav a.nav-line,.top nav a.nav-signup{display:none!important}
   body:has(input:focus,textarea:focus,select:focus) .mobile-cta{display:none}
   body:has(input:focus,textarea:focus,select:focus){padding-bottom:0}
+  body:has(input:focus,textarea:focus,select:focus)>footer{box-shadow:none}
 }
 </style>
 </head>
@@ -85,4 +88,26 @@ footer .form{color:var(--gold);border-color:var(--gold)}
   <a class="mobile-cta-line" href="https://line.me/R/ti/p/@595zatgi" target="_blank" rel="noopener">加入官方 LINE</a>
   <a class="mobile-cta-signup" href="/signup/">線上報名</a>
 </nav>
+<script>
+(function(){
+  var bar=document.querySelector(".mobile-cta");
+  if(!bar)return;
+  var box=document.querySelector(".js-hide-mobile-cta");
+  if(!box)return;
+  var mq=window.matchMedia("(max-width:719px)");
+  function hide(on){
+    bar.classList.toggle("is-hidden",!!on);
+    bar.setAttribute("aria-hidden",on?"true":"false");
+    if("inert" in bar)bar.inert=!!on;
+  }
+  var io=new IntersectionObserver(function(es){
+    if(!mq.matches){hide(false);return;}
+    hide(es[0].isIntersecting);
+  },{threshold:0,root:null,rootMargin:"0px"});
+  io.observe(box);
+  function onMq(e){if(!e.matches)hide(false);}
+  if(mq.addEventListener)mq.addEventListener("change",onMq);
+  else if(mq.addListener)mq.addListener(onMq);
+})();
+</script>
 </body></html>

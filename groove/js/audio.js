@@ -82,7 +82,7 @@ export function createKit() {
   }
 
   function sampleUrl(kit, voice) {
-    return new URL(`../samples/${kit}/${voice}.mp3?v=20261127a`, import.meta.url).href;
+    return new URL(`../samples/${kit}/${voice}.mp3?v=20261127b`, import.meta.url).href;
   }
 
   async function fetchBuffer(kit, voice) {

@@ -20,7 +20,7 @@
 <meta name="twitter:title" id="twitter-title" content="十二音圓形音階｜慕尼克">
 <meta name="twitter:description" id="twitter-description" content="點圓上的 12 個音就能聽到音高，可換鋼琴、木吉他、電吉他、Bass、人聲，選調後自然音階會換顏色。">
 <meta name="twitter:image" id="twitter-image" content="https://moonickmusic.com/note-circle/og-moonick.png">
-<link rel="stylesheet" href="css/app.css?v=20261122p">
+<link rel="stylesheet" href="css/app.css?v=20261128a">
 <script>
   (function () {
     var h = location.hostname.toLowerCase().replace(/\.$/, "");
@@ -66,21 +66,16 @@
   </script>
 </header>
 
+<nav id="modeBar" aria-label="模式">
+  <div class="seg mode-tabs" id="modeBtns" role="radiogroup" aria-label="模式">
+    <button type="button" data-mode="browse" class="on">瀏覽</button>
+    <button type="button" data-mode="practice">抓歌練習</button>
+    <button type="button" data-mode="freejam">自由 Jam</button>
+  </div>
+</nav>
 <main id="main">
   <section id="stage" aria-label="十二音圓形音階圖">
     <h1>十二音圓形音階圖</h1>
-    <div id="pracBanner" hidden>
-      <div id="pracHud" class="prac-hud" aria-live="polite">
-        <span id="pracLevelName">第 1 級</span>
-        <span>分數 <strong id="pracScore">0</strong></span>
-        <span>連對 <strong id="pracStreak">0</strong></span>
-      </div>
-      <div id="pracHero" class="prac-hero" role="status">
-        <p class="kicker"></p>
-        <h2 class="q-title"></h2>
-        <p class="q-ask"></p>
-      </div>
-    </div>
     <div id="fjBanner" hidden>
       <div class="prac-hero" role="status">
         <p class="kicker">自由 Jam</p>
@@ -107,16 +102,7 @@
   </section>
 
   <aside id="panel" aria-label="設定">
-    <div class="group">
-      <div class="label">模式</div>
-      <div class="seg" id="modeBtns" role="radiogroup" aria-label="模式">
-        <button type="button" data-mode="browse" class="on">瀏覽</button>
-        <button type="button" data-mode="practice">抓歌練習</button>
-        <button type="button" data-mode="freejam">自由 Jam</button>
-      </div>
-    </div>
-
-    <div class="group">
+    <div class="group" id="instGroup">
       <div class="label">音色</div>
       <div class="seg" id="instBtns" role="radiogroup" aria-label="音色"></div>
       <p class="hint" id="instHint"></p>
@@ -145,7 +131,7 @@
       </div>
     </div>
 
-    <div class="group">
+    <div class="group" id="octGroup">
       <div class="label">八度</div>
       <div class="row oct">
         <button type="button" id="octDown" aria-label="低八度">−</button>
@@ -159,24 +145,37 @@
       <button type="button" id="playScale" class="big">▶ 播放音階</button>
     </div>
 
-    <div id="pracBox" hidden>
-      <div class="group">
-        <div class="label">難度</div>
-        <div class="seg" id="pracLevelBtns" role="radiogroup" aria-label="難度"></div>
-        <p class="hint" id="pracLevelHint"></p>
+    <div id="pracBox" class="prac-card" hidden>
+      <div id="pracBanner" hidden>
+        <div class="prac-top">
+          <ol class="prac-steps" id="pracSteps" aria-label="步驟">
+            <li data-step="listen"><b>1</b><span>聽</span></li>
+            <li data-step="answer"><b>2</b><span>選調</span></li>
+            <li data-step="jam"><b>3</b><span>Jam</span></li>
+          </ol>
+          <div id="pracHud" class="prac-hud" aria-live="polite">
+            <span id="pracLevelName">第 1 級</span>
+            <span class="hud-num">分數 <strong id="pracScore">0</strong></span>
+            <span class="hud-num">連對 <strong id="pracStreak">0</strong></span>
+          </div>
+        </div>
+        <div id="pracHero" class="prac-hero" role="status">
+          <p class="kicker"></p>
+          <h2 class="q-title"></h2>
+          <p class="q-ask"></p>
+        </div>
+      </div>
+      <div class="prac-listen-row">
+        <button type="button" id="pracListen" class="prac-listen">▶ 聽題目</button>
+        <button type="button" id="pracStop" class="prac-stop" hidden>■ 停止</button>
       </div>
       <div class="prac-choices" id="pracChoices"></div>
-      <div class="prac-actions">
-        <button type="button" id="pracListen">▶ 聽和弦進行</button>
-        <button type="button" id="pracStop" hidden>■ 停止</button>
-        <button type="button" id="pracSubmit">送出答案</button>
-        <button type="button" id="pracNext">下一題</button>
-        <button type="button" id="pracJam" hidden>進入 Jam</button>
-        <button type="button" id="pracLevelUp" hidden>升到下一級</button>
-      </div>
+      <div id="pracResult" hidden></div>
       <div id="jamBar" class="jam-bar" hidden>
-        <button type="button" id="jamPlay">▶ 播放</button>
-        <button type="button" id="jamStop">■ 停止音樂</button>
+        <div class="jam-row">
+          <button type="button" id="jamPlay">▶ 播放</button>
+          <button type="button" id="jamStop">■ 停止音樂</button>
+        </div>
         <label class="tempo-lab">速度 <strong id="tempoVal">96</strong>
           <input type="range" id="tempoRange" min="60" max="140" value="96" step="2">
         </label>
@@ -184,7 +183,30 @@
         <div id="jamScales" class="jam-scales" hidden></div>
         <div id="jamChords" class="jam-chords" hidden></div>
       </div>
-      <div id="pracResult" hidden></div>
+      <div class="prac-actions">
+        <button type="button" id="pracSubmit">送出答案</button>
+        <button type="button" id="pracJam" hidden>進入 Jam ▶</button>
+        <button type="button" id="pracLevelUp" hidden>升到下一級</button>
+        <button type="button" id="pracNext">下一題 →</button>
+      </div>
+      <details class="prac-settings" id="pracSettings">
+        <summary><span class="ps-gear" aria-hidden="true">⚙</span> 設定 <span id="pracSetSummary" class="ps-sum"></span></summary>
+        <div class="group">
+          <div class="label">題型</div>
+          <div class="seg" id="pracKindBtns" role="radiogroup" aria-label="題型">
+            <button type="button" data-kinds="mix" class="on">和弦＋旋律</button>
+            <button type="button" data-kinds="chords">只聽和弦</button>
+            <button type="button" data-kinds="melody">只聽旋律</button>
+          </div>
+          <button type="button" class="prac-theory-btn" data-kinds="theory" id="pracTheoryBtn">樂理小測驗<small>看和弦答組成音、看級數答和弦（不用聽）</small></button>
+        </div>
+        <div class="group">
+          <div class="label">難度</div>
+          <div class="seg" id="pracLevelBtns" role="radiogroup" aria-label="難度"></div>
+          <p class="hint" id="pracLevelHint"></p>
+        </div>
+        <div id="pracSoundSlot"></div>
+      </details>
     </div>
 
     <div id="freeJamBox" hidden>
@@ -273,8 +295,8 @@
   <p>音色取樣：FluidR3 GM SoundFont（Frank Wen），依 <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a> 授權使用，轉檔版本來自 <a href="https://github.com/gleitz/midi-js-soundfonts" target="_blank" rel="noopener">gleitz/midi-js-soundfonts</a>。</p>
 </footer>
 
-<script src="js/app.js?v=20261122p"></script>
-<script src="js/practice-theory.js?v=20261122p"></script>
-<script src="js/practice.js?v=20261122p"></script>
+<script src="js/app.js?v=20261128a"></script>
+<script src="js/practice-theory.js?v=20261128a"></script>
+<script src="js/practice.js?v=20261128a"></script>
 </body>
 </html>

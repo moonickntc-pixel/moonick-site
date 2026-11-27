@@ -526,7 +526,7 @@
 
   function randomPracticeQuestion(opts) {
     opts = opts || {};
-    var kinds = opts.kind ? [opts.kind] : ["keyFromChords", "keyFromMelody", "chordTones", "degreeChord"];
+    var kinds = opts.kind ? [opts.kind] : (opts.kinds && opts.kinds.length ? opts.kinds.slice() : ["keyFromChords", "keyFromMelody"]);
     var kind = rngPick(kinds, opts.rng);
     var guard = 0, q = null;
     while (!q && guard < 40) {

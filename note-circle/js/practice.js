@@ -8,6 +8,8 @@
   var state = {
     mode: "browse",
     level: 1,
+    kinds: "mix",
+    heard: false,
     score: 0,
     streak: 0,
     pendingLevelUp: false,
@@ -335,6 +337,29 @@
     box.setAttribute("data-ready", "1");
   }
 
+  var KIND_SETS = {
+    mix: ["keyFromChords", "keyFromMelody"],
+    chords: ["keyFromChords"],
+    melody: ["keyFromMelody"],
+    theory: ["chordTones", "degreeChord"]
+  };
+  // 抓歌練習時把「音色」「八度」收進設定裡，離開時放回原位
+  function moveSoundGroups(on) {
+    var inst = document.getElementById("instGroup");
+    var oct = document.getElementById("octGroup");
+    var slot = document.getElementById("pracSoundSlot");
+    var panel = document.getElementById("panel");
+    if (!inst || !oct || !slot || !panel) return;
+    if (on) {
+      if (inst.parentNode !== slot) { slot.appendChild(inst); slot.appendChild(oct); }
+    } else if (inst.parentNode === slot) {
+      var keyGroup = document.getElementById("keySel").closest(".group");
+      var playGroup = document.getElementById("playScale").closest(".group");
+      panel.insertBefore(inst, keyGroup);
+      panel.insertBefore(oct, playGroup);
+    }
+  }
+
   function newQuestion(forced) {
     state.grade = null;
     state.choice = null;
@@ -347,7 +372,8 @@
     C.state.key = -1;
     C.state.chord = "";
     C.state.shown = null;
-    state.question = forced || P.randomPracticeQuestion({ level: state.level });
+    state.heard = false;
+    state.question = forced || P.randomPracticeQuestion({ level: state.level, kinds: KIND_SETS[state.kinds] || KIND_SETS.mix });
     C.render();
     renderPractice();
   }
@@ -647,6 +673,7 @@
     document.querySelectorAll("#modeBtns button").forEach(function (b) {
       b.classList.toggle("on", b.getAttribute("data-mode") === state.mode);
     });
+    if (!on) moveSoundGroups(false);
     if (fj) { renderFreeJam(); return; }
     document.querySelectorAll("#pracLevelBtns button").forEach(function (b) {
       b.classList.toggle("on", b.getAttribute("data-level") === String(state.level));
@@ -658,22 +685,46 @@
     document.getElementById("pracStreak").textContent = String(state.streak);
 
     var q = state.question;
+    var isListenQ = !!(q && (q.kind === "keyFromChords" || q.kind === "keyFromMelody"));
+    var card = document.getElementById("pracBox");
+    var stage = !on ? "" : state.jam ? "jam" : state.grade ? (state.grade.perfect ? "right" : "wrong") : (isListenQ && !state.heard ? "listen" : "answer");
+    card.setAttribute("data-stage", stage);
+    card.setAttribute("data-qtype", isListenQ ? "listen" : "theory");
+    // 步驟列：聽 → 選調 → Jam（只有聽力題才顯示）
+    var steps = document.getElementById("pracSteps");
+    steps.hidden = !(on && (isListenQ || state.jam));
+    var stepNow = state.jam ? "jam" : (stage === "listen" ? "listen" : (stage === "right" ? "jam" : "answer"));
+    var order = ["listen", "answer", "jam"];
+    steps.querySelectorAll("li").forEach(function (li) {
+      var k = li.getAttribute("data-step");
+      var i = order.indexOf(k), cur = order.indexOf(stepNow);
+      li.classList.toggle("now", k === stepNow);
+      li.classList.toggle("done", i < cur || (k === "answer" && stage === "right"));
+    });
+    // 題型摘要
+    var kindName = { mix: "和弦＋旋律", chords: "只聽和弦", melody: "只聽旋律", theory: "樂理小測驗" }[state.kinds] || "";
+    document.getElementById("pracSetSummary").textContent = kindName + "・" + lv.name.split("　")[0];
+    document.querySelectorAll("#pracSettings [data-kinds]").forEach(function (b) {
+      b.classList.toggle("on", b.getAttribute("data-kinds") === state.kinds);
+    });
+    moveSoundGroups(on);
+
     var hero = document.getElementById("pracHero");
     if (on && q && !state.jam) {
       hero.hidden = false;
       hero.querySelector(".kicker").textContent = q.prompt.kicker || "";
       hero.querySelector(".q-title").textContent = q.prompt.title || "";
-      hero.querySelector(".q-ask").textContent = q.prompt.ask || "";
+      var ask = q.prompt.ask || "";
+      if (isListenQ) ask = state.heard ? "聽出主音了嗎？點下面的答案。" : "先按「聽題目」，聽完再選答案。";
+      hero.querySelector(".q-ask").textContent = ask;
       document.getElementById("pracPrompt").textContent = (q.prompt.kicker || "") + " " + (q.prompt.title || "") + " " + (q.prompt.ask || "");
     } else if (on && state.jam && q) {
       hero.hidden = false;
       hero.querySelector(".kicker").textContent = "Jam 時間";
       hero.querySelector(".q-title").textContent = P.keyLabel(q.jam.tonic, q.jam.quality);
-      if (state.jamKind === "melody") {
-        hero.querySelector(".q-ask").textContent = "鼓點和旋律會一直循環。點下面的順階和弦，跟著一起彈；下面可以換音階，圓上只留下選中的音。";
-      } else {
-        hero.querySelector(".q-ask").textContent = "進行會一直循環。點音就能一起彈。下面可以換音階，圓上只留下選中的音。";
-      }
+      hero.querySelector(".q-ask").textContent = state.jamKind === "melody" ?
+        "旋律和鼓會循環播放，點圓上的音或和弦一起彈。" :
+        "和弦進行會循環播放，點圓上的音一起即興。";
       document.getElementById("pracPrompt").textContent = "Jam：" + P.keyLabel(q.jam.tonic, q.jam.quality);
     } else {
       hero.hidden = true;
@@ -682,17 +733,25 @@
 
     var choiceBox = document.getElementById("pracChoices");
     choiceBox.innerHTML = "";
-    if (on && q && !state.jam && (q.kind === "keyFromChords" || q.kind === "keyFromMelody" || q.kind === "degreeChord")) {
+    var showChoices = on && q && !state.jam && (isListenQ || q.kind === "degreeChord");
+    choiceBox.hidden = !showChoices;
+    choiceBox.classList.toggle("locked", !!(showChoices && isListenQ && !state.heard));
+    if (showChoices) {
       (q.choices || []).forEach(function (c) {
         var b = document.createElement("button");
         b.type = "button";
         b.setAttribute("data-choice", c.name);
-        b.textContent = (q.kind === "degreeChord") ? c.name : P.keyLabel(c.name, c.quality);
-        if (state.choice && ((q.kind === "degreeChord" && state.choice === c.name) || (state.choice && state.choice.name === c.name))) b.classList.add("on");
+        var label = (q.kind === "degreeChord") ? c.name : P.keyLabel(c.name, c.quality);
+        var picked = state.choice && ((q.kind === "degreeChord" && state.choice === c.name) || (state.choice.name === c.name));
+        b.innerHTML = "<span class=\"ch-txt\"></span>";
+        b.firstChild.textContent = label;
+        if (isListenQ && !state.heard) b.disabled = true;
         if (state.grade) {
-          if (c.correct) b.classList.add("is-ok");
-          else if (state.choice && ((q.kind === "degreeChord" && state.choice === c.name) || (state.choice.name === c.name))) b.classList.add("is-bad");
-        }
+          b.disabled = true;
+          if (c.correct) { b.classList.add("is-ok"); b.insertAdjacentHTML("afterbegin", "<i class=\"ch-ic\">✓</i>"); }
+          else if (picked) { b.classList.add("is-bad"); b.insertAdjacentHTML("afterbegin", "<i class=\"ch-ic\">✕</i>"); }
+          else b.classList.add("is-dim");
+        } else if (picked) b.classList.add("on");
         choiceBox.appendChild(b);
       });
     }
@@ -704,12 +763,17 @@
     var jamBtn = document.getElementById("pracJam");
     var upBtn = document.getElementById("pracLevelUp");
     var jamBar = document.getElementById("jamBar");
-    listen.hidden = !(on && q && !state.jam && (q.kind === "keyFromChords" || q.kind === "keyFromMelody"));
-    listen.textContent = q && q.kind === "keyFromMelody" ? "▶ 聽旋律" : "▶ 聽和弦進行";
-    stop.hidden = !(on && transport.playing && !state.jam);
-    submit.hidden = !(on && q && !state.jam && !state.grade);
-    next.hidden = !(on && !state.jam);
-    jamBtn.hidden = !(on && q && q.jam && state.grade && state.grade.perfect && !state.jam && (q.kind === "keyFromChords" || q.kind === "keyFromMelody"));
+    var playingQ = on && transport.playing && !state.jam;
+    listen.hidden = !(on && q && !state.jam && isListenQ);
+    listen.classList.toggle("pulse", !!(on && isListenQ && !state.heard && !playingQ));
+    listen.classList.toggle("is-playing", !!playingQ);
+    listen.textContent = playingQ ? "♪ 播放中…" : (state.heard ? "↻ 再聽一次" : (q && q.kind === "keyFromMelody" ? "▶ 聽旋律" : "▶ 聽和弦"));
+    stop.hidden = !playingQ;
+    submit.hidden = !(on && q && !state.jam && !state.grade && q.kind === "chordTones");
+    next.hidden = !on;
+    next.textContent = state.jam ? "結束 Jam，下一題 →" : (state.grade ? "下一題 →" : "跳過這題");
+    next.classList.toggle("ghost", !!(on && !state.grade && !state.jam));
+    jamBtn.hidden = !(on && q && q.jam && state.grade && state.grade.perfect && !state.jam && isListenQ);
     upBtn.hidden = !(on && state.pendingLevelUp && !state.jam);
     jamBar.hidden = !(on && state.jam);
     var jamPlay = document.getElementById("jamPlay");
@@ -717,7 +781,7 @@
     if (jamPlay) {
       jamPlay.hidden = !(on && state.jam);
       jamPlay.classList.toggle("on", !!(on && state.jam && transport.playing));
-      jamPlay.textContent = (on && state.jam && transport.playing) ? "▶ 播放中" : "▶ 播放";
+      jamPlay.textContent = (on && state.jam && transport.playing) ? "♪ 播放中" : "▶ 播放";
     }
     if (jamStop) jamStop.disabled = !(on && state.jam && transport.playing);
     document.getElementById("tempoVal").textContent = String(transport.bpm || state.bpm);
@@ -735,20 +799,24 @@
 
     var res = document.getElementById("pracResult");
     if (on && state.grade && !state.jam) {
-      res.hidden = false;
-      res.className = "shown";
-      if (state.grade.perfect) res.textContent = "答對了！";
-      else if (q && (q.kind === "keyFromChords" || q.kind === "keyFromMelody")) {
-        res.textContent = "再聽一次看看。正確答案是" + P.keyLabel(q.answer.name, q.answer.quality) + "。";
-      } else if (q && q.kind === "degreeChord") {
-        res.textContent = "正確答案是 " + q.answer + "。";
-      } else if (q && q.kind === "chordTones") {
+      var ok = !!state.grade.perfect;
+      var msg;
+      if (ok) msg = isListenQ ? "按「進入 Jam」跟著一起彈！" : "太棒了！";
+      else if (isListenQ) msg = "正確答案是 " + P.keyLabel(q.answer.name, q.answer.quality) + "，可以再聽一次比對。";
+      else if (q && q.kind === "degreeChord") msg = "正確答案是 " + q.answer + "。";
+      else if (q && q.kind === "chordTones") {
         var bits = [];
         if (state.grade.missing.length) bits.push("漏了 " + state.grade.missing.length + " 個音");
         if (state.grade.extra.length) bits.push("多點了 " + state.grade.extra.length + " 個音");
-        res.textContent = bits.join("，") + "。組成音是 " + q.chord.tones.join(" ") + "。";
-      } else res.textContent = "再試一次。";
-      if (state.pendingLevelUp) res.textContent += " 連對 " + state.streak + " 題，可以升到" + P.levelById(state.level + 1).name + "了！";
+        msg = (bits.length ? bits.join("，") + "。" : "") + "組成音是 " + q.chord.tones.join(" ") + "。";
+      } else msg = "再試一次。";
+      if (state.pendingLevelUp) msg += " 連對 " + state.streak + " 題，可以升到" + P.levelById(state.level + 1).name.split("　")[0] + "了！";
+      res.hidden = false;
+      res.className = "shown " + (ok ? "ok" : "bad");
+      res.innerHTML = "<span class=\"res-ic\" aria-hidden=\"true\"></span><div><strong></strong><p></p></div>";
+      res.querySelector(".res-ic").textContent = ok ? "✓" : "✕";
+      res.querySelector("strong").textContent = ok ? (state.streak > 1 ? "答對了！連對 " + state.streak + " 題" : "答對了！") : "差一點！";
+      res.querySelector("p").textContent = msg;
     } else {
       res.hidden = true;
       res.textContent = "";
@@ -1660,11 +1728,16 @@
         var ch = (q.choices || []).find(function (c) { return c.name === name; });
         state.choice = ch || { name: name, quality: q.quality };
       }
+      if ((q.kind === "keyFromChords" || q.kind === "keyFromMelody") && !state.heard) return;
+      applyGrade(P.gradePracticeQuestion(state.choice, q));
+      stopTransport();
+      C.render();
       renderPractice();
     });
     document.getElementById("pracListen").addEventListener("click", function () {
       var q = state.question;
       if (!q) return;
+      state.heard = true;
       if (q.kind === "keyFromChords") startProgression(q.chords, { bpm: 92, drums: true, loop: false, beatsPerChord: 2 });
       else if (q.kind === "keyFromMelody") playMelody(q);
     });
@@ -1682,6 +1755,17 @@
       renderPractice();
     });
     document.getElementById("pracNext").addEventListener("click", function () { newQuestion(); });
+    document.getElementById("pracSettings").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-kinds]");
+      if (!b) return;
+      var k = b.getAttribute("data-kinds");
+      if (!KIND_SETS[k]) return;
+      state.kinds = k;
+      state.streak = 0;
+      state.pendingLevelUp = false;
+      if (state.mode === "practice") newQuestion();
+      else renderPractice();
+    });
     document.getElementById("pracJam").addEventListener("click", function () { enterJam(); });
     document.getElementById("pracLevelUp").addEventListener("click", function () {
       if (!state.pendingLevelUp) return;

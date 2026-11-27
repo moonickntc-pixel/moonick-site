@@ -1,4 +1,4 @@
-/* rhythm-practice 20261127c */
+/* rhythm-practice 20261127d */
 /* 節奏練習：作答畫面一次看完（有「播放題目」鈕時才生效，設定／結果／錯題本維持原樣） */
 
 html:has([data-testid="play"]) [data-testid="school-footer"] {

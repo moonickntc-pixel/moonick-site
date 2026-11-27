@@ -1,0 +1,5 @@
+notation.woff2 is a subset of Noto Music (treble clef and rest symbols only).
+Copyright 2018 Google Inc.
+Licensed under the SIL Open Font License, Version 1.1.
+https://scripts.sil.org/OFL
+Noto is a trademark of Google Inc.

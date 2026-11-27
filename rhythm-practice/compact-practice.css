@@ -1,3 +1,4 @@
+/* rhythm-practice 20261127c */
 /* 節奏練習：作答畫面一次看完（有「播放題目」鈕時才生效，設定／結果／錯題本維持原樣） */
 
 html:has([data-testid="play"]) [data-testid="school-footer"] {
@@ -406,5 +407,102 @@ html:has([data-testid="play"]) .rhythm-key .text-\[15px\] {
   html:has([data-testid="play"]) .rhythm-key span,
   html:has([data-testid="play"]) .rhythm-key .text-\[15px\] {
     font-size: 18px;
+  }
+}
+
+
+/* ===== 測試版：播放鈕靠近譜面、答對答錯更明顯 ===== */
+
+/* 手機：播放鈕放在譜面正上方，並在捲動作答鈕時維持可見 */
+@media (max-width: 767px) {
+  html:has([data-testid="play"]) main > section.flex.flex-col {
+    display: flex;
+    flex-direction: column;
+  }
+
+  html:has([data-testid="play"]) main > section > :has(> [data-testid="play"]) {
+    order: 1;
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: var(--bg);
+    padding: 4px 0 8px;
+    margin: 0;
+  }
+
+  html:has([data-testid="play"]) main > section > :has([data-testid="staff"]) {
+    order: 2;
+  }
+
+  html:has([data-testid="play"]) main > section > p[aria-live] {
+    order: 3;
+  }
+
+  html:has([data-testid="play"]) main > section > :has(> [data-testid="submit"]) {
+    order: 4;
+  }
+
+  html:has([data-testid="play"]) main > section > [data-testid="keyboard"] {
+    order: 5;
+  }
+
+  html:has([data-testid="play"]) [data-testid="play"] {
+    height: 48px;
+    min-height: 48px;
+  }
+}
+
+/* 答對／答錯：大勾叉＋更強烈的綠／紅 */
+[data-testid="result-status"].result-status-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 140px;
+  border: 4px solid transparent;
+}
+
+[data-testid="result-status"] .result-mark {
+  display: block;
+  font-size: 72px;
+  line-height: 1;
+  font-weight: 900;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.18);
+}
+
+[data-testid="result-status"] .result-label {
+  display: block;
+  font-size: 40px;
+  line-height: 1.15;
+  letter-spacing: 0.06em;
+}
+
+[data-testid="result-status"].result-ok,
+[data-testid="result-status"][data-correct="true"] {
+  background: #15803d !important;
+  color: #ffffff !important;
+  border-color: #166534;
+  box-shadow: 0 8px 0 #14532d;
+}
+
+[data-testid="result-status"].result-bad,
+[data-testid="result-status"][data-correct="false"] {
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  border-color: #b91c1c;
+  box-shadow: 0 8px 0 #7f1d1d;
+}
+
+@media (max-width: 639px) {
+  [data-testid="result-status"].result-status-banner {
+    min-height: 120px;
+    padding: 16px 12px;
+  }
+  [data-testid="result-status"] .result-mark {
+    font-size: 64px;
+  }
+  [data-testid="result-status"] .result-label {
+    font-size: 32px;
   }
 }

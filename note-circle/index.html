@@ -20,7 +20,7 @@
 <meta name="twitter:title" id="twitter-title" content="十二音圓形音階｜慕尼克">
 <meta name="twitter:description" id="twitter-description" content="點圓上的 12 個音就能聽到音高，可換鋼琴、木吉他、電吉他、Bass、人聲，選調後自然音階會換顏色。">
 <meta name="twitter:image" id="twitter-image" content="https://moonickmusic.com/note-circle/og-moonick.png">
-<link rel="stylesheet" href="css/app.css?v=20261128a">
+<link rel="stylesheet" href="css/app.css?v=20261128b">
 <script>
   (function () {
     var h = location.hostname.toLowerCase().replace(/\.$/, "");
@@ -179,6 +179,17 @@
         <label class="tempo-lab">速度 <strong id="tempoVal">96</strong>
           <input type="range" id="tempoRange" min="60" max="140" value="96" step="2">
         </label>
+        <div class="jam-kb">
+          <div class="label">用鍵盤彈（首調 1–7）</div>
+          <div id="jamKbGuide" class="fj-kb-guide" aria-hidden="false">
+            <div class="fj-kb-row" data-row="high"><span class="lab">高音</span></div>
+            <div class="fj-kb-row" data-row="mid"><span class="lab">中音</span></div>
+            <div class="fj-kb-row" data-row="low"><span class="lab">低音</span></div>
+          </div>
+          <button type="button" id="jamKbBtn">用鍵盤彈</button>
+          <p class="hint" id="jamKbHint">電腦可直接按這些字母。手機請按「用鍵盤彈」叫出鍵盤，並切到英文輸入。</p>
+          <input id="jamKbInput" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="text" lang="en" aria-label="用鍵盤彈">
+        </div>
         <p class="hint" id="jamCaption" hidden></p>
         <div id="jamScales" class="jam-scales" hidden></div>
         <div id="jamChords" class="jam-chords" hidden></div>
@@ -295,8 +306,8 @@
   <p>音色取樣：FluidR3 GM SoundFont（Frank Wen），依 <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a> 授權使用，轉檔版本來自 <a href="https://github.com/gleitz/midi-js-soundfonts" target="_blank" rel="noopener">gleitz/midi-js-soundfonts</a>。</p>
 </footer>
 
-<script src="js/app.js?v=20261128a"></script>
-<script src="js/practice-theory.js?v=20261128a"></script>
-<script src="js/practice.js?v=20261128a"></script>
+<script src="js/app.js?v=20261128b"></script>
+<script src="js/practice-theory.js?v=20261128b"></script>
+<script src="js/practice.js?v=20261128b"></script>
 </body>
 </html>

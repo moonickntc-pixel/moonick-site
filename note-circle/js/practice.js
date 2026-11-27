@@ -20,6 +20,7 @@
     jam: false,
     jamKind: "",
     jamScale: "",
+    jamKbOn: false,
     bpm: 96,
     freejam: {
       tonic: "C",
@@ -361,12 +362,15 @@
   }
 
   function newQuestion(forced) {
+    releaseAllKb();
+    setJamKbOn(false);
     state.grade = null;
     state.choice = null;
     state.picked = {};
     state.jam = false;
     state.jamKind = "";
     state.jamScale = "";
+    state.jamKbOn = false;
     state.pendingLevelUp = false;
     stopTransport();
     C.state.key = -1;
@@ -564,7 +568,7 @@
   function paintKbOnNote(el, info) {
     var old = el.querySelector("text.kb");
     if (old) old.remove();
-    if (state.mode !== "freejam" || !info) return;
+    if (!(state.mode === "freejam" || (state.mode === "practice" && state.jam)) || !info) return;
     var body = el.querySelector("circle.body");
     if (!body) return;
     var kb = document.createElementNS("http://www.w3.org/2000/svg", "text");
@@ -584,7 +588,7 @@
     notes.forEach(function (el) {
       el.classList.remove("picked", "tone-ok", "tone-miss", "tone-bad", "jam-chord", "jam-chord-root");
       var kb = el.querySelector("text.kb");
-      if (kb && state.mode !== "freejam") kb.remove();
+      if (kb && !(state.mode === "freejam" || (state.mode === "practice" && state.jam))) kb.remove();
     });
     var ctxj = jamContext();
     if (ctxj) {
@@ -796,6 +800,10 @@
     }
     fillJamChords(on && state.jam && q ? q.jam : null);
     fillJamScales();
+    if (on && state.jam) {
+      fillKbGuideAt("#jamKbGuide", false);
+      syncJamKbUi();
+    }
 
     var res = document.getElementById("pracResult");
     if (on && state.grade && !state.jam) {
@@ -856,10 +864,12 @@
   function setMode(mode) {
     stopTransport();
     releaseAllKb();
+    setJamKbOn(false);
     state.mode = mode;
     state.jam = false;
     state.jamKind = "";
     state.jamScale = "";
+    state.jamKbOn = false;
     if (mode === "browse") {
       state.question = null;
       state.grade = null;
@@ -891,13 +901,14 @@
   function releaseAllKb() {
     Object.keys(kbHeld).forEach(function (k) { releaseFreeJamKey(k); });
     kbHeld = {};
+    paintKbHeld();
   }
   function isTypingTarget(el) {
     if (!el || !el.tagName) return false;
     var tag = el.tagName.toLowerCase();
     if (tag === "textarea" || el.isContentEditable) return true;
     if (tag === "input") {
-      if (el.id === "fjKbInput") return false;
+      if (el.id === "fjKbInput" || el.id === "jamKbInput") return false;
       var typ = (el.type || "text").toLowerCase();
       return typ !== "range" && typ !== "button" && typ !== "checkbox" && typ !== "radio" && typ !== "hidden";
     }
@@ -909,26 +920,52 @@
     var tonicPc = ctxj ? P.pcOf(ctxj.tonic) : 0;
     return P.freeJamMidi(pc, tonicPc, C.state.octave, octShift || 0, inst && inst.octShift);
   }
+  function jamKeyboardOpen() {
+    return state.mode === "freejam" || (state.mode === "practice" && !!state.jam);
+  }
   function playFreeJamKey(letter, opts) {
     opts = opts || {};
-    if (state.mode !== "freejam") return null;
-    var f = state.freejam;
-    var pitch = P.freeJamPitchForKey(f.tonic, f.scale, letter);
+    if (!jamKeyboardOpen()) return null;
+    var ctxk = jamContext();
+    if (!ctxk) return null;
+    var pitch = P.freeJamPitchForKey(ctxk.tonic, ctxk.scale, letter);
     if (!pitch) return null;
     if (C.unlock) C.unlock();
     var midi = jamNoteMidi(pitch.pc, pitch.oct);
     if (C.playMidiImmediate) C.playMidiImmediate(midi, { hold: !!opts.hold });
     else if (C.playMidi) C.playMidi(midi);
     if (C.flash) C.flash(pitch.pc);
-    if (opts.record !== false) appendJianpu(pitch.label, pitch.oct, pitch.pc);
+    if (opts.record !== false && state.mode === "freejam") appendJianpu(pitch.label, pitch.oct, pitch.pc);
     return { pitch: pitch, midi: midi };
   }
   function releaseFreeJamKey(letter) {
     if (!C.releaseMidi) return;
-    var f = state.freejam;
-    var pitch = P.freeJamPitchForKey(f.tonic, f.scale, letter);
+    var ctxk = jamContext();
+    if (!ctxk) return;
+    var pitch = P.freeJamPitchForKey(ctxk.tonic, ctxk.scale, letter);
     if (!pitch) return;
     C.releaseMidi(jamNoteMidi(pitch.pc, pitch.oct));
+  }
+  function paintKbHeld() {
+    document.querySelectorAll(".fj-kb-key[data-key]").forEach(function (b) {
+      b.classList.toggle("held", !!kbHeld[b.getAttribute("data-key")]);
+    });
+  }
+  function holdKbKey(letter, opts) {
+    var k = letter && String(letter).toUpperCase();
+    if (!P.freeJamKeySpec(k)) return null;
+    if (kbHeld[k]) return null;
+    kbHeld[k] = true;
+    var r = playFreeJamKey(k, opts);
+    paintKbHeld();
+    return r;
+  }
+  function unholdKbKey(letter) {
+    var k = letter && String(letter).toUpperCase();
+    if (!kbHeld[k]) return;
+    delete kbHeld[k];
+    releaseFreeJamKey(k);
+    paintKbHeld();
   }
   function currentJpDur() { return state.freejam.jpDur || "quarter"; }
   function currentJpDotted() { return !!state.freejam.jpDotted; }
@@ -1291,49 +1328,74 @@
       inp.blur();
     }
   }
+  function syncJamKbUi() {
+    var inp = document.getElementById("jamKbInput");
+    var btn = document.getElementById("jamKbBtn");
+    if (inp) inp.classList.toggle("kb-on", !!state.jamKbOn);
+    if (btn) {
+      btn.classList.toggle("on", !!state.jamKbOn);
+      btn.textContent = state.jamKbOn ? "收起鍵盤" : "用鍵盤彈";
+    }
+  }
+  function setJamKbOn(on) {
+    state.jamKbOn = !!on && state.mode === "practice" && !!state.jam;
+    syncJamKbUi();
+    var inp = document.getElementById("jamKbInput");
+    if (state.jamKbOn) {
+      if (C.unlock) C.unlock();
+      if (C.loadInst) C.loadInst(C.state.inst);
+      if (inp) inp.focus();
+    } else if (inp) {
+      inp.blur();
+    }
+  }
   function onFjKeydown(e) {
-    if (state.mode !== "freejam") return;
+    if (!jamKeyboardOpen()) return;
     if (e.repeat) return;
     if (isTypingTarget(e.target)) return;
-    if (e.key === "Backspace") {
-      e.preventDefault();
-      backspaceJianpu();
-      return;
-    }
-    if (e.key === "0") {
-      e.preventDefault();
-      appendJianpuRest();
-      return;
-    }
-    if (e.key === "-" || e.key === "_") {
-      e.preventDefault();
-      appendJianpuTie();
-      return;
+    if (state.mode === "freejam") {
+      if (e.key === "Backspace") {
+        e.preventDefault();
+        backspaceJianpu();
+        return;
+      }
+      if (e.key === "0") {
+        e.preventDefault();
+        appendJianpuRest();
+        return;
+      }
+      if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        appendJianpuTie();
+        return;
+      }
     }
     var k = e.key && e.key.length === 1 ? e.key.toUpperCase() : "";
     if (!P.freeJamKeySpec(k)) return;
     e.preventDefault();
-    if (kbHeld[k]) return;
-    kbHeld[k] = true;
-    playFreeJamKey(k, { hold: true, record: true });
+    holdKbKey(k, { hold: true, record: state.mode === "freejam" });
   }
   function onFjKeyup(e) {
     var k = e.key && e.key.length === 1 ? e.key.toUpperCase() : "";
     if (!kbHeld[k]) return;
-    delete kbHeld[k];
-    releaseFreeJamKey(k);
+    unholdKbKey(k);
   }
-  function onFjSoftInput() {
-    var inp = document.getElementById("fjKbInput");
-    if (!inp || state.mode !== "freejam") return;
+  function onSoftJamInput(inp, record) {
+    if (!inp || !jamKeyboardOpen()) return;
     var val = inp.value;
     inp.value = "";
     var i, k;
     for (i = 0; i < val.length; i++) {
       k = val.charAt(i).toUpperCase();
-      if (kbHeld[k]) continue;
-      playFreeJamKey(k, { hold: false, record: true });
+      if (kbHeld[k] || !P.freeJamKeySpec(k)) continue;
+      playFreeJamKey(k, { hold: false, record: !!record });
     }
+  }
+  function onFjSoftInput() {
+    onSoftJamInput(document.getElementById("fjKbInput"), true);
+  }
+  function onJamSoftInput() {
+    onSoftJamInput(document.getElementById("jamKbInput"), false);
   }
   function setFreeJamKey(tonic, quality, restart) {
     var f = state.freejam;
@@ -1492,15 +1554,16 @@
     });
     box.setAttribute("data-ready", "1");
   }
-  function fillKbGuide() {
-    var f = state.freejam;
+  function fillKbGuideAt(guideSel, record) {
+    var ctxk = jamContext();
+    if (!ctxk) return;
     ["high", "mid", "low"].forEach(function (row) {
-      var el = document.querySelector('#fjKbGuide .fj-kb-row[data-row="' + row + '"]');
+      var el = document.querySelector(guideSel + ' .fj-kb-row[data-row="' + row + '"]');
       if (!el) return;
       el.querySelectorAll(".fj-kb-key").forEach(function (n) { n.remove(); });
       (P.FREE_JAM_KEY_ROWS[row] || []).forEach(function (ch, i) {
         var deg = String(i + 1);
-        var pitch = P.freeJamPitchForKey(f.tonic, f.scale, ch);
+        var pitch = P.freeJamPitchForKey(ctxk.tonic, ctxk.scale, ch);
         var b = document.createElement("button");
         b.type = "button";
         b.className = "fj-kb-key" + (pitch ? "" : " off");
@@ -1510,15 +1573,17 @@
         if (pitch) {
           b.addEventListener("pointerdown", function (ev) {
             ev.preventDefault();
-            playFreeJamKey(ch, { hold: true, record: true });
+            holdKbKey(ch, { hold: true, record: !!record });
           });
-          b.addEventListener("pointerup", function () { releaseFreeJamKey(ch); });
-          b.addEventListener("pointercancel", function () { releaseFreeJamKey(ch); });
+          b.addEventListener("pointerup", function () { unholdKbKey(ch); });
+          b.addEventListener("pointercancel", function () { unholdKbKey(ch); });
         }
         el.appendChild(b);
       });
     });
+    paintKbHeld();
   }
+  function fillKbGuide() { fillKbGuideAt("#fjKbGuide", true); }
   function renderFreeJam() {
     var f = state.freejam;
     document.querySelectorAll("#fjQuality button").forEach(function (b) {
@@ -1781,6 +1846,26 @@
       restartPracticeJam();
     });
     document.getElementById("jamStop").addEventListener("click", function () { stopTransport(); });
+    var jamKbBtn = document.getElementById("jamKbBtn");
+    if (jamKbBtn) jamKbBtn.addEventListener("click", function () { setJamKbOn(!state.jamKbOn); });
+    var jamInp = document.getElementById("jamKbInput");
+    if (jamInp) {
+      jamInp.addEventListener("compositionstart", function () { jamInp.setAttribute("data-composing", "1"); });
+      jamInp.addEventListener("compositionend", function () {
+        jamInp.setAttribute("data-composing", "0");
+        onJamSoftInput();
+      });
+      jamInp.addEventListener("input", function (e) {
+        if (e.isComposing || jamInp.getAttribute("data-composing") === "1") return;
+        onJamSoftInput();
+      });
+      jamInp.addEventListener("blur", function () {
+        setTimeout(function () {
+          if (document.activeElement === jamInp) return;
+          if (state.jamKbOn) setJamKbOn(false);
+        }, 300);
+      });
+    }
     document.getElementById("tempoRange").addEventListener("input", function () {
       state.bpm = Math.max(60, Math.min(140, +this.value || 96));
       transport.bpm = state.bpm;
@@ -1828,6 +1913,7 @@
       };
     },
     setKbOn: setKbOn,
+    setJamKbOn: setJamKbOn,
     currentGlowChord: currentGlowChord,
     appendJianpu: appendJianpu, appendJianpuRest: appendJianpuRest, appendJianpuTie: appendJianpuTie,
     backspaceJianpu: backspaceJianpu, clearJianpu: clearJianpu,

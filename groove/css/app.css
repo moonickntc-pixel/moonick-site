@@ -398,6 +398,14 @@ button.beat-subdiv.custom {
   align-items: center;
   justify-content: center;
 }
+#grid .cell,
+#grid .cell * {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+}
+#grid .cell { touch-action: manipulation; }
 .cell.stick, .cell.sticking { height: 40px; font-weight: 800; font-size: 20px; color: #b0b0b0; }
 .cell.stick.on, .cell.sticking.on { color: #2484c0; }
 .cell.stick.L.on, .cell.sticking.L.on { color: #333; }

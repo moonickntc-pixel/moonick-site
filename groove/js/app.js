@@ -1,5 +1,5 @@
-import * as M from "./model.js?v=20261123a";
-import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261123a";
+import * as M from "./model.js?v=20261127a";
+import { createKit, createTransport, rememberedKit } from "./audio.js?v=20261127a";
 
 const kit = createKit();
 const transport = createTransport(kit);
@@ -1713,6 +1713,57 @@ function onMetro(rate) {
 
 let pressTimer = 0;
 let eighthsHeld = false;
+let pressStartX = 0;
+let pressStartY = 0;
+let pressPointerId = null;
+let pressMoved = false;
+let touchCellPress = false;
+const LONG_PRESS_MS = 480;
+const MOVE_CANCEL_PX = 10;
+
+function clearPressTimer() {
+  clearTimeout(pressTimer);
+  pressTimer = 0;
+}
+
+function pressDistance(event) {
+  return Math.hypot(event.clientX - pressStartX, event.clientY - pressStartY);
+}
+
+function endPressWatch(event) {
+  if (pressPointerId != null && event && event.pointerId !== pressPointerId) return;
+  document.removeEventListener("pointermove", onPressMove);
+  document.removeEventListener("pointerup", onPressEnd);
+  document.removeEventListener("pointercancel", onPressEnd);
+  clearPressTimer();
+  pressPointerId = null;
+  if (eighthsHeld) {
+    setTimeout(() => { eighthsHeld = false; }, 400);
+  }
+}
+
+function onPressMove(event) {
+  if (pressPointerId != null && event.pointerId !== pressPointerId) return;
+  if (event.pointerType === "mouse") return;
+  if (pressDistance(event) > MOVE_CANCEL_PX) {
+    pressMoved = true;
+    clearPressTimer();
+  }
+}
+
+function onPressEnd(event) {
+  endPressWatch(event);
+}
+
+function startPressWatch(event) {
+  pressStartX = event.clientX;
+  pressStartY = event.clientY;
+  pressPointerId = event.pointerId;
+  pressMoved = false;
+  document.addEventListener("pointermove", onPressMove);
+  document.addEventListener("pointerup", onPressEnd);
+  document.addEventListener("pointercancel", onPressEnd);
+}
 const SCHOOLS = {
   rhythm: {
     name: "節奏感",
@@ -1844,6 +1895,14 @@ function boot() {
     if (cell) {
       if (state.suppressClick) {
         state.suppressClick = false;
+        touchCellPress = false;
+        return;
+      }
+      // Touch/pen: short press always toggles the default voice on or off.
+      // Mouse keeps the existing desktop behavior, including Advanced edit.
+      if (touchCellPress) {
+        touchCellPress = false;
+        setCell(cell.dataset.inst, Number(cell.dataset.i), "toggle");
         return;
       }
       if (state.advanced) openCellMenu(cell, event);
@@ -1869,6 +1928,8 @@ function boot() {
     const cell = event.target.closest(".cell");
     if (!cell) return;
     event.preventDefault();
+    clearPressTimer();
+    state.suppressClick = true;
     openCellMenu(cell, event);
   });
 
@@ -1877,8 +1938,10 @@ function boot() {
     if (cymbalLabel && event.pointerType !== "mouse") {
       state.suppressClick = false;
       eighthsHeld = false;
-      clearTimeout(pressTimer);
+      clearPressTimer();
+      startPressWatch(event);
       pressTimer = setTimeout(() => {
+        if (pressMoved) return;
         state.suppressClick = true;
         eighthsHeld = true;
         openCymbalMenu(cymbalLabel, event);
@@ -1886,22 +1949,27 @@ function boot() {
       return;
     }
     const cell = event.target.closest(".cell");
-    if (!cell || event.pointerType === "mouse") return;
+    if (!cell || event.pointerType === "mouse") {
+      if (event.pointerType === "mouse") touchCellPress = false;
+      return;
+    }
     state.suppressClick = false;
-    clearTimeout(pressTimer);
+    touchCellPress = true;
+    clearPressTimer();
+    startPressWatch(event);
     pressTimer = setTimeout(() => {
+      if (pressMoved) return;
       state.suppressClick = true;
-      openCellMenu(cell, event);
-    }, 480);
+      openCellMenu(cell, { clientX: pressStartX, clientY: pressStartY });
+    }, LONG_PRESS_MS);
   });
-  ["pointerup", "pointercancel", "pointermove"].forEach((type) => {
-    $("grid").addEventListener(type, (event) => {
-      if (type === "pointermove" && event.pointerType === "mouse") return;
-      clearTimeout(pressTimer);
-      if ((type === "pointerup" || type === "pointercancel") && eighthsHeld) {
-        setTimeout(() => { eighthsHeld = false; }, 400);
-      }
-    });
+  $("grid").addEventListener("contextmenu", (event) => {
+    if (event.target.closest(".cell") || event.target.closest("[data-cymbal-menu]")) {
+      event.preventDefault();
+    }
+  });
+  $("grid").addEventListener("selectstart", (event) => {
+    if (event.target.closest(".cell")) event.preventDefault();
   });
   $("grid").addEventListener("pointerover", (event) => {
     const cell = event.target.closest(".cell");
@@ -1910,6 +1978,17 @@ function boot() {
     else if (event.ctrlKey || event.metaKey) setCell(cell.dataset.inst, Number(cell.dataset.i), "on");
   });
 
+  const tapBtn = $("tapBtn");
+  if (tapBtn) {
+    tapBtn.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      tapTempo();
+    });
+    // 鍵盤（Enter）操作時 click 的 detail 是 0；滑鼠／觸控已由 pointerdown 處理。
+    tapBtn.addEventListener("click", (event) => {
+      if (event.detail === 0) tapTempo();
+    });
+  }
   $("tempo").addEventListener("input", () => {
     setTempo(Number($("tempo").value));
     $("tempoNum").value = state.groove.tempo;
@@ -2038,6 +2117,23 @@ function retimeSoon() {
     retimeFrame = 0;
     transport.retime();
   });
+}
+
+// Tap 測速度：連點，用最近 4 個間隔取平均；超過 2 秒沒點就重來。
+const TAP_RESET_MS = 2000;
+const TAP_MAX_INTERVALS = 4;
+let tapTimes = [];
+function tapTempo(now = performance.now()) {
+  if (tapTimes.length && now - tapTimes[tapTimes.length - 1] > TAP_RESET_MS) tapTimes = [];
+  tapTimes.push(now);
+  if (tapTimes.length > TAP_MAX_INTERVALS + 1) tapTimes.shift();
+  if (tapTimes.length < 2) return null;
+  const avg = (tapTimes[tapTimes.length - 1] - tapTimes[0]) / (tapTimes.length - 1);
+  const bpm = Math.round(Math.min(M.MAX_TEMPO, Math.max(M.MIN_TEMPO, 60000 / avg)));
+  setTempo(bpm);
+  $("tempo").value = state.groove.tempo;
+  $("tempoNum").value = state.groove.tempo;
+  return bpm;
 }
 
 function setTempo(value) {

@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>十二音圓形音階｜慕尼克</title>
+<meta name="description" content="點圓上的 12 個音就能聽到音高，可換鋼琴、木吉他、電吉他、Bass、人聲，選調後自然音階會換顏色。">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#111111">
+<link rel="icon" id="favicon" href="images/moonick-logo.png" type="image/png">
+<link rel="apple-touch-icon" id="appleIcon" href="images/moonick-logo.png">
+<meta property="og:type" content="website">
+<meta property="og:title" id="og-title" content="十二音圓形音階｜慕尼克">
+<meta property="og:description" id="og-description" content="點圓上的 12 個音就能聽到音高，可換鋼琴、木吉他、電吉他、Bass、人聲，選調後自然音階會換顏色。">
+<meta property="og:image" id="og-image" content="https://moonickmusic.com/note-circle/og-moonick.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" id="og-image-alt" content="慕尼克十二音圓形音階">
+<meta property="og:url" id="og-url" content="https://moonickmusic.com/note-circle/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" id="twitter-title" content="十二音圓形音階｜慕尼克">
+<meta name="twitter:description" id="twitter-description" content="點圓上的 12 個音就能聽到音高，可換鋼琴、木吉他、電吉他、Bass、人聲，選調後自然音階會換顏色。">
+<meta name="twitter:image" id="twitter-image" content="https://moonickmusic.com/note-circle/og-moonick.png">
+<link rel="stylesheet" href="css/app.css?v=20261128t">
+<script>
+  (function () {
+    var h = location.hostname.toLowerCase().replace(/\.$/, "");
+    var locked = h === "moonickmusic.com" || h.endsWith(".moonickmusic.com") ? "moonick" : h === "musicdance.com.tw" || h.endsWith(".musicdance.com.tw") ? "rhythm" : "";
+    var query = locked ? "" : new URLSearchParams(location.search).get("school");
+    var school = locked || (query === "moonick" || query === "rhythm" ? query : "rhythm");
+    window.__school = school;
+    document.documentElement.setAttribute("data-school", school);
+    var moonick = school === "moonick";
+    var img = new URL(moonick ? "og-moonick.png" : "og-rhythm.png", location.href).href;
+    var title = moonick ? "十二音圓形音階｜慕尼克" : "十二音圓形音階｜節奏感";
+    function put(id, v) { var el = document.getElementById(id); if (el) el.setAttribute("content", v); }
+    put("og-image", img); put("twitter-image", img);
+    put("og-title", title); put("twitter-title", title);
+    put("og-url", location.origin + location.pathname);
+    put("og-image-alt", moonick ? "慕尼克十二音圓形音階" : "節奏感十二音圓形音階");
+    document.title = title;
+  })();
+</script>
+</head>
+<body>
+<header id="brandbar">
+  <a class="brand-lockup" id="brandHome" href="https://www.musicdance.com.tw/">
+    <img id="brandLogo" alt="">
+    <span><strong id="brandName"></strong><em>十二音圓形音階</em></span>
+  </a>
+  <a class="home-back" id="homeBack" href="https://moonickmusic.com/">← 回官網</a>
+  <script>
+    (function () {
+      var moonick = window.__school === "moonick";
+      var name = moonick ? "慕尼克" : "節奏感";
+      var src = moonick ? "images/moonick-logo.png" : "images/musicdance-logo.png";
+      var home = moonick ? "https://moonickmusic.com/" : "https://www.musicdance.com.tw/";
+      var logo = document.getElementById("brandLogo");
+      logo.src = src; logo.alt = name;
+      document.getElementById("brandName").textContent = name;
+      document.getElementById("brandHome").href = home;
+      var back = document.getElementById("homeBack");
+      back.href = home; back.textContent = moonick ? "← 回慕尼克官網" : "← 回節奏感官網";
+      document.getElementById("favicon").href = src;
+      document.getElementById("appleIcon").href = src;
+    })();
+  </script>
+</header>
+
+<nav id="modeBar" aria-label="模式">
+  <div class="seg mode-tabs" id="modeBtns" role="radiogroup" aria-label="模式">
+    <button type="button" data-mode="browse" class="on">瀏覽</button>
+    <button type="button" data-mode="practice">抓歌練習</button>
+    <button type="button" data-mode="freejam">自由 Jam</button>
+  </div>
+</nav>
+<main id="main">
+  <section id="stage" aria-label="十二音圓形音階圖">
+    <h1>十二音圓形音階圖</h1>
+    <div id="fjBanner" hidden>
+      <div class="prac-hero" role="status">
+        <p class="kicker">自由 Jam</p>
+        <h2 class="q-title"></h2>
+        <p class="q-ask">先選調，點級數排出和弦，按播放後就可以在圓上即興。</p>
+      </div>
+    </div>
+    <p id="pracPrompt" class="sr-only"></p>
+    <div id="circleWrap">
+      <svg id="circle" viewBox="-36 -36 672 672" role="group" aria-label="十二個音，點一下發出音高"></svg>
+      <div id="chordCenter" role="status" hidden>
+        <div class="cc-name"></div>
+        <div class="cc-tones"></div>
+        <div class="cc-deg" hidden></div>
+      </div>
+    </div>
+    <ul id="legend">
+      <li><span class="sw sw-white"></span>白鍵音（C D E F G A B）</li>
+      <li><span class="sw sw-black"></span>黑鍵音（升降音）</li>
+      <li class="key-only"><span class="sw sw-scale"></span>這個調的自然音階</li>
+      <li class="key-only"><span class="sw sw-tonic"></span>主音（1 / Do）</li>
+      <li class="chord-only"><span class="sw sw-chord"></span>和弦組成音（粗框是根音）</li>
+    </ul>
+  </section>
+
+  <aside id="panel" aria-label="設定">
+    <div class="group" id="instGroup">
+      <div class="label">音色</div>
+      <div class="seg" id="instBtns" role="radiogroup" aria-label="音色"></div>
+      <p class="hint" id="instHint"></p>
+    </div>
+
+    <div class="group browse-only">
+      <label class="label" for="keySel">調（大調）</label>
+      <div class="row">
+        <select id="keySel" autocomplete="off"></select>
+        <button type="button" id="spellBtn" class="small" hidden></button>
+      </div>
+    </div>
+
+    <div class="group browse-only">
+      <div class="label">和弦</div>
+      <div class="chord-grid" id="chordBtns" role="radiogroup" aria-label="和弦"></div>
+      <div class="chord-grid auto key-only" id="autoBtns" role="radiogroup" aria-label="順階和弦"></div>
+      <p class="hint" id="chordHint"></p>
+    </div>
+
+    <div class="group key-only browse-only">
+      <div class="label">音階標示</div>
+      <div class="seg" id="labelBtns" role="radiogroup" aria-label="音階標示">
+        <button type="button" data-label="num" class="on">級數 1–7</button>
+        <button type="button" data-label="solfa">Do Re Mi</button>
+      </div>
+    </div>
+
+    <div class="group" id="octGroup">
+      <div class="label">八度</div>
+      <div class="row oct">
+        <button type="button" id="octDown" aria-label="低八度">−</button>
+        <span id="octText">C4</span>
+        <button type="button" id="octUp" aria-label="高八度">＋</button>
+      </div>
+      <p class="hint" id="octHint">預設是中央 C（C4）這個八度。</p>
+    </div>
+
+    <div class="group browse-only">
+      <button type="button" id="playScale" class="big">▶ 播放音階</button>
+    </div>
+
+    <div id="pracBox" class="prac-card" hidden>
+      <div id="pracBanner" hidden>
+        <div class="prac-top">
+          <ol class="prac-steps" id="pracSteps" aria-label="步驟">
+            <li data-step="listen"><b>1</b><span>聽</span></li>
+            <li data-step="answer"><b>2</b><span>選調</span></li>
+            <li data-step="jam"><b>3</b><span>Jam</span></li>
+          </ol>
+          <div id="pracHud" class="prac-hud" aria-live="polite">
+            <span id="pracLevelName">第 1 級</span>
+            <span class="hud-num">分數 <strong id="pracScore">0</strong></span>
+            <span class="hud-num">連對 <strong id="pracStreak">0</strong></span>
+          </div>
+        </div>
+        <div id="pracHero" class="prac-hero" role="status">
+          <p class="kicker"></p>
+          <h2 class="q-title"></h2>
+          <p class="q-ask"></p>
+        </div>
+      </div>
+      <div class="prac-listen-row">
+        <button type="button" id="pracListen" class="prac-listen">▶ 聽題目</button>
+        <button type="button" id="pracStop" class="prac-stop" hidden>■ 停止</button>
+      </div>
+      <div class="prac-choices" id="pracChoices"></div>
+      <div id="pracResult" hidden></div>
+      <div id="jamBar" class="jam-bar" hidden>
+        <div class="jam-row">
+          <button type="button" id="jamPlay">▶ 播放</button>
+          <button type="button" id="jamStop">■ 停止音樂</button>
+        </div>
+        <label class="tempo-lab">速度 <strong id="tempoVal">96</strong>
+          <input type="range" id="tempoRange" min="60" max="140" value="96" step="2">
+        </label>
+        <p class="hint" id="jamCaption" hidden></p>
+        <div id="jamScales" class="jam-scales" hidden></div>
+        <div id="jamChords" class="jam-chords" hidden></div>
+      </div>
+      <div class="prac-actions">
+        <button type="button" id="pracSubmit">送出答案</button>
+        <button type="button" id="pracJam" hidden>進入 Jam ▶</button>
+        <button type="button" id="pracLevelUp" hidden>升到下一級</button>
+        <button type="button" id="pracNext">下一題 →</button>
+      </div>
+      <details class="prac-settings" id="pracSettings">
+        <summary><span class="ps-gear" aria-hidden="true">⚙</span> 設定 <span id="pracSetSummary" class="ps-sum"></span></summary>
+        <div class="group">
+          <div class="label">題型</div>
+          <div class="seg" id="pracKindBtns" role="radiogroup" aria-label="題型">
+            <button type="button" data-kinds="mix" class="on">和弦＋旋律</button>
+            <button type="button" data-kinds="chords">只聽和弦</button>
+            <button type="button" data-kinds="melody">只聽旋律</button>
+          </div>
+          <button type="button" class="prac-theory-btn" data-kinds="theory" id="pracTheoryBtn">樂理小測驗<small>看和弦答組成音、看級數答和弦（不用聽）</small></button>
+        </div>
+        <div class="group">
+          <div class="label">難度</div>
+          <div class="seg" id="pracLevelBtns" role="radiogroup" aria-label="難度"></div>
+          <p class="hint" id="pracLevelHint"></p>
+        </div>
+        <div id="pracSoundSlot"></div>
+      </details>
+    </div>
+
+    <div id="freeJamBox" hidden>
+      <div class="group">
+        <div class="label">調</div>
+        <div class="seg" id="fjQuality" role="radiogroup" aria-label="大調或小調">
+          <button type="button" data-quality="major" class="on">大調</button>
+          <button type="button" data-quality="minor">小調</button>
+        </div>
+        <div class="fj-tonics" id="fjTonics" role="radiogroup" aria-label="主音"></div>
+      </div>
+      <div class="group">
+        <div class="label">點級數排進行</div>
+        <div class="fj-degrees" id="fjDegrees"></div>
+        <p class="hint" id="fjDegHint">最多 16 個和弦。點一下加到進行裡。</p>
+      </div>
+      <div class="group">
+        <div class="label">和弦進行</div>
+        <div id="fjProg" class="fj-prog"></div>
+        <button type="button" id="fjClear" class="small">清空</button>
+      </div>
+      <div class="group">
+        <div class="label">節奏</div>
+        <div class="seg" id="fjRhythms" role="radiogroup" aria-label="節奏"></div>
+      </div>
+      <div id="fjBar" class="jam-bar">
+        <button type="button" id="fjPlay">▶ 播放</button>
+        <button type="button" id="fjStop">■ 停止</button>
+        <label class="tempo-lab">速度 <strong id="fjTempoVal">96</strong>
+          <input type="range" id="fjTempoRange" min="60" max="160" value="96" step="2">
+        </label>
+        <div id="fjScales" class="jam-scales"></div>
+      </div>
+      <div class="group">
+        <div class="label">用鍵盤彈（首調 1–7）</div>
+        <div id="fjKbGuide" class="fj-kb-guide" aria-hidden="false">
+          <div class="fj-kb-row" data-row="high"><span class="lab">高音</span></div>
+          <div class="fj-kb-row" data-row="mid"><span class="lab">中音</span></div>
+          <div class="fj-kb-row" data-row="low"><span class="lab">低音</span></div>
+        </div>
+        <button type="button" id="fjKbBtn">用鍵盤彈</button>
+        <p class="hint" id="fjKbHint">電腦可直接按這些字母。手機請按「用鍵盤彈」叫出鍵盤，並切到英文輸入。</p>
+        <input id="fjKbInput" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="text" lang="en" aria-label="用鍵盤彈">
+        <div class="label fj-jp-lab">簡譜</div>
+        <label class="fj-title-lab">標題
+          <input id="fjJpTitle" type="text" maxlength="40" placeholder="曲名（選填）" autocomplete="off">
+        </label>
+        <div class="label fj-sublab">時值</div>
+        <div class="seg" id="fjJpDurs" role="radiogroup" aria-label="時值">
+          <button type="button" data-dur="whole">全</button>
+          <button type="button" data-dur="half">二分</button>
+          <button type="button" data-dur="quarter" class="on">四分</button>
+          <button type="button" data-dur="eighth">八分</button>
+          <button type="button" data-dur="sixteenth">十六分</button>
+          <button type="button" id="fjJpDot">附點</button>
+        </div>
+        <div class="fj-jp-edit">
+          <button type="button" id="fjJpRest">休止 0</button>
+          <button type="button" id="fjJpTie">延長 −</button>
+          <button type="button" id="fjJpBack">退格</button>
+          <button type="button" id="fjJpClear">清除</button>
+        </div>
+        <label class="fj-check"><input type="checkbox" id="fjJpChords" checked> 小節上方標和弦級數</label>
+        <label class="fj-check"><input type="checkbox" id="fjJpPlayMel"> 播放我寫的旋律</label>
+        <div id="fjScorePaper" class="fj-score-paper" aria-live="polite">
+          <div class="fj-score-head">
+            <div class="fj-score-title" id="fjScoreTitle"></div>
+            <div class="fj-score-meta"><span id="fjScoreKey">1=C</span><span id="fjScoreMeter">4/4</span><span id="fjScoreTempo">♩=96</span></div>
+          </div>
+          <div class="fj-score-body" id="fjScoreBody"></div>
+        </div>
+        <div class="fj-jp-export">
+          <button type="button" id="fjJpJpg">輸出 JPG</button>
+          <button type="button" id="fjJpShare">分享</button>
+          <button type="button" id="fjJpPrint">列印</button>
+        </div>
+        <canvas id="fjScoreCanvas" hidden></canvas>
+      </div>
+    </div>
+
+    <p id="status" class="hint" aria-live="polite"></p>
+  </aside>
+</main>
+
+<footer>
+  <p>音色取樣：FluidR3 GM SoundFont（Frank Wen），依 <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a> 授權使用，轉檔版本來自 <a href="https://github.com/gleitz/midi-js-soundfonts" target="_blank" rel="noopener">gleitz/midi-js-soundfonts</a>。</p>
+</footer>
+
+<script src="js/app.js?v=20261128t"></script>
+<script src="js/practice-theory.js?v=20261128t"></script>
+<script src="js/practice.js?v=20261128t"></script>
+</body>
+</html>
